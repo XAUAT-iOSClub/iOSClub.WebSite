@@ -29,3 +29,38 @@ export enum Identity {
   Minister = "Minister",     // 部长
   Department = "Department"  // 部员
 }
+
+// 部门名单导入的单条成员（含可选学生档案字段）
+export interface DepartmentImportMember {
+  userId: string;
+  name: string;
+  identity: string;
+  academy?: string;
+  className?: string;
+  phoneNum?: string;
+  politicalLandscape?: string;
+  gender?: string;
+  eMail?: string | null;
+}
+
+// 部门名单导入结果
+export interface DepartmentImportResult {
+  historyId: string;
+  departmentName: string;
+  beforeCount: number;
+  afterCount: number;
+  roleChanges: Record<string, number[]>;
+  backup: DepartmentImportMember[];
+}
+
+// 部门名单导入历史
+export interface DepartmentImportHistory {
+  id: string;
+  departmentName: string;
+  importedAt: string;
+  operatorId: string;
+  operatorName: string;
+  fileName: string | null;
+  memberCount: number;
+  roleChanges: Record<string, number[]>;
+}

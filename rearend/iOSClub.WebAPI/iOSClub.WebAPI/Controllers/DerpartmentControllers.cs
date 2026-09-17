@@ -5,8 +5,10 @@ using iOSClub.Data.VOs;
 using iOSClub.DataApi.Repositories;
 using iOSClub.WebAPI.Common;
 using iOSClub.WebAPI.IdentityModels;
+using iOSClub.WebAPI.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Text;
 using System.Text.Json;
 
 namespace iOSClub.WebAPI.Controllers;
@@ -17,6 +19,7 @@ namespace iOSClub.WebAPI.Controllers;
 public class DepartmentController(
     IDepartmentRepository departmentRepository,
     IStaffRepository staffRepository,
+    IDepartmentImportService departmentImportService,
     IHttpContextAccessor httpContextAccessor,
     ILogger<DepartmentController> logger)
     : ControllerBase
@@ -183,6 +186,54 @@ public class DepartmentController(
 
             return StatusCode(500, $"导出失败: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// 导入并覆盖指定部门的成员名单（导入前自动备份原名单）
+    /// </summary>
+    [HttpPost("{name}/import")]
+    [Authorize(Roles = "Founder,President,Minister")]
+    public async Task<ActionResult<ApiResponse<DepartmentImportResultVO>>> ImportDepartmentRoster(
+        string name, [FromBody] DepartmentImportDTO model)
+    {
+        var userJwt = httpContextAccessor.HttpContext?.User.GetUser();
+        if (userJwt == null)
+            return Ok(ApiResponse<DepartmentImportResultVO>.Fail(ErrorCode.Unauthorized, "用户未认证"));
+
+        if (!IsAdminUser(userJwt.Identity))
+            return Ok(ApiResponse<DepartmentImportResultVO>.Fail(ErrorCode.InsufficientPermission, "权限不足"));
+
+        var operatorStaff = await staffRepository.GetStaffByIdAsync(userJwt.UserId);
+        var result = await departmentImportService.ImportRosterAsync(name, model, userJwt.UserId,
+            operatorStaff?.Name ?? "");
+        return Ok(ApiResponse<DepartmentImportResultVO>.Success(result, "导入成功"));
+    }
+
+    /// <summary>
+    /// 获取指定部门的导入历史
+    /// </summary>
+    [HttpGet("{name}/import-history")]
+    [Authorize(Roles = "Founder,President,Minister")]
+    public async Task<ActionResult<ApiResponse<List<ImportHistoryVO>>>> GetImportHistory(string name)
+    {
+        var history = await departmentImportService.GetHistoryAsync(name);
+        return Ok(ApiResponse<List<ImportHistoryVO>>.Success(history, "获取导入历史成功"));
+    }
+
+    /// <summary>
+    /// 下载某次导入前的名单备份
+    /// </summary>
+    [HttpGet("import-history/{id}/backup")]
+    [Authorize(Roles = "Founder,President,Minister")]
+    public async Task<IActionResult> DownloadImportBackup(string id)
+    {
+        var record = await departmentImportService.GetHistoryByIdAsync(id);
+        if (record == null)
+            return Ok(ApiResponse<string>.Fail(ErrorCode.ResourceNotFound, "导入记录不存在"));
+
+        var bytes = Encoding.UTF8.GetBytes(record.BackupJson);
+        var fileName = $"{record.DepartmentName}-backup-{record.ImportedAt:yyyyMMddHHmmss}.json";
+        return File(bytes, "application/json", fileName);
     }
 
     /// <summary>

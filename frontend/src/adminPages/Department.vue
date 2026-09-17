@@ -1,5 +1,6 @@
 <template>
   <div class="apple-container min-h-screen max-sm:p-0 p-6 md:p-8 transition-colors duration-300">
+    <input ref="importFileInput" type="file" accept=".xlsx,.xls,.csv,.json" class="hidden" @change="handleImportFile"/>
     <div class="p-4">
       <n-tabs
           type="segment"
@@ -124,7 +125,26 @@
                         department.name
                       }}</h2>
                   </div>
-                  <div class="flex gap-2">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <button @click="() => openImportModal(department)" class="apple-btn secondary">
+                      <Icon icon="ion:cloud-upload-outline" class="mr-1"/>
+                      导入名单
+                    </button>
+                    <n-dropdown
+                        trigger="click"
+                        :options="exportOptions"
+                        @select="(key) => handleExportSelect(department, key)"
+                    >
+                      <button class="apple-btn secondary">
+                        <Icon icon="ion:download-outline" class="mr-1"/>
+                        导出
+                        <Icon icon="ion:chevron-down" class="ml-1 text-xs"/>
+                      </button>
+                    </n-dropdown>
+                    <button @click="() => openHistory(department)" class="apple-btn secondary">
+                      <Icon icon="ion:time-outline" class="mr-1"/>
+                      导入历史
+                    </button>
                     <button @click="() => openDepartment(department)" class="apple-btn secondary">
                       <Icon icon="ion:settings-outline" class="mr-1"/>
                       设置
@@ -332,6 +352,111 @@
       </div>
     </template>
   </n-modal>
+
+  <!-- 导入部门名单（选择文件 → 预检查，同一个弹窗内完成） -->
+  <n-modal
+      v-model:show="showImportModal"
+      preset="card"
+      class="apple-modal"
+      style="max-width: 560px"
+      :title="importStep === 'select' ? '导入部门名单' : '导入检查'"
+      :bordered="false"
+  >
+    <div v-if="importStep === 'select'" class="space-y-5">
+      <p class="text-sm text-gray-500 dark:text-gray-400">
+        支持 XLSX / CSV / JSON，表头需包含「姓名 / 学号 / 职位」。
+      </p>
+      <div class="flex flex-wrap gap-3">
+        <button class="apple-btn secondary" @click="triggerImportFileInput">
+          <Icon icon="ion:document-outline" class="mr-1"/>
+          选择文件
+        </button>
+        <button class="apple-btn secondary" @click="downloadImportTemplate">
+          <Icon icon="ion:download-outline" class="mr-1"/>
+          下载导入模板
+        </button>
+      </div>
+      <p v-if="importFileName" class="text-sm text-gray-600 dark:text-gray-300">已选择：{{ importFileName }}</p>
+      <p v-if="importError" class="text-sm text-red-500">{{ importError }}</p>
+      <div class="flex items-start gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 text-sm">
+        <Icon icon="ion:warning-outline" class="mt-0.5 shrink-0"/>
+        <span>导入将覆盖当前部门成员名单，原名单会自动备份。</span>
+      </div>
+    </div>
+
+    <div v-else class="space-y-5">
+      <div class="flex items-center justify-between text-sm">
+        <span class="text-gray-500 dark:text-gray-400">原成员：{{ importPreview.beforeCount }} 人</span>
+        <span class="font-medium">新成员：{{ importPreview.afterCount }} 人</span>
+      </div>
+      <div class="rounded-xl border border-gray-100 dark:border-white/10 divide-y divide-gray-100 dark:divide-white/10">
+        <div v-for="row in importPreview.rows" :key="row.identity"
+             class="flex items-center justify-between px-4 py-2 text-sm">
+          <span>{{ row.label }}</span>
+          <span class="font-mono">{{ row.before }} → {{ row.after }}</span>
+        </div>
+      </div>
+      <ul class="space-y-1 text-sm">
+        <li v-for="check in importChecks" :key="check.text" class="flex items-center gap-2"
+            :class="check.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500'">
+          <Icon :icon="check.ok ? 'ion:checkmark-circle' : 'ion:close-circle'"/>
+          {{ check.text }}
+        </li>
+      </ul>
+      <p v-if="importFileName" class="text-xs text-gray-400">来源文件：{{ importFileName }}</p>
+    </div>
+
+    <template #footer>
+      <div class="flex justify-end gap-3">
+        <button v-if="importStep === 'select'" class="apple-btn secondary" @click="closeImportModal">取消</button>
+        <button v-else class="apple-btn secondary" @click="backToSelectStep">返回</button>
+        <button v-if="importStep === 'preview'"
+                class="apple-btn primary disabled:opacity-50 disabled:cursor-not-allowed"
+                :disabled="!importCanSubmit || importSubmitting"
+                @click="confirmImport">
+          {{ importSubmitting ? '导入中...' : '确认并覆盖' }}
+        </button>
+      </div>
+    </template>
+  </n-modal>
+
+  <!-- 导入历史 -->
+  <n-modal
+      v-model:show="showHistoryModal"
+      preset="card"
+      class="apple-modal"
+      style="max-width: 600px"
+      title="导入历史"
+      :bordered="false"
+  >
+    <div v-if="historyLoading" class="py-10 flex justify-center">
+      <Icon icon="ion:load-c" class="animate-spin text-3xl text-gray-300"/>
+    </div>
+    <div v-else-if="importHistory.length === 0" class="py-10 text-center text-gray-400 text-sm">
+      暂无导入记录
+    </div>
+    <div v-else class="space-y-3 max-h-[60vh] overflow-auto">
+      <div v-for="record in importHistory" :key="record.id"
+           class="flex items-center justify-between gap-3 p-3 rounded-xl bg-gray-50 dark:bg-white/5">
+        <div class="min-w-0">
+          <div class="text-sm font-medium">{{ formatImportTime(record.importedAt) }}</div>
+          <div class="text-xs text-gray-500 dark:text-gray-400 truncate">
+            {{ record.operatorName || record.operatorId }} · {{ record.memberCount }} 人
+            <span v-if="record.fileName"> · {{ record.fileName }}</span>
+          </div>
+        </div>
+        <button class="apple-btn-sm secondary shrink-0" @click="downloadHistoryBackup(record)">
+          <Icon icon="ion:download-outline" class="mr-1"/>
+          下载备份
+        </button>
+      </div>
+    </div>
+    <template #footer>
+      <div class="flex justify-end">
+        <button class="apple-btn secondary" @click="showHistoryModal = false">关闭</button>
+      </div>
+    </template>
+  </n-modal>
 </template>
 
 <script setup lang="ts">
@@ -346,18 +471,51 @@ import {
   NModal,
   NForm,
   NFormItem,
+  NDropdown,
 } from 'naive-ui'
 import type {DataTableColumns} from 'naive-ui'
 import {Icon} from '@iconify/vue'
 import {DepartmentService} from '../services/DepartmentService'
 import {StaffService} from '../services/StaffService'
-import type {Department, DepartmentModel, MemberVO, StudentVO, StaffModel} from '../models'
+import type {
+  Department,
+  DepartmentImportHistory,
+  DepartmentImportMember,
+  DepartmentModel,
+  MemberVO,
+  StudentVO,
+  StaffModel
+} from '../models'
 import * as echarts from 'echarts'
+import * as XLSX from 'xlsx'
 import {MemberQueryService} from "../services/MemberQueryService";
 import {useLayoutStore} from '../stores/LayoutStore';
 
 const message = useMessage()
 const layoutStore = useLayoutStore()
+
+// --- 导入/导出：身份与排序 ---
+const IDENTITY_LABELS: Record<string, string> = {
+  President: '社长/团支书',
+  Minister: '部长',
+  Department: '部员',
+  Founder: '创始人'
+}
+const IMPORT_IDENTITIES = ['President', 'Minister', 'Department']
+const ROLE_ORDER: Record<string, number> = {President: 0, Minister: 1, Department: 2, Founder: 3}
+
+// --- 导入/导出：状态 ---
+const showImportModal = ref(false)
+const importStep = ref<'select' | 'preview'>('select')
+const importTarget = ref<Department | null>(null)
+const importFileName = ref('')
+const importMembers = ref<DepartmentImportMember[]>([])
+const importError = ref('')
+const importSubmitting = ref(false)
+const importFileInput = ref<HTMLInputElement>()
+const showHistoryModal = ref(false)
+const historyLoading = ref(false)
+const importHistory = ref<DepartmentImportHistory[]>([])
 
 // --- 数据状态 ---
 const ministers = ref<MemberVO[]>([])
@@ -502,6 +660,320 @@ const openAddMember = (department: Department | null = null, type = 'member') =>
   searchKeyword.value = ''
   searchResults.value = []
   addMemberType.value = type
+}
+
+// --- 导入 / 导出 / 导入历史 ---
+
+const downloadBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  setTimeout(() => {
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }, 100)
+}
+
+const sortByRole = <T extends { identity: string }>(list: T[]) =>
+    [...list].sort((a, b) => (ROLE_ORDER[a.identity] ?? 9) - (ROLE_ORDER[b.identity] ?? 9))
+
+const departmentRoster = (department: Department): StaffModel[] => [
+  ...(department.ministers || []),
+  ...(department.members || [])
+]
+
+// --- 导入预览 / 校验 ---
+const importPreview = computed(() => {
+  const before: Record<string, number> = {President: 0, Minister: 0, Department: 0}
+  if (importTarget.value) {
+    departmentRoster(importTarget.value).forEach(s => {
+      if (before[s.identity] !== undefined) before[s.identity]++
+    })
+  }
+
+  const after: Record<string, number> = {President: 0, Minister: 0, Department: 0}
+  importMembers.value.forEach(m => {
+    if (after[m.identity] !== undefined) after[m.identity]++
+  })
+
+  const rows = IMPORT_IDENTITIES.map(identity => ({
+    identity,
+    label: IDENTITY_LABELS[identity],
+    before: before[identity],
+    after: after[identity]
+  }))
+
+  return {
+    beforeCount: Object.values(before).reduce((sum, value) => sum + value, 0),
+    afterCount: importMembers.value.length,
+    rows
+  }
+})
+
+const importChecks = computed(() => {
+  const phonePattern = /^1[3-9]\d{9}$/
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const invalidFormat = importMembers.value.filter(m => {
+    if (!m.userId || !m.name) return true
+    if (m.phoneNum && !phonePattern.test(m.phoneNum)) return true
+    if (m.eMail && !emailPattern.test(m.eMail)) return true
+    if (m.gender && m.gender !== '男' && m.gender !== '女') return true
+    return false
+  }).length
+
+  const seen = new Set<string>()
+  let duplicate = 0
+  importMembers.value.forEach(m => {
+    if (seen.has(m.userId)) duplicate++
+    else seen.add(m.userId)
+  })
+
+  const invalidIdentity = importMembers.value.filter(m => !IMPORT_IDENTITIES.includes(m.identity)).length
+
+  return [
+    {ok: invalidFormat === 0, text: '数据格式正确'},
+    {ok: duplicate === 0, text: '学号无重复'},
+    {ok: invalidIdentity === 0, text: '职位合法'}
+  ]
+})
+
+const importCanSubmit = computed(() => importMembers.value.length > 0 && importChecks.value.every(c => c.ok))
+
+// --- 文件解析 ---
+const triggerImportFileInput = () => importFileInput.value?.click()
+
+const normalizeIdentity = (raw: unknown): string => {
+  const value = String(raw ?? '').trim()
+  if (!value) return 'Department'
+  if (['President', '社长', '团支书', '社长/团支书', '副社长', '秘书长'].includes(value)) return 'President'
+  if (['Minister', '部长', '副部长'].includes(value)) return 'Minister'
+  if (['Department', '部员', '成员', '普通成员'].includes(value)) return 'Department'
+  return value
+}
+
+const pickField = (row: Record<string, unknown>, keys: string[]): unknown => {
+  for (const key of keys) {
+    const value = row[key]
+    if (value !== undefined && value !== null && String(value).trim() !== '') return value
+  }
+  return ''
+}
+
+const mapRosterRow = (row: Record<string, unknown>): DepartmentImportMember | null => {
+  const userId = String(pickField(row, ['学号', 'userId', 'UserId', 'id', 'ID', '编号'])).trim()
+  const name = String(pickField(row, ['姓名', 'name', 'Name', 'userName', 'UserName', '名字'])).trim()
+  const identity = normalizeIdentity(pickField(row, ['职位', '身份', 'identity', 'Identity', 'role', 'Role']))
+  if (!userId && !name) return null
+  return {
+    userId,
+    name,
+    identity,
+    academy: String(pickField(row, ['学院', 'academy', 'Academy'])).trim(),
+    className: String(pickField(row, ['专业班级', '班级', '专业', 'className', 'ClassName'])).trim(),
+    phoneNum: String(pickField(row, ['手机号', '手机', '电话', 'phoneNum', 'PhoneNum'])).trim(),
+    politicalLandscape: String(pickField(row, ['政治面貌', '面貌', 'politicalLandscape', 'PoliticalLandscape'])).trim(),
+    gender: String(pickField(row, ['性别', 'gender', 'Gender'])).trim(),
+    eMail: String(pickField(row, ['邮箱', '电子邮箱', 'eMail', 'EMail', 'email', 'Email'])).trim() || null
+  }
+}
+
+const parseRosterFile = async (file: File): Promise<DepartmentImportMember[]> => {
+  if (file.name.toLowerCase().endsWith('.json')) {
+    const text = await file.text()
+    const data = JSON.parse(text)
+    const rows: Record<string, unknown>[] = Array.isArray(data)
+        ? data
+        : (data?.members || data?.staffs || [])
+    return rows.map(mapRosterRow).filter((m): m is DepartmentImportMember => m !== null)
+  }
+
+  const buffer = await file.arrayBuffer()
+  const workbook = XLSX.read(buffer, {type: 'array'})
+  const sheet = workbook.Sheets[workbook.SheetNames[0]]
+  if (!sheet) return []
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {defval: ''})
+  return rows.map(mapRosterRow).filter((m): m is DepartmentImportMember => m !== null)
+}
+
+const handleImportFile = async (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  target.value = ''
+  if (!file) return
+
+  importError.value = ''
+  try {
+    const members = await parseRosterFile(file)
+    if (!members.length) {
+      importMembers.value = []
+      importError.value = '未从文件中解析到成员数据，请检查表头是否为「姓名 / 学号 / 职位」'
+      return
+    }
+    importMembers.value = members
+    importFileName.value = file.name
+    importStep.value = 'preview'
+  } catch (e: any) {
+    importMembers.value = []
+    importError.value = e?.message || '文件解析失败'
+  }
+}
+
+// --- 导入弹窗 ---
+const openImportModal = (department: Department) => {
+  importTarget.value = department
+  importStep.value = 'select'
+  importFileName.value = ''
+  importMembers.value = []
+  importError.value = ''
+  showImportModal.value = true
+}
+
+const closeImportModal = () => {
+  showImportModal.value = false
+  importSubmitting.value = false
+}
+
+const backToSelectStep = () => {
+  importStep.value = 'select'
+  importMembers.value = []
+  importError.value = ''
+}
+
+const confirmImport = async () => {
+  if (!importTarget.value || !importCanSubmit.value) return
+  importSubmitting.value = true
+  try {
+    const result = await DepartmentService.importDepartmentRoster(importTarget.value.name, {
+      fileName: importFileName.value || undefined,
+      members: importMembers.value
+    })
+    const deptName = importTarget.value.name
+    const backupBlob = new Blob([JSON.stringify(result.backup, null, 2)], {type: 'application/json'})
+    const backupName = `${deptName}-导入前备份-${new Date().toISOString().slice(0, 10)}.json`
+
+    showImportModal.value = false
+    await fetchData()
+
+    message.success(
+        () => h('div', {class: 'flex items-center gap-3'}, [
+          h('span', `✓ ${deptName}名单导入成功，共 ${result.afterCount} 人`),
+          h('button', {
+            class: 'text-blue-600 dark:text-blue-400 underline underline-offset-2',
+            onClick: () => downloadBlob(backupBlob, backupName)
+          }, '下载导入前备份')
+        ]),
+        {duration: 8000}
+    )
+  } catch (e: any) {
+    message.error(e?.message || '导入失败')
+  } finally {
+    importSubmitting.value = false
+  }
+}
+
+// --- 模板下载 ---
+const IMPORT_COLUMNS = ['姓名', '学号', '职位', '学院', '专业班级', '手机号', '政治面貌', '性别', '邮箱']
+
+const downloadImportTemplate = () => {
+  // 模板只保留表头，不预填任何具体信息。
+  // 用 aoa_to_sheet 而不是 json_to_sheet：空数组时 json_to_sheet 不会写出表头。
+  const worksheet = XLSX.utils.aoa_to_sheet([IMPORT_COLUMNS])
+  worksheet['!cols'] = [
+    {wch: 12}, {wch: 14}, {wch: 14}, {wch: 22}, {wch: 14},
+    {wch: 14}, {wch: 12}, {wch: 8}, {wch: 24}
+  ]
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, '导入模板')
+  XLSX.writeFile(workbook, '部门名单导入模板.xlsx')
+}
+
+// --- 导出 ---
+const exportOptions = [
+  {label: 'Excel (.xlsx)', key: 'xlsx'},
+  {label: 'CSV (.csv)', key: 'csv'},
+  {label: 'JSON (.json)', key: 'json'}
+]
+
+const handleExportSelect = (department: Department, key: string | number) => {
+  void exportDepartment(department, key as 'xlsx' | 'csv' | 'json')
+}
+
+const exportDepartment = async (department: Department, format: 'xlsx' | 'csv' | 'json') => {
+  // 部门成员列表只有 name/userId/identity，学生档案字段需要从 /Staff/members 补齐
+  let profiles: MemberVO[] = []
+  try {
+    profiles = await StaffService.getAllStaff()
+  } catch {
+    profiles = []
+  }
+  const profileMap = new Map(profiles.map(p => [p.userId, p]))
+
+  const rows = departmentRoster(department).map(s => {
+    const profile = profileMap.get(s.userId)
+    return {
+      姓名: profile?.userName || s.name,
+      学号: s.userId,
+      职位: IDENTITY_LABELS[s.identity] || s.identity,
+      学院: profile?.academy || '',
+      专业班级: profile?.className || '',
+      手机号: profile?.phoneNum || '',
+      政治面貌: profile?.politicalLandscape || '',
+      性别: profile?.gender || '',
+      邮箱: profile?.eMail || ''
+    }
+  })
+  const stamp = new Date().toISOString().slice(0, 10)
+  const base = `${department.name}-名单-${stamp}`
+
+  if (format === 'json') {
+    downloadBlob(new Blob([JSON.stringify(rows, null, 2)], {type: 'application/json'}), `${base}.json`)
+  } else if (format === 'csv') {
+    const worksheet = XLSX.utils.json_to_sheet(rows)
+    const csv = '\uFEFF' + XLSX.utils.sheet_to_csv(worksheet)
+    downloadBlob(new Blob([csv], {type: 'text/csv;charset=utf-8'}), `${base}.csv`)
+  } else {
+    const worksheet = XLSX.utils.json_to_sheet(rows)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, '成员名单')
+    XLSX.writeFile(workbook, `${base}.xlsx`)
+  }
+  message.success('导出成功')
+}
+
+// --- 导入历史 ---
+const openHistory = async (department: Department) => {
+  importTarget.value = department
+  showHistoryModal.value = true
+  historyLoading.value = true
+  importHistory.value = []
+  try {
+    importHistory.value = await DepartmentService.getImportHistory(department.name)
+  } catch (e: any) {
+    message.error(e?.message || '获取导入历史失败')
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+const downloadHistoryBackup = async (record: DepartmentImportHistory) => {
+  try {
+    const blob = await DepartmentService.downloadImportBackup(record.id)
+    downloadBlob(blob, `${record.departmentName}-备份-${record.id.slice(0, 8)}.json`)
+    message.success('备份下载已开始')
+  } catch (e: any) {
+    message.error(e?.message || '下载失败')
+  }
+}
+
+const formatImportTime = (value: string) => {
+  try {
+    return new Intl.DateTimeFormat('zh-CN', {dateStyle: 'medium', timeStyle: 'short'}).format(new Date(value))
+  } catch {
+    return value
+  }
 }
 
 // --- CRUD Operations (Logic Preserved) ---
@@ -663,13 +1135,13 @@ const fetchData = async () => {
       id: dept.key,
       name: dept.name,
       description: dept.description,
-      ministers: dept.staffs?.filter((staff: any) => staff.identity === 'President' || staff.identity === 'Minister') || [],
-      members: dept.staffs?.filter((staff: any) => staff.identity === 'Department') || [],
+      ministers: sortByRole(dept.staffs?.filter((staff: any) => staff.identity === 'President' || staff.identity === 'Minister') || []),
+      members: sortByRole(dept.staffs?.filter((staff: any) => staff.identity === 'Department') || []),
     } as Department))
 
     staffs.value = await StaffService.getAllStaff()
     ministers.value = staffs.value.filter(staff => staff.identity === 'President')
-    members.value = staffs.value.filter(staff => staff.identity !== 'Founder')
+    members.value = sortByRole(staffs.value.filter(staff => staff.identity !== 'Founder'))
 
   } catch (error: any) {
     console.error(error)

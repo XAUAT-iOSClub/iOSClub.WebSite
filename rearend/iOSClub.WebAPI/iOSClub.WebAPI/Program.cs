@@ -342,8 +342,11 @@ if (string.IsNullOrEmpty(sql))
 if (string.IsNullOrEmpty(sql))
 {
     builder.Services.AddDbContextFactory<ClubContext>(opt =>
+    {
         opt.UseSqlite("Data Source=Data.db",
-            o => o.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
+            o => o.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
+        opt.ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
+    });
 
     builder.Services.AddDataProtection()
         .PersistKeysToFileSystem(new DirectoryInfo("./keys"));
@@ -546,28 +549,39 @@ using (var scope = app.Services.CreateScope())
             }
 
             context.Staffs.Add(model);
+            // 先落库，下面的 Founder 查询才会命中（FirstOrDefaultAsync 查数据库，不查变更跟踪器）
+            await context.SaveChangesAsync();
         }
-        // else
-        // {
-        //     var founder = await context.Staffs.FirstOrDefaultAsync(x => x.Identity == "Founder");
-        //     if (founder is {UserId: not null and not ""})
-        //     {
-        //         Console.WriteLine($"Founder exists: {founder.Name} ({founder.UserId})");
-        //         var userFounder = await context.Students.FirstOrDefaultAsync(x => x.UserId == founder.UserId);
-        //         if (userFounder is null)
-        //         {
-        //             var userFounderStu = new StudentDO
-        //             {
-        //                 UserId = founder.UserId,
-        //                 UserName = founder.Name,
-        //                 EMail = "iosclub@example.com",
-        //                 PhoneNum = "0000000000",
-        //                 PasswordHash = DataTool.StringToHash("123456"), // 这里应该使用实际的密码哈希
-        //             };
-        //             context.Students.Add(userFounderStu);
-        //         }
-        //     }
-        // }
+
+        // 开发环境：保证 Founder 同时拥有 Student 档案。
+        // 系统约定 Founder = Staff + Student；缺 Student 时 /User/data 会返回 404，
+        // 前端若把它当成会话失效就会把已登录用户弹回登录页。仅开发环境自动补齐，
+        // 生产环境仍由管理员显式创建，避免写入默认密码。
+        if (app.Environment.IsDevelopment())
+        {
+            var founder = await context.Staffs.FirstOrDefaultAsync(x => x.Identity == "Founder");
+            if (founder is { UserId: not null and not "" } &&
+                !await context.Students.AnyAsync(x => x.UserId == founder.UserId))
+            {
+                var password = Environment.GetEnvironmentVariable("FOUNDER_PASSWORD", EnvironmentVariableTarget.Process);
+                if (string.IsNullOrWhiteSpace(password)) password = "iosclub123";
+
+                Console.WriteLine($"Creating Student profile for Founder: {founder.Name} ({founder.UserId})");
+                context.Students.Add(new StudentDO
+                {
+                    UserId = founder.UserId,
+                    UserName = founder.Name,
+                    Academy = "计算机科学与技术学院",
+                    PoliticalLandscape = "共青团员",
+                    Gender = "男",
+                    ClassName = "计科2301",
+                    PhoneNum = "13800138000",
+                    EMail = "iosclub@example.com",
+                    PasswordHash = DataTool.StringToHash(password),
+                    JoinTime = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+                });
+            }
+        }
 
         if (await context.Categories.AnyAsync())
         {

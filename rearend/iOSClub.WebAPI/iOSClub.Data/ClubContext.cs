@@ -18,6 +18,7 @@ public sealed class ClubContext(DbContextOptions<ClubContext> options) : DbConte
     public DbSet<ArticleDO> Articles { get; init; }
     public DbSet<CategoryDO> Categories { get; init; }
     public DbSet<ClientApplicationDO> ClientApplications { get; init; }
+    public DbSet<ImportHistoryDO> ImportHistories { get; init; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -69,6 +70,10 @@ public sealed class ClubContext(DbContextOptions<ClubContext> options) : DbConte
             .HasIndex(a => a.CategoryId); // 用于按分类查询
         modelBuilder.Entity<ArticleDO>()
             .HasIndex(a => a.VisibleToDepartment); // 用于按部门过滤可见文章
+
+        // ImportHistoryDO 索引：按部门 + 时间倒序拉取导入历史
+        modelBuilder.Entity<ImportHistoryDO>()
+            .HasIndex(h => new { h.DepartmentName, h.ImportedAt });
 
         // ParadeDB BM25 全文检索索引（pg_search）
         modelBuilder.Entity<ArticleDO>()

@@ -1,6 +1,11 @@
 import {url} from './Url';
 import {AuthService} from './AuthService';
-import {DepartmentModel} from "../models";
+import {
+    DepartmentImportHistory,
+    DepartmentImportMember,
+    DepartmentImportResult,
+    DepartmentModel
+} from "../models";
 import {apiRequest} from './ApiService';
 
 /**
@@ -74,6 +79,61 @@ export class DepartmentService {
             try {
                 const errorData = await response.json();
                 // 后端统一信封用的是 camelCase 的 message 字段
+                if (errorData.message) {
+                    errorMessage = errorData.message;
+                }
+            } catch {
+            }
+            throw new Error(errorMessage);
+        }
+
+        return await response.blob();
+    }
+
+    /**
+     * 导入并覆盖指定部门的成员名单（后端会自动备份原名单并记录导入历史）
+     */
+    static async importDepartmentRoster(
+        name: string,
+        payload: { fileName?: string; members: DepartmentImportMember[] }
+    ): Promise<DepartmentImportResult> {
+        return await apiRequest<DepartmentImportResult>({
+            url: `${url}/Department/${encodeURIComponent(name)}/import`,
+            method: 'POST',
+            body: payload
+        });
+    }
+
+    /**
+     * 获取指定部门的导入历史
+     */
+    static async getImportHistory(name: string): Promise<DepartmentImportHistory[]> {
+        return await apiRequest<DepartmentImportHistory[]>({
+            url: `${url}/Department/${encodeURIComponent(name)}/import-history`,
+            method: 'GET'
+        });
+    }
+
+    /**
+     * 下载某次导入前的名单备份
+     */
+    static async downloadImportBackup(historyId: string): Promise<Blob> {
+        const token = AuthService.getToken();
+        if (!token) {
+            throw new Error('未登录');
+        }
+
+        const response = await fetch(`${url}/Department/import-history/${encodeURIComponent(historyId)}/backup`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            },
+        });
+
+        if (!response.ok) {
+            let errorMessage = `HTTP error! status: ${response.status}`;
+            try {
+                const errorData = await response.json();
                 if (errorData.message) {
                     errorMessage = errorData.message;
                 }
