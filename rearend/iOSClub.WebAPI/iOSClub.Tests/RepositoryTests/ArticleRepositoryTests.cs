@@ -159,9 +159,12 @@ public class ArticleRepositoryTests
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
         
-        // 使用Bogus生成分类
+        // 使用Bogus生成分类；Name 是随机单词，可能重复，而结果按 Name 分组，
+        // 重复会让两个分类被合并导致断言随机失败，这里强制区分。
         var category1 = BogusDataGenerator.CategoryFaker.Generate();
         var category2 = BogusDataGenerator.CategoryFaker.Generate();
+        category1.Name = "测试分类A";
+        category2.Name = "测试分类B";
         await context.Categories.AddRangeAsync(category1, category2);
         
         // 使用Bogus生成3篇文章

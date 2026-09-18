@@ -311,4 +311,57 @@ public class DepartmentImportControllerTests : IClassFixture<WebApplicationFacto
         Assert.False(string.IsNullOrEmpty(student.PasswordHash));
     }
 
+    [Fact]
+    public async Task Rollback_RestoresPreviousVersion()
+    {
+        await SeedAsync();
+        ActAsFounder();
+
+        // V1：3 人
+        await _client.PostAsJsonAsync("/Department/技术部/import", new DepartmentImportDTO
+        {
+            FileName = "v1.csv",
+            Members =
+            [
+                new DepartmentImportMemberDTO { UserId = "2023000001", Name = "甲", Identity = "Department" },
+                new DepartmentImportMemberDTO { UserId = "2023000002", Name = "乙", Identity = "Department" },
+                new DepartmentImportMemberDTO { UserId = "2023000003", Name = "丙", Identity = "Department" }
+            ]
+        });
+
+        // V2：2 人
+        await _client.PostAsJsonAsync("/Department/技术部/import", new DepartmentImportDTO
+        {
+            FileName = "v2.csv",
+            Members =
+            [
+                new DepartmentImportMemberDTO { UserId = "2023000001", Name = "甲", Identity = "Department" },
+                new DepartmentImportMemberDTO { UserId = "2023000002", Name = "乙", Identity = "Department" }
+            ]
+        });
+
+        var historyResponse = await _client.GetAsync("/Department/技术部/import-history");
+        var history = JsonConvert.DeserializeObject<ApiResponse<List<ImportHistoryVO>>>(
+            await historyResponse.Content.ReadAsStringAsync());
+        Assert.NotNull(history);
+        Assert.Equal(2, history.Data!.Count);
+        Assert.All(history.Data, h => Assert.True(h.CanRollback));
+
+        // 列表按时间倒序，第 2 条是 V1
+        var v1Id = history.Data[1].Id;
+        var rollback = await _client.PostAsync($"/Department/技术部/rollback/{v1Id}", null);
+        Assert.Equal(HttpStatusCode.OK, rollback.StatusCode);
+        var rollbackResult = JsonConvert.DeserializeObject<ApiResponse<DepartmentImportResultVO>>(
+            await rollback.Content.ReadAsStringAsync());
+        Assert.Equal(2, rollbackResult!.Data!.BeforeCount);
+        Assert.Equal(3, rollbackResult.Data.AfterCount);
+        Assert.Equal(2, rollbackResult.Data.Backup.Count);
+
+        await using var context = new ClubContext(_options);
+        var staff = await context.Staffs.Include(s => s.Department)
+            .Where(s => s.Department != null && s.Department.Name == "技术部").ToListAsync();
+        Assert.Equal(3, staff.Count);
+        Assert.Contains(staff, s => s.UserId == "2023000003");
+    }
+
 }

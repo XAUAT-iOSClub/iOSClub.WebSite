@@ -115,6 +115,16 @@ export class DepartmentService {
     }
 
     /**
+     * 回滚到指定版本（后端会先备份当前名单，再以该版本快照覆盖）
+     */
+    static async rollbackDepartmentRoster(name: string, historyId: string): Promise<DepartmentImportResult> {
+        return await apiRequest<DepartmentImportResult>({
+            url: `${url}/Department/${encodeURIComponent(name)}/rollback/${encodeURIComponent(historyId)}`,
+            method: 'POST'
+        });
+    }
+
+    /**
      * 下载某次导入前的名单备份
      */
     static async downloadImportBackup(historyId: string): Promise<Blob> {

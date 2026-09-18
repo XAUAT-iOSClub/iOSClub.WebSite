@@ -48,6 +48,12 @@ public class ImportHistoryDO
     public string BackupJson { get; set; } = "[]";
 
     /// <summary>
+    /// 本次导入后的部门名单快照（JSON 数组），作为可回滚的版本内容。
+    /// 旧数据可能为空，表示该记录不可回滚。
+    /// </summary>
+    public string SnapshotJson { get; set; } = "[]";
+
+    /// <summary>
     /// 导入前后各身份数量变化（JSON 对象），用于历史详情展示
     /// </summary>
     public string SummaryJson { get; set; } = "{}";

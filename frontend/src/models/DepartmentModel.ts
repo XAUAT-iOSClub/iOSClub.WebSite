@@ -63,4 +63,5 @@ export interface DepartmentImportHistory {
   fileName: string | null;
   memberCount: number;
   roleChanges: Record<string, number[]>;
+  canRollback: boolean;
 }

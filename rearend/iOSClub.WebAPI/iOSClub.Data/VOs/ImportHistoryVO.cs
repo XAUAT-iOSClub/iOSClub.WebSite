@@ -17,6 +17,11 @@ public class ImportHistoryVO
     /// 导入前后各身份数量变化，键为身份，值为 [before, after]
     /// </summary>
     public Dictionary<string, int[]> RoleChanges { get; set; } = new();
+
+    /// <summary>
+    /// 是否可回滚到该版本（存在名单快照）
+    /// </summary>
+    public bool CanRollback { get; set; }
 }
 
 /// <summary>

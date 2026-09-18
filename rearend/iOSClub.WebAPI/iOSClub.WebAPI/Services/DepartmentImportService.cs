@@ -30,6 +30,12 @@ public interface IDepartmentImportService
     /// 获取指定导入历史的备份记录，找不到返回 null
     /// </summary>
     Task<ImportHistoryDO?> GetHistoryByIdAsync(string id);
+
+    /// <summary>
+    /// 回滚到指定版本：以该版本快照覆盖当前名单，回滚前自动备份当前名单。
+    /// </summary>
+    Task<DepartmentImportResultVO> RollbackAsync(string departmentName, string historyId,
+        string operatorId, string operatorName);
 }
 
 public class DepartmentImportService(IDbContextFactory<ClubContext> factory) : IDepartmentImportService
@@ -39,13 +45,49 @@ public class DepartmentImportService(IDbContextFactory<ClubContext> factory) : I
     public async Task<DepartmentImportResultVO> ImportRosterAsync(string departmentName, DepartmentImportDTO dto,
         string operatorId, string operatorName)
     {
+        var incoming = NormalizeMembers(dto.Members);
+        return await ApplyRosterAsync(departmentName, incoming, dto.FileName, operatorId, operatorName);
+    }
+
+    public async Task<DepartmentImportResultVO> RollbackAsync(string departmentName, string historyId,
+        string operatorId, string operatorName)
+    {
+        await using var context = await factory.CreateDbContextAsync();
+        var record = await context.ImportHistories
+            .FirstOrDefaultAsync(h => h.Id == historyId && h.DepartmentName == departmentName);
+        if (record == null)
+            throw new BusinessException(ErrorCode.ResourceNotFound, "版本不存在");
+
+        var snapshot = DeserializeSnapshot(record.SnapshotJson);
+        if (snapshot.Count == 0)
+            throw new BusinessException(ErrorCode.InvalidStatusForOperation, "该版本没有可回滚的名单快照");
+
+        // 快照里的成员信息已是规范值，转成 DTO 后复用与导入完全相同的覆盖+备份流程。
+        var members = snapshot.Select(v => new DepartmentImportMemberDTO
+        {
+            UserId = v.UserId,
+            Name = v.Name,
+            Identity = v.Identity,
+            Academy = v.Academy,
+            ClassName = v.ClassName,
+            PhoneNum = v.PhoneNum,
+            PoliticalLandscape = v.PoliticalLandscape,
+            Gender = v.Gender,
+            EMail = v.EMail
+        }).ToList();
+
+        var label = $"回滚至 {record.ImportedAt:yyyy-MM-dd HH:mm:ss}";
+        return await ApplyRosterAsync(departmentName, NormalizeMembers(members), label, operatorId, operatorName);
+    }
+
+    private async Task<DepartmentImportResultVO> ApplyRosterAsync(string departmentName,
+        List<DepartmentImportMemberDTO> incoming, string? fileName, string operatorId, string operatorName)
+    {
         await using var context = await factory.CreateDbContextAsync();
 
         var department = await context.Departments.FirstOrDefaultAsync(d => d.Name == departmentName);
         if (department == null)
             throw new BusinessException(ErrorCode.ResourceNotFound, "部门不存在");
-
-        var incoming = NormalizeMembers(dto.Members);
 
         // 备份、删除、upsert、历史记录都在同一次 SaveChanges 中提交，天然原子，无需显式事务。
         var current = await context.Staffs
@@ -117,6 +159,7 @@ public class DepartmentImportService(IDbContextFactory<ClubContext> factory) : I
 
             if (student == null)
             {
+                // 数据库中没有该学号 → 新成员，建立独立档案
                 student = new StudentDO { UserId = item.UserId, UserName = item.Name };
                 // 新学生需要一个可登录的初始密码：优先手机号，其次学号（与批量导入的约定一致）
                 student.PasswordHash = DataTool.StringToHash(
@@ -125,6 +168,15 @@ public class DepartmentImportService(IDbContextFactory<ClubContext> factory) : I
             }
             else
             {
+                // 身份判定：学号 + 姓名都相同，才视为数据库里的同一个人。
+                // 只同学号但姓名不同，说明是另一个人的学号被占用，不能静默改名或另建独立记录。
+                var existingName = (student.UserName ?? "").Trim();
+                if (!string.Equals(existingName, item.Name, StringComparison.Ordinal))
+                    throw new BusinessException(ErrorCode.ParameterValidationFailed,
+                        $"学号 {item.UserId} 在系统中已存在，但姓名不一致（系统：{existingName}，导入：{item.Name}）。" +
+                        "学号与姓名都相同才视为同一人，请核对名单后重试。");
+
+                // 同名同学号 → 同一个人：复用其现有档案，仅补充导入文件中非空的字段。
                 student.UserName = item.Name;
             }
 
@@ -134,15 +186,30 @@ public class DepartmentImportService(IDbContextFactory<ClubContext> factory) : I
         var afterRoles = CountRoles(incoming.Select(m => m.Identity));
         var roleChanges = BuildRoleChanges(beforeRoles, afterRoles);
 
+        // 记录本次操作后的名单快照，作为可回滚的"版本"内容。
+        var snapshot = incoming.Select(m => new DepartmentImportMemberVO
+        {
+            UserId = m.UserId,
+            Name = m.Name,
+            Identity = m.Identity,
+            Academy = m.Academy,
+            ClassName = m.ClassName,
+            PhoneNum = m.PhoneNum,
+            PoliticalLandscape = m.PoliticalLandscape,
+            Gender = m.Gender,
+            EMail = m.EMail
+        }).ToList();
+
         var history = new ImportHistoryDO
         {
             DepartmentName = departmentName,
             ImportedAt = DateTime.UtcNow,
             OperatorId = operatorId,
             OperatorName = operatorName,
-            FileName = dto.FileName,
+            FileName = fileName,
             MemberCount = incoming.Count,
             BackupJson = JsonSerializer.Serialize(backup),
+            SnapshotJson = JsonSerializer.Serialize(snapshot),
             SummaryJson = JsonSerializer.Serialize(roleChanges)
         };
         context.ImportHistories.Add(history);
@@ -264,6 +331,19 @@ public class DepartmentImportService(IDbContextFactory<ClubContext> factory) : I
         return changes;
     }
 
+    private static List<DepartmentImportMemberVO> DeserializeSnapshot(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        try
+        {
+            return JsonSerializer.Deserialize<List<DepartmentImportMemberVO>>(json) ?? [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
     private static ImportHistoryVO ToVO(ImportHistoryDO record)
     {
         Dictionary<string, int[]> roleChanges;
@@ -285,7 +365,8 @@ public class DepartmentImportService(IDbContextFactory<ClubContext> factory) : I
             OperatorName = record.OperatorName,
             FileName = record.FileName,
             MemberCount = record.MemberCount,
-            RoleChanges = roleChanges
+            RoleChanges = roleChanges,
+            CanRollback = DeserializeSnapshot(record.SnapshotJson).Count > 0
         };
     }
 }

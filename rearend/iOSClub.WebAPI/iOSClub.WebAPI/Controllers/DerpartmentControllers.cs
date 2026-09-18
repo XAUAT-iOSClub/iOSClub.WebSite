@@ -237,6 +237,27 @@ public class DepartmentController(
     }
 
     /// <summary>
+    /// 回滚到指定版本：以该版本快照覆盖当前名单，回滚前自动备份当前名单。
+    /// </summary>
+    [HttpPost("{name}/rollback/{historyId}")]
+    [Authorize(Roles = "Founder,President,Minister")]
+    public async Task<ActionResult<ApiResponse<DepartmentImportResultVO>>> RollbackDepartmentRoster(
+        string name, string historyId)
+    {
+        var userJwt = httpContextAccessor.HttpContext?.User.GetUser();
+        if (userJwt == null)
+            return Ok(ApiResponse<DepartmentImportResultVO>.Fail(ErrorCode.Unauthorized, "用户未认证"));
+
+        if (!IsAdminUser(userJwt.Identity))
+            return Ok(ApiResponse<DepartmentImportResultVO>.Fail(ErrorCode.InsufficientPermission, "权限不足"));
+
+        var operatorStaff = await staffRepository.GetStaffByIdAsync(userJwt.UserId);
+        var result = await departmentImportService.RollbackAsync(name, historyId, userJwt.UserId,
+            operatorStaff?.Name ?? "");
+        return Ok(ApiResponse<DepartmentImportResultVO>.Success(result, "回滚成功"));
+    }
+
+    /// <summary>
     /// 检查用户是否有权限访问部门信息
     /// </summary>
     /// <param name="identity">用户身份</param>

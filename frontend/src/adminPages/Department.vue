@@ -51,9 +51,15 @@
                     <Icon icon="ion:people-outline" class="text-xl"/>
                     <span class="text-sm font-medium">成员总数</span>
                   </div>
-                  <button @click="downloadMemberInfo" class="apple-icon-btn text-blue-500" title="导出数据">
-                    <Icon icon="ion:cloud-download-outline" width="24"/>
-                  </button>
+                  <n-dropdown
+                      trigger="click"
+                      :options="exportOptions"
+                      @select="handleOverviewExportSelect"
+                  >
+                    <button class="apple-icon-btn text-blue-500" title="导出数据">
+                      <Icon icon="ion:cloud-download-outline" width="24"/>
+                    </button>
+                  </n-dropdown>
                 </div>
                 <div class="text-4xl font-bold text-gray-900 dark:text-white tracking-tight">
                   {{ loading ? '-' : members.length }}
@@ -396,6 +402,10 @@
           <span class="font-mono">{{ row.before }} → {{ row.after }}</span>
         </div>
       </div>
+      <p class="text-xs text-gray-500 dark:text-gray-400">
+        数据库关联：已关联 {{ importLinkSummary.linked }} 人，新建 {{ importLinkSummary.created }} 人
+        <span v-if="importLinkSummary.conflict" class="text-red-500">（姓名冲突 {{ importLinkSummary.conflict }} 人）</span>
+      </p>
       <ul class="space-y-1 text-sm">
         <li v-for="check in importChecks" :key="check.text" class="flex items-center gap-2"
             :class="check.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500'">
@@ -426,7 +436,7 @@
       preset="card"
       class="apple-modal"
       style="max-width: 600px"
-      title="导入历史"
+      title="版本记录"
       :bordered="false"
   >
     <div v-if="historyLoading" class="py-10 flex justify-center">
@@ -445,10 +455,16 @@
             <span v-if="record.fileName"> · {{ record.fileName }}</span>
           </div>
         </div>
-        <button class="apple-btn-sm secondary shrink-0" @click="downloadHistoryBackup(record)">
-          <Icon icon="ion:download-outline" class="mr-1"/>
-          下载备份
-        </button>
+        <div class="flex items-center gap-2 shrink-0">
+          <button v-if="record.canRollback" class="apple-btn-sm primary" @click="rollbackVersion(record)">
+            <Icon icon="ion:time-outline" class="mr-1"/>
+            回滚
+          </button>
+          <button class="apple-btn-sm secondary" @click="downloadHistoryBackup(record)">
+            <Icon icon="ion:download-outline" class="mr-1"/>
+            下载备份
+          </button>
+        </div>
       </div>
     </div>
     <template #footer>
@@ -463,6 +479,7 @@
 import {ref, onMounted, onBeforeUnmount, h, computed, nextTick, watch, defineComponent} from 'vue'
 import {
   useMessage,
+  useDialog,
   NTabs,
   NTabPane,
   NSelect,
@@ -492,6 +509,7 @@ import {MemberQueryService} from "../services/MemberQueryService";
 import {useLayoutStore} from '../stores/LayoutStore';
 
 const message = useMessage()
+const dialog = useDialog()
 const layoutStore = useLayoutStore()
 
 // --- 导入/导出：身份与排序 ---
@@ -513,6 +531,8 @@ const importMembers = ref<DepartmentImportMember[]>([])
 const importError = ref('')
 const importSubmitting = ref(false)
 const importFileInput = ref<HTMLInputElement>()
+// 数据库现有成员的 学号 -> 姓名，用于判断导入成员是"关联已有人"还是"新建"
+const existingProfileMap = ref<Map<string, string>>(new Map())
 const showHistoryModal = ref(false)
 const historyLoading = ref(false)
 const importHistory = ref<DepartmentImportHistory[]>([])
@@ -713,6 +733,17 @@ const importPreview = computed(() => {
   }
 })
 
+const importLinkSummary = computed(() => {
+  let linked = 0, created = 0, conflict = 0
+  for (const m of importMembers.value) {
+    const dbName = existingProfileMap.value.get(m.userId)
+    if (dbName === undefined) created++
+    else if (dbName === (m.name || '').trim()) linked++
+    else conflict++
+  }
+  return {linked, created, conflict}
+})
+
 const importChecks = computed(() => {
   const phonePattern = /^1[3-9]\d{9}$/
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -736,7 +767,8 @@ const importChecks = computed(() => {
   return [
     {ok: invalidFormat === 0, text: '数据格式正确'},
     {ok: duplicate === 0, text: '学号无重复'},
-    {ok: invalidIdentity === 0, text: '职位合法'}
+    {ok: invalidIdentity === 0, text: '职位合法'},
+    {ok: importLinkSummary.value.conflict === 0, text: '学号与姓名匹配'}
   ]
 })
 
@@ -822,13 +854,22 @@ const handleImportFile = async (event: Event) => {
 }
 
 // --- 导入弹窗 ---
-const openImportModal = (department: Department) => {
+const openImportModal = async (department: Department) => {
   importTarget.value = department
   importStep.value = 'select'
   importFileName.value = ''
   importMembers.value = []
   importError.value = ''
+  existingProfileMap.value = new Map()
   showImportModal.value = true
+
+  // 拉取数据库现有成员，用于判断导入项是"关联已有人"还是"新建"
+  try {
+    const profiles = await StaffService.getAllStaff()
+    existingProfileMap.value = new Map(profiles.map(p => [p.userId, (p.userName || '').trim()]))
+  } catch {
+    existingProfileMap.value = new Map()
+  }
 }
 
 const closeImportModal = () => {
@@ -901,6 +942,34 @@ const handleExportSelect = (department: Department, key: string | number) => {
   void exportDepartment(department, key as 'xlsx' | 'csv' | 'json')
 }
 
+const writeExport = (rows: Record<string, unknown>[], base: string, format: 'xlsx' | 'csv' | 'json') => {
+  if (format === 'json') {
+    downloadBlob(new Blob([JSON.stringify(rows, null, 2)], {type: 'application/json'}), `${base}.json`)
+  } else if (format === 'csv') {
+    const worksheet = XLSX.utils.json_to_sheet(rows)
+    const csv = '\uFEFF' + XLSX.utils.sheet_to_csv(worksheet)
+    downloadBlob(new Blob([csv], {type: 'text/csv;charset=utf-8'}), `${base}.csv`)
+  } else {
+    const worksheet = XLSX.utils.json_to_sheet(rows)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, '成员名单')
+    XLSX.writeFile(workbook, `${base}.xlsx`)
+  }
+  message.success('导出成功')
+}
+
+const memberToExportRow = (m: MemberVO) => ({
+  姓名: m.userName,
+  学号: m.userId,
+  职位: IDENTITY_LABELS[m.identity] || m.identity,
+  学院: m.academy || '',
+  专业班级: m.className || '',
+  手机号: m.phoneNum || '',
+  政治面貌: m.politicalLandscape || '',
+  性别: m.gender || '',
+  邮箱: m.eMail || ''
+})
+
 const exportDepartment = async (department: Department, format: 'xlsx' | 'csv' | 'json') => {
   // 部门成员列表只有 name/userId/identity，学生档案字段需要从 /Staff/members 补齐
   let profiles: MemberVO[] = []
@@ -926,21 +995,14 @@ const exportDepartment = async (department: Department, format: 'xlsx' | 'csv' |
     }
   })
   const stamp = new Date().toISOString().slice(0, 10)
-  const base = `${department.name}-名单-${stamp}`
+  writeExport(rows, `${department.name}-名单-${stamp}`, format)
+}
 
-  if (format === 'json') {
-    downloadBlob(new Blob([JSON.stringify(rows, null, 2)], {type: 'application/json'}), `${base}.json`)
-  } else if (format === 'csv') {
-    const worksheet = XLSX.utils.json_to_sheet(rows)
-    const csv = '\uFEFF' + XLSX.utils.sheet_to_csv(worksheet)
-    downloadBlob(new Blob([csv], {type: 'text/csv;charset=utf-8'}), `${base}.csv`)
-  } else {
-    const worksheet = XLSX.utils.json_to_sheet(rows)
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, '成员名单')
-    XLSX.writeFile(workbook, `${base}.xlsx`)
-  }
-  message.success('导出成功')
+// --- 总览面板：导出全体成员 ---
+const handleOverviewExportSelect = (key: string | number) => {
+  const rows = members.value.map(memberToExportRow)
+  const stamp = new Date().toISOString().slice(0, 10)
+  writeExport(rows, `全体部员-${stamp}`, key as 'xlsx' | 'csv' | 'json')
 }
 
 // --- 导入历史 ---
@@ -966,6 +1028,42 @@ const downloadHistoryBackup = async (record: DepartmentImportHistory) => {
   } catch (e: any) {
     message.error(e?.message || '下载失败')
   }
+}
+
+// 回滚到某个历史版本：先确认，成功后自动提供"回滚前备份"下载
+const rollbackVersion = (record: DepartmentImportHistory) => {
+  const department = importTarget.value
+  if (!department || !record.canRollback) return
+
+  dialog.warning({
+    title: '回滚版本',
+    content: `将把「${department.name}」名单回滚到 ${formatImportTime(record.importedAt)} 的版本（${record.memberCount} 人）。回滚前会自动备份当前名单。`,
+    positiveText: '确认回滚',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        const result = await DepartmentService.rollbackDepartmentRoster(department.name, record.id)
+        const backupBlob = new Blob([JSON.stringify(result.backup, null, 2)], {type: 'application/json'})
+        const backupName = `${department.name}-回滚前备份-${new Date().toISOString().slice(0, 10)}.json`
+
+        showHistoryModal.value = false
+        await fetchData()
+
+        message.success(
+          () => h('div', {class: 'flex items-center gap-3'}, [
+            h('span', `✓ ${department.name}已回滚到 ${result.afterCount} 人版本`),
+            h('button', {
+              class: 'text-blue-600 dark:text-blue-400 underline underline-offset-2',
+              onClick: () => downloadBlob(backupBlob, backupName)
+            }, '下载回滚前备份')
+          ]),
+          {duration: 8000}
+        )
+      } catch (e: any) {
+        message.error(e?.message || '回滚失败')
+      }
+    }
+  })
 }
 
 const formatImportTime = (value: string) => {
@@ -1016,25 +1114,6 @@ const deleteStaff = async (staff: any) => {
   if (!res) return message.error('操作失败')
   message.success('成员已删除')
   await fetchData()
-}
-
-const downloadMemberInfo = async () => {
-  try {
-    const blob = await DepartmentService.exportJson()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'member.json'
-    document.body.appendChild(a)
-    a.click()
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url)
-    }, 100)
-    message.success('下载已开始')
-  } catch (error) {
-    message.error('导出失败')
-  }
 }
 
 const deleteDepartment = async (department: Department) => {

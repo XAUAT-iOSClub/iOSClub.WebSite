@@ -104,9 +104,10 @@ public class DepartmentImportServiceTests
         // 旧成员先有一个学生档案，用于验证字段更新
         await using (var seed = _contextFactory.CreateDbContext())
         {
+            // 姓名必须与导入一致，否则会触发"学号相同但姓名不同"的身份冲突
             seed.Students.Add(new StudentDO
             {
-                UserId = "0000000001", UserName = "旧部长", Academy = "旧学院",
+                UserId = "0000000001", UserName = "新部长", Academy = "旧学院",
                 ClassName = "旧班", PhoneNum = "13900000000", PoliticalLandscape = "群众", Gender = "男"
             });
             await seed.SaveChangesAsync();
@@ -284,6 +285,144 @@ public class DepartmentImportServiceTests
     }
 
     [Fact]
+    public async Task RollbackAsync_RestoresVersionAndBacksUpCurrent()
+    {
+        await SeedDepartmentAsync();
+
+        // V1：导入 3 人
+        var v1 = await _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+        {
+            FileName = "v1.csv",
+            Members =
+            [
+                new DepartmentImportMemberDTO { UserId = "0000000003", Name = "甲", Identity = "Department" },
+                new DepartmentImportMemberDTO { UserId = "0000000004", Name = "乙", Identity = "Department" },
+                new DepartmentImportMemberDTO { UserId = "0000000005", Name = "丙", Identity = "Department" }
+            ]
+        }, "9999999999", "操作员");
+
+        // V2：导入 2 人
+        await _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+        {
+            FileName = "v2.csv",
+            Members =
+            [
+                new DepartmentImportMemberDTO { UserId = "0000000003", Name = "甲", Identity = "Department" },
+                new DepartmentImportMemberDTO { UserId = "0000000004", Name = "乙", Identity = "Department" }
+            ]
+        }, "9999999999", "操作员");
+
+        // 回滚到 V1
+        var result = await _service.RollbackAsync("技术部", v1.HistoryId, "9999999999", "操作员");
+
+        Assert.Equal(2, result.BeforeCount);   // 回滚前是 V2 的 2 人
+        Assert.Equal(3, result.AfterCount);    // 恢复成 V1 的 3 人
+        Assert.Equal(2, result.Backup.Count);  // 回滚前备份当前名单
+
+        await using var context = _contextFactory.CreateDbContext();
+        var deptStaff = await context.Staffs.Include(s => s.Department)
+            .Where(s => s.Department != null && s.Department.Name == "技术部").ToListAsync();
+        Assert.Equal(3, deptStaff.Count);
+        Assert.Contains(deptStaff, s => s.UserId == "0000000005");
+
+        // V1 + V2 + 回滚记录 = 3 条版本
+        Assert.Equal(3, await context.ImportHistories.CountAsync());
+    }
+
+    [Fact]
+    public async Task RollbackAsync_VersionNotFound_Throws()
+    {
+        await SeedDepartmentAsync();
+
+        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+            _service.RollbackAsync("技术部", "does-not-exist", "9999999999", "操作员"));
+        Assert.Equal(4000, ex.ErrorCode);
+    }
+
+    [Fact]
+    public async Task RollbackAsync_NoSnapshot_Throws()
+    {
+        await SeedDepartmentAsync();
+
+        await using (var seed = _contextFactory.CreateDbContext())
+        {
+            seed.ImportHistories.Add(new ImportHistoryDO
+            {
+                Id = "oldversion0000000000000000000001",
+                DepartmentName = "技术部",
+                SnapshotJson = "[]"
+            });
+            await seed.SaveChangesAsync();
+        }
+
+        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+            _service.RollbackAsync("技术部", "oldversion0000000000000000000001", "9999999999", "操作员"));
+        Assert.Equal(2003, ex.ErrorCode);
+    }
+
+    [Fact]
+    public async Task ImportRosterAsync_SameIdDifferentName_Throws()
+    {
+        await SeedDepartmentAsync();
+
+        await using (var seed = _contextFactory.CreateDbContext())
+        {
+            seed.Students.Add(new StudentDO { UserId = "0000000001", UserName = "张三" });
+            await seed.SaveChangesAsync();
+        }
+
+        var dto = new DepartmentImportDTO
+        {
+            Members = [new DepartmentImportMemberDTO { UserId = "0000000001", Name = "李四", Identity = "Minister" }]
+        };
+
+        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+            _service.ImportRosterAsync("技术部", dto, "9999999999", "操作员"));
+        Assert.Equal(1003, ex.ErrorCode);
+        Assert.Contains("姓名不一致", ex.Message);
+
+        // 失败的导入不应落库
+        await using var context = _contextFactory.CreateDbContext();
+        Assert.Equal("张三", (await context.Students.SingleAsync(s => s.UserId == "0000000001")).UserName);
+    }
+
+    [Fact]
+    public async Task ImportRosterAsync_SameIdSameName_LinksExistingMember()
+    {
+        await SeedDepartmentAsync();
+
+        await using (var seed = _contextFactory.CreateDbContext())
+        {
+            seed.Students.Add(new StudentDO
+            {
+                UserId = "0000000001", UserName = "张三", Academy = "计算机学院",
+                PhoneNum = "13800138000", Gender = "男"
+            });
+            await seed.SaveChangesAsync();
+        }
+
+        // 名单只给姓名/学号/职位 —— 应复用已有档案，而不是新建一个独立成员
+        var dto = new DepartmentImportDTO
+        {
+            Members = [new DepartmentImportMemberDTO { UserId = "0000000001", Name = "张三", Identity = "Minister" }]
+        };
+
+        await _service.ImportRosterAsync("技术部", dto, "9999999999", "操作员");
+
+        await using var context = _contextFactory.CreateDbContext();
+        Assert.Equal(1, await context.Students.CountAsync());
+        var student = await context.Students.SingleAsync(s => s.UserId == "0000000001");
+        Assert.Equal("计算机学院", student.Academy);
+        Assert.Equal("13800138000", student.PhoneNum);
+
+        var staff = await context.Staffs.Include(s => s.Department)
+            .SingleAsync(s => s.UserId == "0000000001");
+        Assert.Equal("张三", staff.Name);
+        Assert.Equal("Minister", staff.Identity);
+        Assert.Equal("技术部", staff.Department!.Name);
+    }
+
+    [Fact]
     public async Task ImportRosterAsync_BackupIncludesStudentProfileFields()
     {
         await SeedDepartmentAsync();
@@ -325,9 +464,10 @@ public class DepartmentImportServiceTests
 
         await using (var seed = _contextFactory.CreateDbContext())
         {
+            // 姓名与导入一致，才能关联到同一个人
             seed.Students.Add(new StudentDO
             {
-                UserId = "0000000001", UserName = "旧部长", Academy = "计算机学院", ClassName = "计科2301",
+                UserId = "0000000001", UserName = "新名字", Academy = "计算机学院", ClassName = "计科2301",
                 PhoneNum = "13800138000", PoliticalLandscape = "共青团员", Gender = "男", EMail = "keep@example.com"
             });
             await seed.SaveChangesAsync();
