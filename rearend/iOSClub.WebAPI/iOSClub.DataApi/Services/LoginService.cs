@@ -92,6 +92,17 @@ public interface ILoginService
     public Task<string> GetToken(string userId, string clientId = "");
 
     /// <summary>
+    /// 将已签发的访问/刷新令牌写入 Redis。
+    /// 注册接口直接签发令牌但不落库，会导致 /SSO/from_main_jwt 的
+    /// ValidateToken（按 Redis 比对）对新注册用户失败。
+    /// </summary>
+    /// <param name="userId">学号</param>
+    /// <param name="accessToken">访问令牌</param>
+    /// <param name="refreshToken">刷新令牌</param>
+    /// <param name="clientId">客户端 ID</param>
+    public Task StoreMemberToken(string userId, string accessToken, string refreshToken, string clientId = "");
+
+    /// <summary>
     /// 验证token是否有效（简化版）
     /// </summary>
     /// <param name="userId">学号</param>
@@ -289,6 +300,25 @@ public class LoginService(
 
         var storedToken = await _db.StringGetAsync($"{TokenPrefix}{userId}{s}");
         return storedToken.HasValue && !string.IsNullOrEmpty(storedToken) ? storedToken.ToString() : "";
+    }
+
+    public async Task StoreMemberToken(string userId, string accessToken, string refreshToken,
+        string clientId = "")
+    {
+        if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(accessToken)) return;
+
+        var s = await GetClientKey(clientId);
+        var accessTokenKey = $"{TokenPrefix}{userId}{s}";
+        var refreshTokenKey = $"{RefreshTokenPrefix}{userId}{s}";
+
+        var batch = _db.CreateBatch();
+        _ = batch.StringSetAsync(accessTokenKey, accessToken, TimeSpan.FromMinutes(20 * 24));
+        if (!string.IsNullOrEmpty(refreshToken))
+        {
+            _ = batch.StringSetAsync(refreshTokenKey, refreshToken, TimeSpan.FromHours(RefreshTokenExpiryHours));
+        }
+
+        batch.Execute();
     }
 
     /// <summary>

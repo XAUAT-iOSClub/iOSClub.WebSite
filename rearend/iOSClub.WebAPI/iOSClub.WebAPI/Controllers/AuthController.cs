@@ -35,6 +35,9 @@ public class AuthController(
         }
 
         var (accessToken, refreshToken) = tokenGenerator.GetMemberToken(createdStudent.Adapt<MemberVO>());
+        // 注册签发的令牌必须与登录一样写入 Redis，否则后续 /SSO/from_main_jwt
+        // 的 ValidateToken（按 Redis 比对）对新注册用户会失败。
+        await loginService.StoreMemberToken(createdStudent.UserId, accessToken, refreshToken);
         // 返回访问令牌和刷新令牌，刷新令牌存储在响应头中
         Response.Headers.Append("X-Refresh-Token", refreshToken);
         return Ok(ApiResponse<string>.Success(accessToken, "注册成功"));
