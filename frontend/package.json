@@ -7,7 +7,8 @@
     "dev": "vite",
     "typecheck": "vue-tsc --noEmit",
     "build": "pnpm run typecheck && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@iconify/vue": "^5.0.0",
@@ -41,6 +42,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/markdown-it-container": "^2.0.10",
     "@types/markdown-it-footnote": "^3.0.4",
     "@types/prismjs": "^1.26.5",

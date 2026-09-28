@@ -3,6 +3,7 @@
     <input ref="importFileInput" type="file" accept=".xlsx,.xls,.csv,.json" class="hidden" @change="handleImportFile"/>
     <div class="p-4">
       <n-tabs
+          v-model:value="activeTab"
           type="segment"
           animated
           class="apple-tabs"
@@ -22,7 +23,8 @@
                     <span class="text-sm font-medium">领导核心</span>
                   </div>
                   <div class="flex gap-2">
-                    <button v-if="!loading" @click="() => openAddMember(null)" class="apple-icon-btn text-blue-500">
+                    <button v-if="!loading" @click="() => openAddMember(null)" class="apple-icon-btn text-blue-500"
+                            data-testid="leader-add" title="添加领导">
                       <Icon icon="ion:add-circle" width="24"/>
                     </button>
                   </div>
@@ -110,10 +112,11 @@
         </n-tab-pane>
 
         <!-- 动态部门 Tab -->
+        <!-- 用 department.name（数据库主键，唯一）作为 tab name，避免 key 为空或重复时选中项与高亮项对不上 -->
         <n-tab-pane
             v-for="department in departments"
-            :key="department.id"
-            :name="department.id || ''"
+            :key="department.name"
+            :name="`dept:${department.name}`"
             :tab="department.name"
         >
           <div class="space-y-8 mt-6 animate-fade-in" v-if="!loading">
@@ -177,7 +180,8 @@
                     <h3 class="font-semibold text-lg">管理团队</h3>
                     <div class="flex gap-1">
                       <button @click="() => openAddMember(department, 'Minister')"
-                              class="apple-icon-btn text-blue-500">
+                              class="apple-icon-btn text-blue-500"
+                              data-testid="minister-add" title="提拔部长">
                         <Icon icon="ion:add"/>
                       </button>
                       <button @click="() => deleteAll(department.ministers)" class="apple-icon-btn text-red-500">
@@ -250,8 +254,8 @@
       v-model:show="showAddMemberModal"
       preset="card"
       class="apple-modal"
-      style="max-width: 500px"
-      :title="`添加${addMemberType === 'minister' ? '部长' : '成员'}`"
+      style="max-width: 560px"
+      :title="addMemberTitle"
       :bordered="false"
       size="huge"
   >
@@ -262,14 +266,15 @@
         </div>
         <input
             v-model="searchKeyword"
-            @keyup.enter="searchMembers"
+            @keyup.enter="addMemberMode === 'student' && searchMembers()"
             type="text"
-            placeholder="搜索姓名或学号..."
+            :placeholder="addMemberMode === 'student' ? '搜索姓名或学号...' : '搜索姓名 / 学号 / 部门...'"
             class="w-full pl-10 pr-4 py-3 bg-gray-100 dark:bg-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
         />
       </div>
 
-      <div class="min-h-[200px]">
+      <!-- 从学生库搜索新增成员 -->
+      <div v-if="addMemberMode === 'student'" class="min-h-[200px]">
         <n-data-table
             v-if="searchResults.length > 0"
             :columns="searchColumns"
@@ -281,6 +286,22 @@
         <div v-else class="h-full flex flex-col items-center justify-center text-gray-400 gap-2 py-8">
           <Icon icon="ion:search-outline" width="48" class="opacity-20"/>
           <span>{{ searchKeyword ? '未找到匹配成员' : '输入关键词开始搜索' }}</span>
+        </div>
+      </div>
+
+      <!-- 从现有部员/部长中提拔 -->
+      <div v-else class="min-h-[200px]" data-testid="candidate-list">
+        <n-data-table
+            v-if="filteredCandidates.length > 0"
+            :columns="candidateColumns"
+            :data="filteredCandidates"
+            class="apple-table"
+            :bordered="false"
+            :pagination="{pageSize: 5}"
+        />
+        <div v-else class="h-full flex flex-col items-center justify-center text-gray-400 gap-2 py-8">
+          <Icon icon="ion:people-outline" width="48" class="opacity-20"/>
+          <span>{{ candidateList.length === 0 ? '暂无可选成员' : '未找到匹配成员' }}</span>
         </div>
       </div>
     </div>
@@ -506,6 +527,7 @@ import type {
 import * as echarts from 'echarts'
 import * as XLSX from 'xlsx'
 import {MemberQueryService} from "../services/MemberQueryService";
+import {filterInSchool} from '../lib/memberFilter';
 import {useLayoutStore} from '../stores/LayoutStore';
 
 const message = useMessage()
@@ -514,7 +536,7 @@ const layoutStore = useLayoutStore()
 
 // --- 导入/导出：身份与排序 ---
 const IDENTITY_LABELS: Record<string, string> = {
-  President: '社长/团支书',
+  President: '社长/副社长/团支书',
   Minister: '部长',
   Department: '部员',
   Founder: '创始人'
@@ -543,6 +565,8 @@ const members = ref<MemberVO[]>([])
 const departments = ref<Department[]>([])
 const staffs = ref<MemberVO[]>([])
 const loading = ref(true) // 默认 loading true
+// 当前激活的 Tab（'overview' 或 `dept:${部门名}`），显式受控以保证选中项与高亮项一致
+const activeTab = ref('overview')
 
 const showChangeDepartmentModalRef = ref(false)
 const selectedStaff = ref<StaffModel | null>(null)
@@ -553,6 +577,9 @@ const showDepartmentModal = ref(false)
 const searchKeyword = ref('')
 const searchResults = ref<StudentVO[]>([])
 const addMemberType = ref('member')
+// 'student'：从学生库搜索新增成员；'minister'：从本部门部员中提拔部长；'leader'：从全部部员/部长中提拔领导
+const addMemberMode = ref<'student' | 'minister' | 'leader'>('student')
+const candidateList = ref<StaffModel[]>([])
 const departmentFormRef = ref<InstanceType<typeof NForm> | null>(null)
 
 const departmentForm = ref({
@@ -640,6 +667,26 @@ const searchColumns: DataTableColumns<any> = [
   }
 ]
 
+// 提拔部长 / 添加领导时的候选成员表格
+const candidateColumns: DataTableColumns<StaffModel> = [
+  {title: '姓名', key: 'name', width: 100, render: (row) => h('b', row.name)},
+  {title: '学号', key: 'userId', width: 120},
+  {
+    title: '原身份', key: 'identity', width: 90,
+    render: (row) => h('span', {class: 'text-gray-500 text-xs'}, IDENTITY_LABELS[row.identity] || row.identity)
+  },
+  {
+    title: '所属部门', key: 'departmentName', width: 120,
+    render: (row) => h('span', {class: 'text-gray-500 text-xs'}, row.departmentName || '—')
+  },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 80,
+    render: (row) => AppleButton({type: 'primary', size: 'small', onClick: () => addCandidate(row), text: '添加'})
+  }
+]
+
 const departmentRules = {
   name: {required: true, message: '请输入部门名称', trigger: 'blur'},
   description: {required: true, message: '请输入部门简介', trigger: 'blur'}
@@ -650,6 +697,20 @@ const departmentOptions = computed(() => {
     label: dept.name,
     value: dept.name
   }))
+})
+
+// 候选成员（提拔部长/添加领导）支持按姓名/学号/部门搜索
+const filteredCandidates = computed(() => {
+  const keyword = searchKeyword.value.trim().toLowerCase()
+  if (!keyword) return candidateList.value
+  return candidateList.value.filter(s =>
+      `${s.name}${s.userId}${s.departmentName || ''}`.toLowerCase().includes(keyword))
+})
+
+const addMemberTitle = computed(() => {
+  if (addMemberMode.value === 'minister') return '提拔部长 / 副部长'
+  if (addMemberMode.value === 'leader') return '添加领导（社长 / 副社长 / 团支书）'
+  return currentDepartment.value ? `添加成员至 ${currentDepartment.value.name}` : '添加成员'
 })
 
 // --- Actions ---
@@ -679,7 +740,30 @@ const openAddMember = (department: Department | null = null, type = 'member') =>
   showAddMemberModal.value = true
   searchKeyword.value = ''
   searchResults.value = []
+  candidateList.value = []
   addMemberType.value = type
+
+  if (type === 'Minister' && department) {
+    // 部长/副部长只能从本部门现有部员中提拔，避免把外部门或不存在的人塞进部门。
+    addMemberMode.value = 'minister'
+    candidateList.value = (department.members || []).filter(m => m.identity === 'Department')
+  } else if (!department) {
+    // 社长/副社长/团支书从全部部员与部长中选择。
+    addMemberMode.value = 'leader'
+    const seen = new Set<string>()
+    const list: StaffModel[] = []
+    for (const dept of departments.value) {
+      for (const staff of [...(dept.members || []), ...(dept.ministers || [])]) {
+        if (staff.identity !== 'Department' && staff.identity !== 'Minister') continue
+        if (seen.has(staff.userId)) continue
+        seen.add(staff.userId)
+        list.push({...staff, departmentName: staff.departmentName ?? dept.name})
+      }
+    }
+    candidateList.value = sortByRole(list)
+  } else {
+    addMemberMode.value = 'student'
+  }
 }
 
 // --- 导入 / 导出 / 导入历史 ---
@@ -932,14 +1016,35 @@ const downloadImportTemplate = () => {
 }
 
 // --- 导出 ---
-const exportOptions = [
+// 两种导出模式：normal = 数据库全部成员；school = 仅在校成员（学号前两位晚于 本年-4）。
+// 现有格式选项保持不变，新增一组“在校成员”选项。
+const EXPORT_FORMATS = [
   {label: 'Excel (.xlsx)', key: 'xlsx'},
   {label: 'CSV (.csv)', key: 'csv'},
   {label: 'JSON (.json)', key: 'json'}
 ]
 
+const exportOptions = [
+  {type: 'group', label: '全部成员（数据库）', key: 'normal', children: EXPORT_FORMATS},
+  {
+    type: 'group',
+    label: '在校成员',
+    key: 'school',
+    children: EXPORT_FORMATS.map(f => ({label: `在校 - ${f.label}`, key: `school:${f.key}`}))
+  }
+]
+
+type ExportFormat = 'xlsx' | 'csv' | 'json'
+
+const parseExportKey = (key: string | number): {mode: 'normal' | 'school'; format: ExportFormat} => {
+  const raw = String(key)
+  if (raw.startsWith('school:')) return {mode: 'school', format: raw.slice('school:'.length) as ExportFormat}
+  return {mode: 'normal', format: raw as ExportFormat}
+}
+
 const handleExportSelect = (department: Department, key: string | number) => {
-  void exportDepartment(department, key as 'xlsx' | 'csv' | 'json')
+  const {mode, format} = parseExportKey(key)
+  void exportDepartment(department, format, mode)
 }
 
 const writeExport = (rows: Record<string, unknown>[], base: string, format: 'xlsx' | 'csv' | 'json') => {
@@ -970,7 +1075,7 @@ const memberToExportRow = (m: MemberVO) => ({
   邮箱: m.eMail || ''
 })
 
-const exportDepartment = async (department: Department, format: 'xlsx' | 'csv' | 'json') => {
+const exportDepartment = async (department: Department, format: ExportFormat, mode: 'normal' | 'school' = 'normal') => {
   // 部门成员列表只有 name/userId/identity，学生档案字段需要从 /Staff/members 补齐
   let profiles: MemberVO[] = []
   try {
@@ -980,7 +1085,10 @@ const exportDepartment = async (department: Department, format: 'xlsx' | 'csv' |
   }
   const profileMap = new Map(profiles.map(p => [p.userId, p]))
 
-  const rows = departmentRoster(department).map(s => {
+  let roster = departmentRoster(department)
+  if (mode === 'school') roster = filterInSchool(roster)
+
+  const rows = roster.map(s => {
     const profile = profileMap.get(s.userId)
     return {
       姓名: profile?.userName || s.name,
@@ -995,14 +1103,19 @@ const exportDepartment = async (department: Department, format: 'xlsx' | 'csv' |
     }
   })
   const stamp = new Date().toISOString().slice(0, 10)
-  writeExport(rows, `${department.name}-名单-${stamp}`, format)
+  const suffix = mode === 'school' ? '-在校成员' : '-名单'
+  writeExport(rows, `${department.name}${suffix}-${stamp}`, format)
 }
 
 // --- 总览面板：导出全体成员 ---
 const handleOverviewExportSelect = (key: string | number) => {
-  const rows = members.value.map(memberToExportRow)
+  const {mode, format} = parseExportKey(key)
+  let list = members.value
+  if (mode === 'school') list = filterInSchool(list)
+  const rows = list.map(memberToExportRow)
   const stamp = new Date().toISOString().slice(0, 10)
-  writeExport(rows, `全体部员-${stamp}`, key as 'xlsx' | 'csv' | 'json')
+  const suffix = mode === 'school' ? '-在校成员' : ''
+  writeExport(rows, `全体部员${suffix}-${stamp}`, format)
 }
 
 // --- 导入历史 ---
@@ -1139,29 +1252,34 @@ const searchMembers = async () => {
 }
 
 const addMember = async (member: StudentVO) => {
+  if (!currentDepartment.value) return
   try {
     // StaffCreateDTO 只接受 userId / name / identity / departmentName。
-    // 学院、班级、性别、电话、政治面貌属于学生信息（Students 表），不在员工请求里，
-    // 之前传这些字段会被后端静默丢弃。
-    const commonData = {
+    // 学院、班级、性别、电话、政治面貌属于学生信息（Students 表），不在员工请求里。
+    await StaffService.createStaff({
       userId: member.userId,
       name: member.userName,
-    }
+      identity: 'Department',
+      departmentName: currentDepartment.value.name
+    } as StaffModel);
+    message.success(`已添加至 ${currentDepartment.value.name}`)
+    await fetchData()
+    showAddMemberModal.value = false
+  } catch (error: any) {
+    message.error('添加失败: ' + (error.message || '未知错误'))
+  }
+}
 
-    if (currentDepartment.value) {
-      await StaffService.createStaff({
-        ...commonData,
-        identity: addMemberType.value === 'Minister' ? 'Minister' : 'Department',
-        departmentName: currentDepartment.value.name
-      } as StaffModel);
-      message.success(`已添加至 ${currentDepartment.value.name}`)
+// 从候选成员中提拔部长或添加领导（不新增 Staff，只调整已有成员的身份）
+const addCandidate = async (staff: StaffModel) => {
+  try {
+    if (addMemberMode.value === 'minister') {
+      if (!currentDepartment.value) return
+      await StaffService.assignRole(staff.userId, 'Minister', currentDepartment.value.name)
+      message.success(`已将 ${staff.name} 提拔为 ${currentDepartment.value.name} 部长`)
     } else {
-      await StaffService.createStaff({
-        ...commonData,
-        identity: 'President',
-        departmentName: null
-      } as StaffModel);
-      message.success(`已添加至领导层`)
+      await StaffService.assignRole(staff.userId, 'President', null)
+      message.success(`已将 ${staff.name} 添加至领导层`)
     }
     await fetchData()
     showAddMemberModal.value = false
@@ -1221,6 +1339,11 @@ const fetchData = async () => {
     staffs.value = await StaffService.getAllStaff()
     ministers.value = staffs.value.filter(staff => staff.identity === 'President')
     members.value = sortByRole(staffs.value.filter(staff => staff.identity !== 'Founder'))
+
+    // 数据刷新后，若当前激活的部门已被删除/更名，回退到总览，避免停在失效 Tab 上
+    if (activeTab.value !== 'overview' && !departments.value.some(d => `dept:${d.name}` === activeTab.value)) {
+      activeTab.value = 'overview'
+    }
 
   } catch (error: any) {
     console.error(error)

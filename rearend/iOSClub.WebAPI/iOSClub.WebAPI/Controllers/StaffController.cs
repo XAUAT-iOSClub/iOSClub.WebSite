@@ -223,4 +223,33 @@ public class StaffController(IStaffRepository staffRepository, ILogger<StaffCont
 
         return Ok(ApiResponse.Success("修改部门成功"));
     }
+
+    /// <summary>
+    /// 人事调动：从现有成员中提拔为部长、或将部员/部长提拔为社长，
+    /// 也支持把领导调整回某个部门。仅更新已存在的成员，不新增。
+    /// </summary>
+    /// <param name="model">调动请求</param>
+    /// <returns>操作结果</returns>
+    [HttpPost("assign-role")]
+    public async Task<ActionResult<ApiResponse<object>>> AssignRole([FromBody] StaffRoleAssignDTO model)
+    {
+        var (success, error) = await staffRepository.AssignRoleAsync(model.UserId, model.Identity, model.DepartmentName);
+        if (!success)
+        {
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("人事调动失败，ID: {UserId}, 目标身份: {Identity}, 原因: {Error}", model.UserId,
+                    model.Identity, error);
+            }
+
+            return Ok(ApiResponse<object>.Fail(ErrorCode.InvalidStatusForOperation, error));
+        }
+
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("人事调动成功，ID: {UserId}, 目标身份: {Identity}", model.UserId, model.Identity);
+        }
+
+        return Ok(ApiResponse.Success("身份调整成功"));
+    }
 }

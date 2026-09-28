@@ -72,4 +72,16 @@ export class StaffService {
             method: 'POST'
         });
     }
+
+    /**
+     * 人事调动：将已存在的成员调整为部长/社长，或调整其所属部门。
+     * identity: Department | Minister | President
+     */
+    static async assignRole(userId: string, identity: string, departmentName: string | null): Promise<any> {
+        return apiRequest<any>({
+            url: `${url}/Staff/assign-role`,
+            method: 'POST',
+            body: {userId, identity, departmentName}
+        });
+    }
 }

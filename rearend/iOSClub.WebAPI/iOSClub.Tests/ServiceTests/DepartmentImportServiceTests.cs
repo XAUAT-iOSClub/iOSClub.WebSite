@@ -1,6 +1,8 @@
+using System.Text.Json;
 using iOSClub.Data;
 using iOSClub.Data.DataObjects;
 using iOSClub.Data.DTOs;
+using iOSClub.Data.VOs;
 using iOSClub.DataApi.Exceptions;
 using iOSClub.WebAPI.Services;
 using Microsoft.EntityFrameworkCore;
@@ -516,5 +518,283 @@ public class DepartmentImportServiceTests
         // Staff 解除部门关系（这里直接删除），但学生档案保留
         Assert.DoesNotContain(await context.Staffs.ToListAsync(), s => s.UserId == "0000000002");
         Assert.True(await context.Students.AnyAsync(s => s.UserId == "0000000002"));
+    }
+
+    [Fact]
+    public async Task ImportRosterAsync_DoesNotAffectOtherDepartments()
+    {
+        await SeedDepartmentAsync();
+        await using (var seed = _contextFactory.CreateDbContext())
+        {
+            var other = new DepartmentDO { Key = "pr", Name = "宣传部", Description = "宣传部" };
+            seed.Departments.Add(other);
+            seed.Staffs.Add(new StaffDO
+            {
+                UserId = "0000000009", Name = "宣传员", Identity = "Department", Department = other
+            });
+            await seed.SaveChangesAsync();
+        }
+
+        await _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+        {
+            Members = [new DepartmentImportMemberDTO { UserId = "0000000003", Name = "甲", Identity = "Department" }]
+        }, "9999999999", "操作员");
+
+        await using var context = _contextFactory.CreateDbContext();
+        var otherStaff = await context.Staffs.Include(s => s.Department)
+            .Where(s => s.Department != null && s.Department.Name == "宣传部").ToListAsync();
+        var member = Assert.Single(otherStaff);
+        Assert.Equal("0000000009", member.UserId);
+        Assert.Equal("宣传员", member.Name);
+    }
+
+    [Fact]
+    public async Task ImportRosterAsync_TransfersMemberFromAnotherDepartment()
+    {
+        await SeedDepartmentAsync();
+        await using (var seed = _contextFactory.CreateDbContext())
+        {
+            var other = new DepartmentDO { Key = "pr", Name = "宣传部", Description = "宣传部" };
+            seed.Departments.Add(other);
+            seed.Staffs.Add(new StaffDO
+            {
+                UserId = "0000000009", Name = "宣传员", Identity = "Department", Department = other
+            });
+            await seed.SaveChangesAsync();
+        }
+
+        // 把 0000000009 导入到技术部 → 应从宣传部调走
+        await _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+        {
+            Members = [new DepartmentImportMemberDTO { UserId = "0000000009", Name = "宣传员", Identity = "Department" }]
+        }, "9999999999", "操作员");
+
+        await using var context = _contextFactory.CreateDbContext();
+        var staff = await context.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "0000000009");
+        Assert.Equal("技术部", staff.Department!.Name);
+        Assert.Empty(await context.Staffs.Include(s => s.Department)
+            .Where(s => s.Department != null && s.Department.Name == "宣传部").ToListAsync());
+    }
+
+    [Fact]
+    public async Task ImportRosterAsync_SameRosterTwice_IsIdempotent()
+    {
+        await SeedDepartmentAsync();
+
+        var dto = new DepartmentImportDTO
+        {
+            Members =
+            [
+                new DepartmentImportMemberDTO { UserId = "0000000003", Name = "甲", Identity = "Department" },
+                new DepartmentImportMemberDTO { UserId = "0000000004", Name = "乙", Identity = "Minister" }
+            ]
+        };
+
+        await _service.ImportRosterAsync("技术部", dto, "9999999999", "操作员");
+        var second = await _service.ImportRosterAsync("技术部", dto, "9999999999", "操作员");
+
+        Assert.Equal(2, second.BeforeCount);
+        Assert.Equal(2, second.AfterCount);
+
+        await using var context = _contextFactory.CreateDbContext();
+        Assert.Equal(2, await context.Staffs.Include(s => s.Department)
+            .CountAsync(s => s.Department != null && s.Department.Name == "技术部"));
+        Assert.Equal(2, await context.Students.CountAsync(s => s.UserId == "0000000003" || s.UserId == "0000000004"));
+    }
+
+    [Fact]
+    public async Task ImportRosterAsync_TrimsWhitespaceAndMatchesExistingName()
+    {
+        await SeedDepartmentAsync();
+        await using (var seed = _contextFactory.CreateDbContext())
+        {
+            seed.Students.Add(new StudentDO { UserId = "0000000001", UserName = "张三", Academy = "计算机学院" });
+            await seed.SaveChangesAsync();
+        }
+
+        // 学号/姓名带首尾空格，应被裁剪后与已有成员匹配，而不是报"姓名不一致"
+        var result = await _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+        {
+            Members =
+            [
+                new DepartmentImportMemberDTO { UserId = " 0000000001 ", Name = " 张三 ", Identity = "Minister" }
+            ]
+        }, "9999999999", "操作员");
+
+        Assert.Equal(1, result.AfterCount);
+        await using var context = _contextFactory.CreateDbContext();
+        var staff = await context.Staffs.SingleAsync(s => s.UserId == "0000000001");
+        Assert.Equal("张三", staff.Name);
+        Assert.Equal(1, await context.Students.CountAsync());
+    }
+
+    [Fact]
+    public async Task ImportRosterAsync_PreservesFounder()
+    {
+        await SeedDepartmentAsync();
+        await using (var seed = _contextFactory.CreateDbContext())
+        {
+            seed.Staffs.Add(new StaffDO { UserId = "0000000000", Name = "创始人", Identity = "Founder" });
+            await seed.SaveChangesAsync();
+        }
+
+        await _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+        {
+            Members = [new DepartmentImportMemberDTO { UserId = "0000000003", Name = "甲", Identity = "Department" }]
+        }, "9999999999", "操作员");
+
+        await using var context = _contextFactory.CreateDbContext();
+        var founder = await context.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "0000000000");
+        Assert.Equal("Founder", founder.Identity);
+        Assert.Null(founder.Department);
+    }
+
+    [Fact]
+    public async Task ImportRosterAsync_MemberIdentityRejected()
+    {
+        await SeedDepartmentAsync();
+
+        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+            _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+            {
+                Members = [new DepartmentImportMemberDTO { UserId = "0000000003", Name = "甲", Identity = "Member" }]
+            }, "9999999999", "操作员"));
+        Assert.Equal(1003, ex.ErrorCode);
+    }
+
+    [Theory]
+    [InlineData("", "甲")]
+    [InlineData("0000000003", "")]
+    public async Task ImportRosterAsync_EmptyUserIdOrName_Throws(string userId, string name)
+    {
+        await SeedDepartmentAsync();
+
+        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+            _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+            {
+                Members = [new DepartmentImportMemberDTO { UserId = userId, Name = name, Identity = "Department" }]
+            }, "9999999999", "操作员"));
+        Assert.Equal(1003, ex.ErrorCode);
+    }
+
+    [Fact]
+    public async Task ImportRosterAsync_DuplicateNamesDifferentIds_Allowed()
+    {
+        await SeedDepartmentAsync();
+
+        var result = await _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+        {
+            Members =
+            [
+                new DepartmentImportMemberDTO { UserId = "0000000003", Name = "同名", Identity = "Department" },
+                new DepartmentImportMemberDTO { UserId = "0000000004", Name = "同名", Identity = "Department" }
+            ]
+        }, "9999999999", "操作员");
+
+        Assert.Equal(2, result.AfterCount);
+    }
+
+    [Fact]
+    public async Task ImportRosterAsync_UpdatesIdentityOfExistingStaff()
+    {
+        await SeedDepartmentAsync();
+
+        // 0000000001 原本是 Minister，导入后应变成 Department
+        await _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+        {
+            Members = [new DepartmentImportMemberDTO { UserId = "0000000001", Name = "旧部长", Identity = "Department" }]
+        }, "9999999999", "操作员");
+
+        await using var context = _contextFactory.CreateDbContext();
+        var staff = await context.Staffs.SingleAsync(s => s.UserId == "0000000001");
+        Assert.Equal("Department", staff.Identity);
+    }
+
+    [Fact]
+    public async Task ImportRosterAsync_HistorySnapshotContainsAfterRoster()
+    {
+        await SeedDepartmentAsync();
+
+        await _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+        {
+            FileName = "v1.csv",
+            Members =
+            [
+                new DepartmentImportMemberDTO
+                {
+                    UserId = "0000000003", Name = "甲", Identity = "Department",
+                    Academy = "计算机学院", PhoneNum = "13800138000"
+                }
+            ]
+        }, "9999999999", "操作员");
+
+        await using var context = _contextFactory.CreateDbContext();
+        var history = await context.ImportHistories.SingleAsync();
+        var snapshot = JsonSerializer.Deserialize<List<DepartmentImportMemberVO>>(history.SnapshotJson);
+        Assert.NotNull(snapshot);
+        var member = Assert.Single(snapshot!);
+        Assert.Equal("0000000003", member.UserId);
+        Assert.Equal("甲", member.Name);
+        Assert.Equal("计算机学院", member.Academy);
+        Assert.Equal("13800138000", member.PhoneNum);
+    }
+
+    [Fact]
+    public async Task RollbackAsync_ToLatestVersion_RestoresSameRoster()
+    {
+        await SeedDepartmentAsync();
+
+        var v1 = await _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+        {
+            Members =
+            [
+                new DepartmentImportMemberDTO { UserId = "0000000003", Name = "甲", Identity = "Department" },
+                new DepartmentImportMemberDTO { UserId = "0000000004", Name = "乙", Identity = "Department" },
+                new DepartmentImportMemberDTO { UserId = "0000000005", Name = "丙", Identity = "Department" }
+            ]
+        }, "9999999999", "操作员");
+
+        var result = await _service.RollbackAsync("技术部", v1.HistoryId, "9999999999", "操作员");
+
+        Assert.Equal(3, result.BeforeCount);
+        Assert.Equal(3, result.AfterCount);
+
+        await using var context = _contextFactory.CreateDbContext();
+        Assert.Equal(2, await context.ImportHistories.CountAsync()); // V1 + 回滚
+    }
+
+    [Fact]
+    public async Task RollbackAsync_ThenImportAgain_Works()
+    {
+        await SeedDepartmentAsync();
+
+        var v1 = await _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+        {
+            Members =
+            [
+                new DepartmentImportMemberDTO { UserId = "0000000003", Name = "甲", Identity = "Department" },
+                new DepartmentImportMemberDTO { UserId = "0000000004", Name = "乙", Identity = "Department" },
+                new DepartmentImportMemberDTO { UserId = "0000000005", Name = "丙", Identity = "Department" }
+            ]
+        }, "9999999999", "操作员");
+
+        await _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+        {
+            Members = [new DepartmentImportMemberDTO { UserId = "0000000003", Name = "甲", Identity = "Department" }]
+        }, "9999999999", "操作员");
+
+        await _service.RollbackAsync("技术部", v1.HistoryId, "9999999999", "操作员");
+
+        // 回滚后再导入一个全新名单
+        var after = await _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+        {
+            Members = [new DepartmentImportMemberDTO { UserId = "0000000006", Name = "丁", Identity = "Department" }]
+        }, "9999999999", "操作员");
+
+        Assert.Equal(3, after.BeforeCount);
+        Assert.Equal(1, after.AfterCount);
+
+        await using var context = _contextFactory.CreateDbContext();
+        Assert.Equal(4, await context.ImportHistories.CountAsync()); // V1 + V2 + 回滚 + 新导入
     }
 }

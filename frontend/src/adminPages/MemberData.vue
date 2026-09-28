@@ -31,6 +31,7 @@ import type {
 } from '../services/DataCentreService'
 import * as echarts from 'echarts'
 import {useLayoutStore} from '../stores/LayoutStore';
+import {filterInSchool} from '../lib/memberFilter';
 import {TableColumn} from "naive-ui/es/data-table/src/interface";
 
 // --- Types & Interfaces ---
@@ -524,21 +525,24 @@ const updateMemberUseJson = async (event: Event) => {
   }
 }
 
-// Simplified Export
+// 两种导出模式：normal = 数据库全部成员；school = 仅在校成员（学号前两位晚于 本年-4）
 const handleDownloadSelect = async (key: string) => {
+  const inSchoolOnly = key.startsWith('school:')
+  const format = key.endsWith('json') ? 'json' : 'csv'
   const allMembers = await MemberQueryService.getAllData();
-  if (key === 'json') {
-    const blob = new Blob([JSON.stringify(allMembers, null, 2)], {type: 'application/json'})
-    downloadBlob(blob, 'members.json')
+  const list = inSchoolOnly ? filterInSchool(allMembers) : allMembers
+  const suffix = inSchoolOnly ? '-在校成员' : ''
+  if (format === 'json') {
+    const blob = new Blob([JSON.stringify(list, null, 2)], {type: 'application/json'})
+    downloadBlob(blob, `members${suffix}.json`)
   } else {
-    // CSV logic simplified for brevity
     const headers = ['姓名', '学号', '学院', '专业班级', '手机号', '政治面貌', '性别']
     const keys = ['userName', 'userId', 'academy', 'className', 'phoneNum', 'politicalLandscape', 'gender']
     let csv = '\uFEFF' + headers.join(',') + '\n'
-    allMembers.forEach(m => {
+    list.forEach(m => {
       csv += keys.map(k => `"${(m as any)[k] || ''}"`).join(',') + '\n'
     })
-    downloadBlob(new Blob([csv], {type: 'text/csv'}), 'members.csv')
+    downloadBlob(new Blob([csv], {type: 'text/csv'}), `members${suffix}.csv`)
   }
   message.success('导出成功')
 }
@@ -604,7 +608,7 @@ onMounted(() => {
         ]),
 
         // Dropdown menu (manual implementation for style control)
-        dropdownOpen.value ? h('div', {class: 'absolute top-12 right-0 w-40 bg-white/90 dark:bg-[#2C2C2E]/90 backdrop-blur-xl rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-white/20 dark:border-white/10 p-1 z-50 flex flex-col animate-in fade-in zoom-in-95 duration-200 origin-top-right'}, [
+        dropdownOpen.value ? h('div', {class: 'absolute top-12 right-0 w-44 bg-white/90 dark:bg-[#2C2C2E]/90 backdrop-blur-xl rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-white/20 dark:border-white/10 p-1 z-50 flex flex-col animate-in fade-in zoom-in-95 duration-200 origin-top-right'}, [
           h('button', {
             class: 'text-left px-3 py-2 text-sm rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors',
             onClick: () => {
@@ -618,7 +622,22 @@ onMounted(() => {
               handleDownloadSelect('json');
               dropdownOpen.value = false
             }
-          }, '导出 JSON')
+          }, '导出 JSON'),
+          h('div', {class: 'my-1 border-t border-black/5 dark:border-white/10'}),
+          h('button', {
+            class: 'text-left px-3 py-2 text-sm rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors',
+            onClick: () => {
+              handleDownloadSelect('school:csv');
+              dropdownOpen.value = false
+            }
+          }, '在校成员 CSV'),
+          h('button', {
+            class: 'text-left px-3 py-2 text-sm rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors',
+            onClick: () => {
+              handleDownloadSelect('school:json');
+              dropdownOpen.value = false
+            }
+          }, '在校成员 JSON')
         ]) : null,
 
         h('button', {

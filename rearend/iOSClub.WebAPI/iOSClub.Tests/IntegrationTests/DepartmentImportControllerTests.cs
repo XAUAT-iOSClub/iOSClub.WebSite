@@ -77,14 +77,16 @@ public class DepartmentImportControllerTests : IClassFixture<WebApplicationFacto
         await context.SaveChangesAsync();
     }
 
-    private void ActAsFounder()
+    private void ActAs(string identity, string userId = "0000000000")
     {
         _client.DefaultRequestHeaders.Remove("X-Test-Anonymous");
         _client.DefaultRequestHeaders.Remove("X-Test-Identity");
         _client.DefaultRequestHeaders.Remove("X-Test-UserId");
-        _client.DefaultRequestHeaders.Add("X-Test-Identity", "Founder");
-        _client.DefaultRequestHeaders.Add("X-Test-UserId", "0000000000");
+        _client.DefaultRequestHeaders.Add("X-Test-Identity", identity);
+        _client.DefaultRequestHeaders.Add("X-Test-UserId", userId);
     }
+
+    private void ActAsFounder() => ActAs("Founder");
 
     private static DepartmentImportDTO Roster() => new()
     {
@@ -362,6 +364,147 @@ public class DepartmentImportControllerTests : IClassFixture<WebApplicationFacto
             .Where(s => s.Department != null && s.Department.Name == "技术部").ToListAsync();
         Assert.Equal(3, staff.Count);
         Assert.Contains(staff, s => s.UserId == "2023000003");
+    }
+
+    [Fact]
+    public async Task Import_DepartmentNotFound_ReturnsNotFound()
+    {
+        await SeedAsync();
+        ActAsFounder();
+
+        var response = await _client.PostAsJsonAsync("/Department/不存在的部门/import", Roster());
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var result = JsonConvert.DeserializeObject<ApiResponse<DepartmentImportResultVO>>(
+            await response.Content.ReadAsStringAsync());
+        Assert.Equal(ErrorCode.ResourceNotFound, result!.ErrorCode);
+    }
+
+    [Fact]
+    public async Task ImportHistory_EmptyForNewDepartment()
+    {
+        await SeedAsync();
+        ActAsFounder();
+
+        var response = await _client.GetAsync("/Department/技术部/import-history");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = JsonConvert.DeserializeObject<ApiResponse<List<ImportHistoryVO>>>(
+            await response.Content.ReadAsStringAsync());
+        Assert.NotNull(result);
+        Assert.Empty(result.Data!);
+    }
+
+    [Fact]
+    public async Task Import_AsDepartmentRole_ReturnsForbidden()
+    {
+        await SeedAsync();
+        ActAs("Department", "2023999999");
+
+        var response = await _client.PostAsJsonAsync("/Department/技术部/import", Roster());
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Rollback_UnknownVersion_ReturnsNotFound()
+    {
+        await SeedAsync();
+        ActAsFounder();
+
+        var response = await _client.PostAsync("/Department/技术部/rollback/does-not-exist", null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var result = JsonConvert.DeserializeObject<ApiResponse<DepartmentImportResultVO>>(
+            await response.Content.ReadAsStringAsync());
+        Assert.Equal(ErrorCode.ResourceNotFound, result!.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Import_InvalidEmail_ReturnsValidationFailure()
+    {
+        await SeedAsync();
+        ActAsFounder();
+
+        var response = await _client.PostAsJsonAsync("/Department/技术部/import", new DepartmentImportDTO
+        {
+            Members =
+            [
+                new DepartmentImportMemberDTO
+                {
+                    UserId = "2023000001", Name = "张三", Identity = "Department", EMail = "bad-email"
+                }
+            ]
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var result = JsonConvert.DeserializeObject<ApiResponse<DepartmentImportResultVO>>(
+            await response.Content.ReadAsStringAsync());
+        Assert.Equal(ErrorCode.ParameterValidationFailed, result!.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Import_InvalidGender_ReturnsValidationFailure()
+    {
+        await SeedAsync();
+        ActAsFounder();
+
+        var response = await _client.PostAsJsonAsync("/Department/技术部/import", new DepartmentImportDTO
+        {
+            Members =
+            [
+                new DepartmentImportMemberDTO
+                {
+                    UserId = "2023000001", Name = "张三", Identity = "Department", Gender = "未知"
+                }
+            ]
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var result = JsonConvert.DeserializeObject<ApiResponse<DepartmentImportResultVO>>(
+            await response.Content.ReadAsStringAsync());
+        Assert.Equal(ErrorCode.ParameterValidationFailed, result!.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Import_WithProfileFields_HistoryBackupDownloadContainsRoster()
+    {
+        await SeedAsync();
+        ActAsFounder();
+
+        // 先导入一版，再覆盖，使第一版进入备份
+        await _client.PostAsJsonAsync("/Department/技术部/import", new DepartmentImportDTO
+        {
+            Members =
+            [
+                new DepartmentImportMemberDTO
+                {
+                    UserId = "2023000001", Name = "张三", Identity = "Minister",
+                    Academy = "计算机学院", PhoneNum = "13800138001"
+                }
+            ]
+        });
+        await _client.PostAsJsonAsync("/Department/技术部/import", new DepartmentImportDTO
+        {
+            Members = [new DepartmentImportMemberDTO { UserId = "2023000002", Name = "李四", Identity = "Department" }]
+        });
+
+        var historyResponse = await _client.GetAsync("/Department/技术部/import-history");
+        var history = JsonConvert.DeserializeObject<ApiResponse<List<ImportHistoryVO>>>(
+            await historyResponse.Content.ReadAsStringAsync());
+        var latest = history!.Data!.First();
+
+        var backupResponse = await _client.GetAsync($"/Department/import-history/{latest.Id}/backup");
+        Assert.Equal(HttpStatusCode.OK, backupResponse.StatusCode);
+        var backupJson = await backupResponse.Content.ReadAsStringAsync();
+        // 备份 JSON 默认会转义非 ASCII 字符，这里反序列化后再断言字段值
+        var backup = JsonConvert.DeserializeObject<List<DepartmentImportMemberVO>>(backupJson);
+        Assert.NotNull(backup);
+        var member = Assert.Single(backup!);
+        Assert.Equal("2023000001", member.UserId);
+        Assert.Equal("张三", member.Name);
+        Assert.Equal("计算机学院", member.Academy);
+        Assert.Equal("13800138001", member.PhoneNum);
     }
 
 }
