@@ -19,6 +19,30 @@ export interface ApiResponse<T> {
 }
 
 /**
+ * 带业务元数据的请求错误。
+ *
+ * 调用方（如页面）需要区分"认证失败要登出"与"业务数据不存在只需提示"时，
+ * 不能只看 message 文本，必须能拿到 HTTP 状态码与业务错误码。
+ */
+export class ApiError extends Error {
+    /** HTTP 状态码（与响应体 code 恒等） */
+    readonly code: number;
+    /** 业务错误码（0 表示成功） */
+    readonly errorCode: number;
+    readonly detail?: string | null;
+    readonly requestId?: string | null;
+
+    constructor(message: string, code: number, errorCode: number, detail?: string | null, requestId?: string | null) {
+        super(message);
+        this.name = 'ApiError';
+        this.code = code;
+        this.errorCode = errorCode;
+        this.detail = detail;
+        this.requestId = requestId;
+    }
+}
+
+/**
  * API请求配置
  */
 export interface ApiRequestConfig extends Omit<RequestInit, 'body'> {
@@ -101,28 +125,29 @@ export async function readApiResponse<T>(response: Response): Promise<ApiRespons
  * 把失败响应转成 Error。按错误码区间分类，避免为每个错误码单独写分支。
  */
 function toError(apiResponse: ApiResponse<unknown>): Error {
-    const {errorCode, message} = apiResponse;
+    const {errorCode, message, code, detail, requestId} = apiResponse;
+    const make = (text: string) => new ApiError(text, code, errorCode, detail, requestId);
 
     // 3000-3999：认证/权限类。除"权限不足"外都意味着当前凭证已不可用，清掉本地令牌。
     // 注意 3001(InsufficientPermission) 只是权限不够——以前把它和 401 混为一谈，
     // 结果用户撞到权限墙就被登出。
     if (errorCode >= 3000 && errorCode < 4000) {
         if (errorCode === ErrorCode.InsufficientPermission) {
-            return new Error(message || '权限不足');
+            return make(message || '权限不足');
         }
         AuthService.clearToken();
-        return new Error(message || '登录已过期，请重新登录');
+        return make(message || '登录已过期，请重新登录');
     }
 
     if (errorCode >= 5000 && errorCode < 6000) {
-        return new Error(message || '服务器内部错误');
+        return make(message || '服务器内部错误');
     }
 
     if (errorCode >= 7000 && errorCode < 8000) {
-        return new Error(message || '请求频率过高，请稍后再试');
+        return make(message || '请求频率过高，请稍后再试');
     }
 
-    return new Error(message || '请求失败');
+    return make(message || '请求失败');
 }
 
 /**

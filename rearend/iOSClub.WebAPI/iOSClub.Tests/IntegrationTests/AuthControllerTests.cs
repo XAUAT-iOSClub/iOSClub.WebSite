@@ -2,6 +2,7 @@ using iOSClub.Data;
 using iOSClub.Data.DataObjects; 
 using iOSClub.Data.DTOs;
 using iOSClub.Data.VOs; 
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc.Testing; 
 using Microsoft.Extensions.DependencyInjection; 
 using Microsoft.EntityFrameworkCore; 
@@ -79,6 +80,14 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
                 // 注册Repository 
                 services.AddScoped<IStudentRepository, StudentRepository>(); 
                 services.AddScoped<IStaffRepository, StaffRepository>(); 
+
+                // 用测试认证方案替换 JWT：以前 Logout 测试拿 mock 的假 token 去撞 [Authorize]，
+                // JWT 校验必然失败返回 401，测试怎么改都过不了。这里让认证结果由测试控制。
+                services.AddAuthentication(options =>
+                {
+                    options.DefaultAuthenticateScheme = TestAuthHandler.SchemeName;
+                    options.DefaultChallengeScheme = TestAuthHandler.SchemeName;
+                }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
             }); 
         }).CreateClient(); 
     } 
@@ -299,6 +308,14 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         var newAccessToken = "new-mock-jwt-token"; 
         
         _redisDbMock.Setup(r => r.StringGetAsync(It.Is<RedisKey>(k => k.ToString() == $"refresh:{userId}"), It.IsAny<CommandFlags>())).ReturnsAsync(refreshToken); 
+        // LoginService.RefreshToken 需要 user:{userId} 里的用户信息来重新签发令牌，
+        // 否则会判定"无法获取用户信息"直接返回空 token（HTTP 401）。旧测试漏了这一步。
+        _redisDbMock.Setup(r => r.StringGetAsync(It.Is<RedisKey>(k => k.ToString() == $"user:{userId}"), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(JsonConvert.SerializeObject(new MemberVO { UserId = userId, UserName = "Test Student", Identity = "Member" }));
+        _redisDbMock.Setup(r => r.KeyExistsAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>())).ReturnsAsync(false);
+        _redisDbMock.Setup(r => r.StringSetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<TimeSpan?>(),
+                It.IsAny<When>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(true);
         _tokenGeneratorMock.Setup(t => t.GetMemberToken(It.IsAny<MemberVO>(), It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>())).Returns((newAccessToken, refreshToken)); 
         
         // Act 

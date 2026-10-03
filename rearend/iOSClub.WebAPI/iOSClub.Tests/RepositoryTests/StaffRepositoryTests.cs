@@ -264,4 +264,113 @@ public class StaffRepositoryTests
         Assert.Equal(2, result.Count());
         Assert.All(result, s => Assert.Contains(s.Identity, new[] { "President", "Minister" }));
     }
+
+    [Fact]
+    public async Task AssignRoleAsync_PromotesDepartmentMemberToMinister_KeepsDepartment()
+    {
+        // Arrange
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var department = new DepartmentDO { Key = "tech", Name = "技术部", Description = "技术" };
+        await context.Departments.AddAsync(department);
+        await context.Staffs.AddAsync(new StaffDO
+        {
+            UserId = "0000000001", Name = "部员甲", Identity = "Department", Department = department
+        });
+        await context.SaveChangesAsync();
+
+        // Act
+        var (success, error) = await _staffRepository.AssignRoleAsync("0000000001", "Minister", "技术部");
+
+        // Assert
+        Assert.True(success, error);
+        await using var verify = new ClubContext(_options);
+        var staff = await verify.Staffs.Include(s => s.Department).FirstAsync(s => s.UserId == "0000000001");
+        Assert.Equal("Minister", staff.Identity);
+        Assert.Equal("技术部", staff.Department!.Name);
+    }
+
+    [Fact]
+    public async Task AssignRoleAsync_PromotesToPresident_ClearsDepartment()
+    {
+        // Arrange
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var department = new DepartmentDO { Key = "tech", Name = "技术部", Description = "技术" };
+        await context.Departments.AddAsync(department);
+        await context.Staffs.AddAsync(new StaffDO
+        {
+            UserId = "0000000002", Name = "部长乙", Identity = "Minister", Department = department
+        });
+        await context.SaveChangesAsync();
+
+        // Act
+        var (success, error) = await _staffRepository.AssignRoleAsync("0000000002", "President", null);
+
+        // Assert
+        Assert.True(success, error);
+        await using var verify = new ClubContext(_options);
+        var staff = await verify.Staffs.Include(s => s.Department).FirstAsync(s => s.UserId == "0000000002");
+        Assert.Equal("President", staff.Identity);
+        Assert.Null(staff.Department);
+    }
+
+    [Fact]
+    public async Task AssignRoleAsync_RejectsFounder()
+    {
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        await context.Staffs.AddAsync(new StaffDO { UserId = "0000000000", Name = "创始人", Identity = "Founder" });
+        await context.SaveChangesAsync();
+
+        var (success, error) = await _staffRepository.AssignRoleAsync("0000000000", "President", null);
+
+        Assert.False(success);
+        Assert.Contains("创始人", error);
+    }
+
+    [Fact]
+    public async Task AssignRoleAsync_RejectsMinisterWithoutDepartment()
+    {
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        await context.Staffs.AddAsync(new StaffDO { UserId = "0000000004", Name = "无部门", Identity = "Department" });
+        await context.SaveChangesAsync();
+
+        var (success, _) = await _staffRepository.AssignRoleAsync("0000000004", "Minister", null);
+
+        Assert.False(success);
+    }
+
+    [Fact]
+    public async Task GetAllStaffIdentity_ExcludesFounder()
+    {
+        // Arrange
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var department = new DepartmentDO { Key = "tech", Name = "技术部", Description = "技术" };
+        await context.Departments.AddAsync(department);
+        await context.Staffs.AddRangeAsync(
+            new StaffDO { UserId = "0000000001", Name = "创始人", Identity = "Founder" },
+            new StaffDO { UserId = "0000000003", Name = "部员", Identity = "Department", Department = department });
+        await context.Students.AddRangeAsync(
+            new StudentDO { UserId = "0000000001", UserName = "创始人" },
+            new StudentDO { UserId = "0000000003", UserName = "部员" });
+        await context.SaveChangesAsync();
+
+        // Act —— 汇总名单导出不应包含 Founder
+        var result = (await _staffRepository.GetAllStaffIdentity()).ToList();
+
+        // Assert
+        Assert.DoesNotContain(result, m => m.UserId == "0000000001");
+        Assert.Contains(result, m => m.UserId == "0000000003");
+    }
 }

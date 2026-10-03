@@ -28,9 +28,9 @@ export interface ClientApplication {
     homepageUrl: string;
     
     /**
-     * 回调URL白名单（多个URL用分号分隔）
+     * 回调URL白名单（后端 ClientAppVO.RedirectUris 为字符串数组）
      */
-    redirectUris: string;
+    redirectUris: string[];
     
     /**
      * 应用图标URL

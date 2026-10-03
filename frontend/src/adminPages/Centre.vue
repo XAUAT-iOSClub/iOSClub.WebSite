@@ -192,16 +192,20 @@
 <script setup lang="ts">
 import {ref, onMounted, computed} from 'vue'
 import {useRouter} from 'vue-router'
+import {useMessage} from 'naive-ui'
 import {Icon} from '@iconify/vue'
 import {ToolService} from '../services/ToolService'
 import {UserService} from '../services/UserService'
 import {DataCentreService} from "../services/DataCentreService"
 import {AuthService} from "../services/AuthService"
+import {ApiError} from '../services/ApiService'
+import {ErrorCode} from '../constants/ErrorCode'
 import IconFont from "../components/IconFont.vue"
 // @ts-ignore
 import '//at.alicdn.com/t/c/font_4612528_md4hjwjgcb.js';
 
 const router = useRouter()
+const message = useMessage()
 
 // --- Interfaces ---
 interface UserInfo {
@@ -322,11 +326,22 @@ const fetchUserInfo = async () => {
       isAdmin: ['Founder', 'President', 'Minister'].includes(userData.identity),
       gender: userData.gender || '男'
     }
-  } catch (error) {
-    // 获取用户信息失败，清除过期令牌并重定向到登录页
-    AuthService.clearTokens()
-    router.push('/login')
-    return
+  } catch (error: any) {
+    // 只有真正的认证失败（401 / 令牌过期 / 无效令牌）才登出。
+    // 业务错误（如 404 档案不存在、5xx）只提示，否则 Founder/Staff 没有 Student
+    // 档案时会被误判为会话失效，登录成功后又被弹回登录页。
+    const authErrorCodes: number[] = [ErrorCode.Unauthorized, ErrorCode.LoginExpired, ErrorCode.InvalidToken]
+    const isAuthFailure = error instanceof ApiError
+      && (error.code === 401 || authErrorCodes.includes(error.errorCode))
+
+    if (isAuthFailure) {
+      AuthService.clearTokens()
+      router.push('/login')
+      return
+    }
+
+    console.error('获取用户信息失败:', error)
+    message.error(error?.message || '用户信息加载失败')
   }
 }
 
