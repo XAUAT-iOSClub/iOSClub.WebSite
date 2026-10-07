@@ -217,8 +217,9 @@ const uploadFiles = async (event: Event) => {
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
       try {
-        await DataCentreService.updateDataFromJson(file)
-        message.success(`文件 "${file.name}" 已同步`)
+        const result = await DataCentreService.updateDataFromJson(file)
+        const skipped = result.skipped > 0 ? `，跳过 ${result.skipped} 条` : ''
+        message.success(`文件 "${file.name}" 已同步：新增 ${result.added} 条，更新 ${result.updated} 条${skipped}`)
       } catch (error) {
         console.error(error)
         message.error(`解析 "${file.name}" 失败`)

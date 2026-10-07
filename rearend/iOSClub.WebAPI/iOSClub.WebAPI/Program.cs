@@ -546,28 +546,16 @@ using (var scope = app.Services.CreateScope())
             }
 
             context.Staffs.Add(model);
+            var userFounderStu = new StudentDO
+                {
+                        UserId = model.UserId,
+                        UserName = model.Name,
+                        EMail = "iosclub@example.com",
+                        PhoneNum = "0000000000",
+                        PasswordHash = DataTool.StringToHash("123456"), // 这里应该使用实际的密码哈希
+                };
+            context.Students.Add(userFounderStu);
         }
-        // else
-        // {
-        //     var founder = await context.Staffs.FirstOrDefaultAsync(x => x.Identity == "Founder");
-        //     if (founder is {UserId: not null and not ""})
-        //     {
-        //         Console.WriteLine($"Founder exists: {founder.Name} ({founder.UserId})");
-        //         var userFounder = await context.Students.FirstOrDefaultAsync(x => x.UserId == founder.UserId);
-        //         if (userFounder is null)
-        //         {
-        //             var userFounderStu = new StudentDO
-        //             {
-        //                 UserId = founder.UserId,
-        //                 UserName = founder.Name,
-        //                 EMail = "iosclub@example.com",
-        //                 PhoneNum = "0000000000",
-        //                 PasswordHash = DataTool.StringToHash("123456"), // 这里应该使用实际的密码哈希
-        //             };
-        //             context.Students.Add(userFounderStu);
-        //         }
-        //     }
-        // }
 
         if (await context.Categories.AnyAsync())
         {
