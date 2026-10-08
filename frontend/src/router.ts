@@ -100,6 +100,12 @@ const routes = [
                 component: () => import('./pages/ClubActivities/HelpCenter.vue'),
             },
             {
+                path: 'ActivityRegister/:id',
+                name: 'ActivityRegister',
+                meta: { title: "活动登记 - 西建大 iOS Club" },
+                component: () => import('./pages/ActivityRegister.vue'),
+            },
+            {
                 path: '/',
                 component: () => import('./layouts/WordLayout.vue'),
                 children: [
@@ -222,6 +228,18 @@ const routes = [
                 name: 'IpBlacklist',
                 meta: { title: "IP黑名单管理 - 西建大 iOS Club" },
                 component: () => import('./adminPages/IpBlacklist.vue'),
+            },
+            {
+                path: 'Activity',
+                name: 'ActivityManager',
+                meta: { title: "活动记录 - 西建大 iOS Club", requiresAuth: true },
+                component: () => import('./adminPages/Activity/ActivityManager.vue'),
+            },
+            {
+                path: 'Activity/:id',
+                name: 'ActivityDetail',
+                meta: { title: "活动详情 - 西建大 iOS Club", requiresAuth: true },
+                component: () => import('./adminPages/Activity/ActivityDetail.vue'),
             },
         ]
     }

@@ -78,5 +78,27 @@ public static class MapperConfig
         config.NewConfig<DTOs.DepartmentCreateUpdateDTO, DepartmentDO>();
         config.NewConfig<DTOs.ClientAppCreateDTO, ClientApplicationDO>();
         config.NewConfig<DTOs.ClientAppUpdateDTO, ClientApplicationDO>();
+        // 活动记录系统
+        config.NewConfig<DTOs.ActivityCreateDTO, ActivityDO>()
+            .Ignore(dest => dest.Id)
+            .Ignore(dest => dest.Status)
+            .Ignore(dest => dest.CreatedAt)
+            .Ignore(dest => dest.UpdatedAt)
+            .Ignore(dest => dest.Participants);
+
+        config.NewConfig<DTOs.ActivityUpdateDTO, ActivityDO>()
+            .Ignore(dest => dest.Id)
+            .Ignore(dest => dest.Status)
+            .Ignore(dest => dest.CreatedAt)
+            .Ignore(dest => dest.UpdatedAt)
+            .Ignore(dest => dest.Participants);
+
+        config.NewConfig<DTOs.ActivityParticipantCreateDTO, ActivityParticipantDO>()
+            .Ignore(dest => dest.Id)
+            .Ignore(dest => dest.ActivityId)
+            .Ignore(dest => dest.CreatedAt)
+            .Ignore(dest => dest.Activity);
+
+        config.NewConfig<ActivityOperationLogDO, ActivityOperationLogVO>();
     }
 }

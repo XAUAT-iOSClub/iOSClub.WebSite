@@ -324,7 +324,7 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials() // 如果需要发送凭据（如cookies、认证头等）
-            .WithExposedHeaders("X-Refresh-Token"); // 允许前端访问X-Refresh-Token响应头
+            .WithExposedHeaders("X-Refresh-Token", "Content-Disposition"); // 允许前端访问X-Refresh-Token响应头
     });
 });
 
@@ -546,6 +546,12 @@ using (var scope = app.Services.CreateScope())
             }
 
             context.Staffs.Add(model);
+        }
+
+        // 开发环境：生成测试账号（成员/部员/部长/社长），便于验证权限
+        if (app.Environment.IsDevelopment())
+        {
+            await TestDataSeeder.SeedAsync(context);
         }
         // else
         // {

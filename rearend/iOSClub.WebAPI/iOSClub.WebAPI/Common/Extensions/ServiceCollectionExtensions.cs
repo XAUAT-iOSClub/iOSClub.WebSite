@@ -19,12 +19,17 @@ public static class ServiceCollectionExtensions
             services.AddScoped<IResourceRepository, ResourceRepository>();
             services.AddScoped<IStaffRepository, StaffRepository>();
             services.AddScoped<IStudentRepository, StudentRepository>();
+            services.AddScoped<IActivityRepository, ActivityRepository>();
+            services.AddScoped<IActivityParticipantRepository, ActivityParticipantRepository>();
+            services.AddScoped<IActivityOperationLogRepository, ActivityOperationLogRepository>();
 
             services.AddScoped<IDataCentreService, DataCentreService>();
             services.AddScoped<IClientApplicationRepository, ClientApplicationRepository>();
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<ILoginService, LoginService>();
             services.AddScoped<IDataAccessStatisticsService, DataAccessStatisticsService>();
+            services.AddScoped<IActivityExcelService, ActivityExcelService>();
+            services.AddHostedService<ActivityAutoStatusService>();
         }
 
         /// <summary>

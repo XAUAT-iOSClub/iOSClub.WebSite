@@ -14,6 +14,7 @@ namespace iOSClub.WebAPI.Controllers;
 [Route("[controller]")]
 public class UserController(
     IStudentRepository studentRepository,
+    IStaffRepository staffRepository,
     IHttpContextAccessor httpContextAccessor)
     : ControllerBase
 {
@@ -25,16 +26,35 @@ public class UserController(
         if (member == null)
             return Ok(ApiResponse<MemberVO>.Fail(ErrorCode.Unauthorized, "用户未认证"));
 
-        // Founder 也走这里。曾经这里对 Founder 直接返回 GetUser() 的存根，
-        // 但那个 MemberVO 只有 UserId + Identity，于是 Founder 在概览页看不到姓名、
-        // 个人档案页整张表单是空的。
+        // 优先返回学生档案（含姓名、学院、班级等完整信息）
         var student = await studentRepository.GetByIdAsync(member.UserId);
-        if (student == null)
-            return Ok(ApiResponse<MemberVO>.Fail(ErrorCode.UserNotFound, "用户不存在"));
+        if (student != null)
+        {
+            var result = student.Adapt<MemberVO>();
+            result.Identity = member.Identity;
+            return Ok(ApiResponse<MemberVO>.Success(result, "获取用户信息成功"));
+        }
 
-        var result = student.Adapt<MemberVO>();
-        result.Identity = member.Identity;
-        return Ok(ApiResponse<MemberVO>.Success(result, "获取用户信息成功"));
+        // 没有学生档案的账号（例如创始人 / 干部 Staff）：回退到 Staff 信息。
+        // 至少要能返回 UserId、姓名和身份，否则概览页拿不到资料会清空令牌把用户踢出去。
+        var staff = await staffRepository.GetStaffByIdWithoutOtherData(member.UserId);
+        if (staff != null)
+        {
+            return Ok(ApiResponse<MemberVO>.Success(new MemberVO
+            {
+                UserId = staff.UserId,
+                UserName = staff.Name,
+                Identity = staff.Identity,
+                Academy = "",
+                PoliticalLandscape = "",
+                Gender = "",
+                ClassName = "",
+                PhoneNum = "",
+                JoinTime = DateTime.UtcNow
+            }, "获取用户信息成功"));
+        }
+
+        return Ok(ApiResponse<MemberVO>.Fail(ErrorCode.UserNotFound, "用户不存在"));
     }
 
     [Authorize]
