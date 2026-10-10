@@ -100,19 +100,15 @@ public class DataCentreController(
                 article.LastWriteTime = DateTime.SpecifyKind(article.LastWriteTime, DateTimeKind.Utc);
             }
 
-            // 使用相同的数据更新逻辑
-            await using var context = await dbContextFactory.CreateDbContextAsync();
+            // 按主键合并导入：库中没有的插入，已存在的就地更新
+            var result = await dataCentreService.ImportAllDataAsync(allData);
 
-            await context.Students.AddRangeAsync(allData.Students);
-            await context.SaveChangesAsync();
-            await context.Departments.AddRangeAsync(allData.Departments);
-            await context.Staffs.AddRangeAsync(allData.Presidents.Where(staff => staff.Identity == "President"));
-            await context.SaveChangesAsync();
-            await context.Resources.AddRangeAsync(allData.Resources);
-            await context.Articles.AddRangeAsync(allData.Articles);
-            await context.SaveChangesAsync();
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("数据导入完成：{Result}", result);
+            }
 
-            return Ok(ApiResponse.Success("数据更新成功"));
+            return Ok(ApiResponse<object>.Success(result, $"数据更新成功：{result}"));
         }
         catch (JsonException ex)
         {
