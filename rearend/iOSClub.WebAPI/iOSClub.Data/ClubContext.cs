@@ -18,6 +18,9 @@ public sealed class ClubContext(DbContextOptions<ClubContext> options) : DbConte
     public DbSet<ArticleDO> Articles { get; init; }
     public DbSet<CategoryDO> Categories { get; init; }
     public DbSet<ClientApplicationDO> ClientApplications { get; init; }
+    public DbSet<ActivityDO> Activities { get; init; }
+    public DbSet<ActivityParticipantDO> ActivityParticipants { get; init; }
+    public DbSet<ActivityOperationLogDO> ActivityOperationLogs { get; init; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -69,6 +72,19 @@ public sealed class ClubContext(DbContextOptions<ClubContext> options) : DbConte
             .HasIndex(a => a.CategoryId); // 用于按分类查询
         modelBuilder.Entity<ArticleDO>()
             .HasIndex(a => a.VisibleToDepartment); // 用于按部门过滤可见文章
+        // ---- 活动记录系统 ----
+        modelBuilder.Entity<ActivityDO>()
+            .HasMany(a => a.Participants)
+            .WithOne(p => p.Activity)
+            .HasForeignKey(p => p.ActivityId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ActivityDO>().HasIndex(a => a.Status);
+        modelBuilder.Entity<ActivityDO>().HasIndex(a => a.StartTime);
+
+        modelBuilder.Entity<ActivityParticipantDO>()
+            .HasIndex(p => new { p.ActivityId, p.StudentId })
+            .IsUnique();
 
         // ParadeDB BM25 全文检索索引（pg_search）
         modelBuilder.Entity<ArticleDO>()

@@ -324,7 +324,7 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials() // 如果需要发送凭据（如cookies、认证头等）
-            .WithExposedHeaders("X-Refresh-Token"); // 允许前端访问X-Refresh-Token响应头
+            .WithExposedHeaders("X-Refresh-Token", "Content-Disposition"); // 允许前端访问X-Refresh-Token响应头
     });
 });
 

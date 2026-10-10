@@ -161,12 +161,6 @@ public class LoginService(
         var s = await GetClientKey(clientId, isNotHasEMail);
 
         var redisKey = $"{TokenPrefix}{model.UserId}{s}";
-        var storedToken = await _db.StringGetAsync(redisKey);
-        if (storedToken.HasValue && !string.IsNullOrEmpty(storedToken))
-        {
-            return storedToken.ToString();
-        }
-
         // 生成访问令牌和刷新令牌
         var (accessToken, refreshToken) = tokenGenerator.GetMemberToken(memberModel, model.RememberMe, scope, clientId);
 
@@ -198,13 +192,6 @@ public class LoginService(
         var s = await GetClientKey(clientId);
 
         var redisKey = $"{TokenPrefix}{userId}{s}";
-        var storedToken = await _db.StringGetAsync(redisKey);
-        if (storedToken.HasValue && !string.IsNullOrEmpty(storedToken))
-        {
-            // logger.LogInformation("Token already exists, get the token");
-            return storedToken.ToString();
-        }
-
         var member = await studentRepository.GetByIdAsync(userId);
         var memberModel = new MemberVO()
         {
@@ -534,12 +521,6 @@ public class LoginService(
         var s = await GetClientKey(clientId);
 
         var redisKey = $"{TokenPrefix}{model.Password}{s}";
-        var storedToken = await _db.StringGetAsync(redisKey);
-        if (storedToken.HasValue && !string.IsNullOrEmpty(storedToken))
-        {
-            return storedToken.ToString();
-        }
-
         // 生成访问令牌和刷新令牌
         var (accessToken, refreshToken) =
             tokenGenerator.GetMemberToken(memberModel, model.RememberMe, scope, clientId: clientId);

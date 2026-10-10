@@ -322,11 +322,26 @@ const fetchUserInfo = async () => {
       isAdmin: ['Founder', 'President', 'Minister'].includes(userData.identity),
       gender: userData.gender || '男'
     }
-  } catch (error) {
-    // 获取用户信息失败，清除过期令牌并重定向到登录页
-    AuthService.clearTokens()
-    router.push('/login')
-    return
+  } catch (error: any) {
+    // 只有真正的认证失败（登录过期 / 令牌无效）才登出；
+    // 其它错误（例如账号没有学生档案返回 404）不应该把用户踢出去。
+    const message = String(error?.message ?? '')
+    const isAuthError = message.includes('登录已过期') || message.includes('令牌') || message.includes('认证')
+    if (isAuthError) {
+      AuthService.clearTokens()
+      router.push('/login')
+      return
+    }
+    // 非认证错误：用 JWT 里的信息兜底，保证概览页仍然可用
+    const claims: any = AuthService.getCurrentUserInfo() || {}
+    const role = claims['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] || 'Member'
+    userInfo.value = {
+      name: claims['unique_name'] || '用户',
+      id: claims['sub'] || '',
+      role,
+      isAdmin: ['Founder', 'President', 'Minister'].includes(role),
+      gender: '男'
+    }
   }
 }
 
