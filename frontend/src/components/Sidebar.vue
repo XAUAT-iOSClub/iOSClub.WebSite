@@ -150,6 +150,7 @@ const menuItems = [
   {name: '社团部门', path: '/Centre/Department', icon: 'ph:buildings', requiresRole: 'Minister'},
   {name: '社团资源', path: '/Centre/Resources', icon: 'ph:books', requiresRole: 'Minister'},
   {name: '公告文章', path: '/Centre/Article', icon: 'ph:article', requiresRole: 'Minister'},
+  {name: '活动记录', path: '/Centre/Activity', icon: 'ph:calendar-blank', requiresRole: 'Minister'},
   {name: '成员管理', path: '/Centre/MemberData', icon: 'ph:users', requiresRole: 'Minister'},
   {name: '权限管理', path: '/Centre/FounderPermission', icon: 'ph:shield-check', requiresRole: 'Founder'},
   {name: '数据分析', path: '/Centre/Admin', icon: 'ph:gear', requiresRole: 'Minister'},

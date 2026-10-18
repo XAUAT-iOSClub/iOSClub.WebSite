@@ -342,6 +342,17 @@ const fetchUserInfo = async () => {
 
     console.error('获取用户信息失败:', error)
     message.error(error?.message || '用户信息加载失败')
+
+    // 非认证错误：用 JWT 里的信息兜底，保证概览页仍然可用
+    const claims: any = AuthService.getCurrentUserInfo() || {}
+    const role = claims['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] || 'Member'
+    userInfo.value = {
+      name: claims['unique_name'] || '用户',
+      id: claims['sub'] || '',
+      role,
+      isAdmin: ['Founder', 'President', 'Minister'].includes(role),
+      gender: '男'
+    }
   }
 }
 

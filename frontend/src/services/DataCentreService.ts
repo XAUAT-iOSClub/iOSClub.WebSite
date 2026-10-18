@@ -29,6 +29,13 @@ export interface PoliticalCount {
     value: number;
 }
 
+// 备份导入的结果统计
+export interface DataImportResult {
+    added: number;
+    updated: number;
+    skipped: number;
+}
+
 // 数据中心服务
 export class DataCentreService {
     // 获取历年人数数据
@@ -78,12 +85,12 @@ export class DataCentreService {
         });
     }
 
-    static async updateDataFromJson(file: File): Promise<void> {
+    static async updateDataFromJson(file: File): Promise<DataImportResult> {
         const formData = new FormData();
         formData.append('file', file);
 
         // 通过统一请求层解析 ApiResponse；HTTP 200 的业务失败也会抛出错误。
-        await apiRequest<void>({
+        return await apiRequest<DataImportResult>({
             url: `${url}/DataCentre/update-from-json`,
             method: 'POST',
             body: formData

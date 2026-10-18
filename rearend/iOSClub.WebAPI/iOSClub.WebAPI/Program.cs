@@ -324,7 +324,7 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials() // 如果需要发送凭据（如cookies、认证头等）
-            .WithExposedHeaders("X-Refresh-Token"); // 允许前端访问X-Refresh-Token响应头
+            .WithExposedHeaders("X-Refresh-Token", "Content-Disposition"); // 允许前端访问X-Refresh-Token响应头
     });
 });
 
@@ -341,9 +341,10 @@ if (string.IsNullOrEmpty(sql))
 
 if (string.IsNullOrEmpty(sql))
 {
+    var sqlitePath = Environment.GetEnvironmentVariable("SQLITE_DB_PATH") ?? "Data.db";
     builder.Services.AddDbContextFactory<ClubContext>(opt =>
     {
-        opt.UseSqlite("Data Source=Data.db",
+        opt.UseSqlite($"Data Source={sqlitePath}",
             o => o.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
         opt.ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
     });

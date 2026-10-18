@@ -1,5 +1,6 @@
 using iOSClub.Data;
 using iOSClub.Data.DataObjects;
+using iOSClub.Data.DTOs;
 using iOSClub.DataApi.Services;
 using Microsoft.EntityFrameworkCore;
 
@@ -348,5 +349,183 @@ public class DataCentreServiceTests
         // Assert
         Assert.NotNull(result);
         Assert.Empty(result);
+    }
+
+    // 把导出的备份再传回来时，库里的学号一定已经存在；旧实现直接 AddRange，会撞 PK_Students
+    [Fact]
+    public async Task ImportAllDataAsync_WithExistingStudents_UpdatesInPlaceAndOnlyInsertsNewOnes()
+    {
+        // Arrange
+        await using (var seed = new ClubContext(_options))
+        {
+            await seed.Database.EnsureDeletedAsync();
+            await seed.Database.EnsureCreatedAsync();
+
+            var existing = BogusDataGenerator.StudentFaker.Clone()
+                .RuleFor(s => s.UserId, "20123456")
+                .RuleFor(s => s.UserName, "旧名字")
+                .RuleFor(s => s.PhoneNum, "13800000000")
+                .Generate();
+            existing.PasswordHash = "原有密码哈希";
+
+            await seed.Students.AddAsync(existing);
+            await seed.SaveChangesAsync();
+        }
+
+        var data = new AllDataImportDTO
+        {
+            Students =
+            [
+                new StudentDO { UserId = "20123456", UserName = "新名字", PhoneNum = "13800000000" },
+                new StudentDO { UserId = "21123456", UserName = "新同学", PhoneNum = "13900000000" }
+            ]
+        };
+
+        // Act
+        var result = await _dataCentreService.ImportAllDataAsync(data);
+
+        // Assert
+        Assert.Equal(1, result.Added);
+        Assert.Equal(1, result.Updated);
+
+        await using var context = new ClubContext(_options);
+        var students = await context.Students.OrderBy(s => s.UserId).ToListAsync();
+        Assert.Equal(2, students.Count);
+
+        var updated = students.Single(s => s.UserId == "20123456");
+        Assert.Equal("新名字", updated.UserName);
+        // 备份导入不应该覆盖库里已有的密码和入社时间
+        Assert.Equal("原有密码哈希", updated.PasswordHash);
+    }
+
+    // 同一份文件里重复出现的学号在 EF 里是"同一实体的两个实例"，跟踪时就会抛错，必须在入库前合并
+    [Fact]
+    public async Task ImportAllDataAsync_WithDuplicateRowsInSameFile_MergesThemIntoOneRow()
+    {
+        // Arrange
+        await using (var seed = new ClubContext(_options))
+        {
+            await seed.Database.EnsureDeletedAsync();
+            await seed.Database.EnsureCreatedAsync();
+        }
+
+        var data = new AllDataImportDTO
+        {
+            Students =
+            [
+                new StudentDO { UserId = "20123456", UserName = "先出现", PhoneNum = "13800000000" },
+                new StudentDO { UserId = "20123456", UserName = "后出现", PhoneNum = "13800000000" }
+            ]
+        };
+
+        // Act
+        var result = await _dataCentreService.ImportAllDataAsync(data);
+
+        // Assert
+        Assert.Equal(1, result.Added);
+
+        await using var context = new ClubContext(_options);
+        var student = await context.Students.SingleAsync();
+        Assert.Equal("后出现", student.UserName);
+    }
+
+    [Fact]
+    public async Task ImportAllDataAsync_WithMissingPrimaryKey_SkipsTheRow()
+    {
+        // Arrange
+        await using (var seed = new ClubContext(_options))
+        {
+            await seed.Database.EnsureDeletedAsync();
+            await seed.Database.EnsureCreatedAsync();
+        }
+
+        var data = new AllDataImportDTO
+        {
+            Students = [new StudentDO { UserId = "  ", UserName = "没有学号", PhoneNum = "13800000000" }]
+        };
+
+        // Act
+        var result = await _dataCentreService.ImportAllDataAsync(data);
+
+        // Assert
+        Assert.Equal(1, result.Skipped);
+        Assert.Equal(0, result.Added);
+
+        await using var context = new ClubContext(_options);
+        Assert.Empty(await context.Students.ToListAsync());
+    }
+
+    // 备份里的 Founder 记录的可能是旧身份，导入不能把现任创始人降级成社长
+    [Fact]
+    public async Task ImportAllDataAsync_WithFounderInPresidents_KeepsFounderIdentity()
+    {
+        // Arrange
+        await using (var seed = new ClubContext(_options))
+        {
+            await seed.Database.EnsureDeletedAsync();
+            await seed.Database.EnsureCreatedAsync();
+
+            await seed.Staffs.AddAsync(new StaffDO { UserId = "0000000000", Name = "root", Identity = "Founder" });
+            await seed.SaveChangesAsync();
+        }
+
+        var data = new AllDataImportDTO
+        {
+            Presidents =
+            [
+                new StaffDO { UserId = "0000000000", Name = "root", Identity = "President" },
+                new StaffDO { UserId = "20123456", Name = "新社长", Identity = "President" }
+            ]
+        };
+
+        // Act
+        var result = await _dataCentreService.ImportAllDataAsync(data);
+
+        // Assert
+        Assert.Equal(1, result.Added);
+        Assert.Equal(1, result.Updated);
+
+        await using var context = new ClubContext(_options);
+        Assert.Equal("Founder", (await context.Staffs.SingleAsync(s => s.UserId == "0000000000")).Identity);
+        Assert.Equal("President", (await context.Staffs.SingleAsync(s => s.UserId == "20123456")).Identity);
+    }
+
+    // 部门里夹带的部员列表如果直接入库，会级联插入并再次撞上 Staffs 主键
+    [Fact]
+    public async Task ImportAllDataAsync_WithNestedStaffsInDepartment_DoesNotCascadeInsertThem()
+    {
+        // Arrange
+        await using (var seed = new ClubContext(_options))
+        {
+            await seed.Database.EnsureDeletedAsync();
+            await seed.Database.EnsureCreatedAsync();
+
+            await seed.Staffs.AddAsync(new StaffDO { UserId = "20123456", Name = "已有部员", Identity = "Department" });
+            await seed.SaveChangesAsync();
+        }
+
+        var data = new AllDataImportDTO
+        {
+            Departments =
+            [
+                new DepartmentDO
+                {
+                    Name = "技术部",
+                    Key = "tech",
+                    Staffs = [new StaffDO { UserId = "20123456", Name = "已有部员", Identity = "Department" }]
+                }
+            ]
+        };
+
+        // Act
+        var result = await _dataCentreService.ImportAllDataAsync(data);
+
+        // Assert
+        Assert.Equal(1, result.Added);
+        Assert.Equal(1, result.Skipped);
+
+        await using var context = new ClubContext(_options);
+        Assert.Equal("技术部", (await context.Departments.SingleAsync()).Name);
+        Assert.Single(await context.Staffs.ToListAsync());
     }
 }

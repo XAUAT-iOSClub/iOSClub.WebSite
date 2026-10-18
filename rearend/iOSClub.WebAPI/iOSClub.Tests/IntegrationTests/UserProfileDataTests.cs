@@ -25,6 +25,7 @@ public class UserProfileDataTests
 {
     private readonly DbContextOptions<ClubContext> _options;
     private readonly StudentRepository _studentRepository;
+    private readonly StaffRepository _staffRepository;
 
     public UserProfileDataTests()
     {
@@ -34,6 +35,7 @@ public class UserProfileDataTests
             .Options;
 
         _studentRepository = new StudentRepository(new TestDbContextFactory(_options));
+        _staffRepository = new StaffRepository(new TestDbContextFactory(_options));
     }
 
     private UserController CreateController(string userId, string identity)
@@ -47,7 +49,7 @@ public class UserProfileDataTests
         var accessor = new Mock<IHttpContextAccessor>();
         accessor.Setup(a => a.HttpContext).Returns(new DefaultHttpContext { User = principal });
 
-        return new UserController(_studentRepository, accessor.Object);
+        return new UserController(_studentRepository, _staffRepository, accessor.Object);
     }
 
     /// <summary>

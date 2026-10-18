@@ -101,7 +101,28 @@ dotnet test
 dotnet ef database update --project iOSClub.Data --startup-project iOSClub.WebAPI
 ```
 
-## 部署
+## Docker 生产部署
+
+后端 CI/CD 工作流位于 `.github/workflows/backend-ci-cd.yml`：PR 会运行 restore、build 和测试；推送到 `master` 后，在测试通过时构建并推送带 commit SHA 与 `latest` 标签的 GHCR 镜像。工作流可在 Actions 中手动触发。若需同步推送到国内镜像仓库，配置 Actions Variables `MIRROR_REGISTRY`、`MIRROR_NAMESPACE`，以及 Secrets `MIRROR_USERNAME`、`MIRROR_PASSWORD`。
+
+服务器安装 Docker Compose v2 后，将 `deploy/.env.example` 复制为 `deploy/.env` 并填写生产配置，再从仓库根目录运行：
+
+```bash
+cd rearend/iOSClub.WebAPI/deploy
+cp .env.example .env
+chmod +x build_from_ghcr.sh
+./build_from_ghcr.sh
+```
+
+私有 GHCR 镜像可在服务器先执行 `docker login ghcr.io`，或通过 `PULL_USERNAME`、`PULL_TOKEN` 环境变量传入凭据。部署脚本支持指定镜像标签回滚：
+
+```bash
+./build_from_ghcr.sh ghcr.io/xauat-iosclub/iosclub.website-backend:<commit-sha>
+```
+
+`APP_PORT` 可覆盖宿主机端口，默认 8080。SQLite 数据库、日志数据库和 RSA 密钥分别保存在 Compose volumes 中；使用 PostgreSQL 时设置 `SQL`。反向代理场景请设置 `TRUSTED_PROXY_IPS`。监控服务仍由仓库根目录的 Compose 文件管理。
+
+## 手动发布
 
 1. 发布WebAPI项目：
 ```bash
