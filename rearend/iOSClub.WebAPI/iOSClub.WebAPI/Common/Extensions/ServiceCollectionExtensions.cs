@@ -1,6 +1,7 @@
 using iOSClub.DataApi.Repositories;
 using iOSClub.DataApi.Services;
 using iOSClub.WebAPI.Common.Security;
+using iOSClub.WebAPI.Services;
 
 namespace iOSClub.WebAPI.Common.Extensions;
 
@@ -28,6 +29,7 @@ public static class ServiceCollectionExtensions
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<ILoginService, LoginService>();
             services.AddScoped<IDataAccessStatisticsService, DataAccessStatisticsService>();
+            services.AddScoped<IDepartmentImportService, DepartmentImportService>();
             services.AddScoped<IActivityExcelService, ActivityExcelService>();
             services.AddHostedService<ActivityAutoStatusService>();
         }

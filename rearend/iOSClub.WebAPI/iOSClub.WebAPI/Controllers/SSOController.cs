@@ -463,7 +463,7 @@ public class SSOController(
             }
 
             // 生成ID token
-            var idToken = await GenerateIdToken(userId, authState.ClientId, authState.Nonce);
+            var idToken = await GenerateIdToken(userId, authState.ClientId, authState.Nonce, token);
 
             if (string.IsNullOrEmpty(idToken))
             {
@@ -860,7 +860,7 @@ public class SSOController(
             string? idToken = null;
             if (authCodeInfo.Scope.Contains("openid"))
             {
-                idToken = await GenerateIdToken(member.UserId, request.ClientId, authCodeInfo.Nonce);
+                idToken = await GenerateIdToken(member.UserId, request.ClientId, authCodeInfo.Nonce, token);
                 if (string.IsNullOrEmpty(idToken))
                 {
                     if (logger.IsEnabled(LogLevel.Information))
@@ -983,13 +983,35 @@ public class SSOController(
     }
 
     /// <summary>
+    /// 计算 OIDC at_hash：access_token 的哈希左半部分，base64url 编码。
+    /// 算法与 id_token 签名算法对应（RS256 使用 SHA-256）。
+    /// </summary>
+    /// <param name="accessToken">访问令牌</param>
+    /// <returns>at_hash 字符串；access_token 为空时返回空串</returns>
+    private static string ComputeAtHash(string? accessToken)
+    {
+        if (string.IsNullOrEmpty(accessToken))
+        {
+            return "";
+        }
+
+        var hash = SHA256.HashData(Encoding.ASCII.GetBytes(accessToken));
+        var leftHalf = hash[..(hash.Length / 2)];
+        return Convert.ToBase64String(leftHalf)
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+    }
+
+    /// <summary>
     /// 生成ID token
     /// </summary>
     /// <param name="userId">用户ID</param>
     /// <param name="clientId">客户端ID</param>
     /// <param name="nonce">Nonce值</param>
+    /// <param name="accessToken">访问令牌，用于计算 at_hash</param>
     /// <returns>ID token</returns>
-    private async Task<string?> GenerateIdToken(string userId, string clientId, string nonce)
+    private async Task<string?> GenerateIdToken(string userId, string clientId, string nonce, string? accessToken = null)
     {
         try
         {
@@ -1028,7 +1050,7 @@ public class SSOController(
                 new("client_id", clientId),
                 new("email", member.EMail ?? ""),
                 new("phone_numb", member.PhoneNum),
-                new("at_hash", Guid.NewGuid().ToString()[..8]) // 访问令牌的哈希值（简化版）
+                new("at_hash", ComputeAtHash(accessToken)) // 访问令牌哈希，供 OIDC 客户端校验
             };
 
             // 如果提供了nonce，则添加到claims中

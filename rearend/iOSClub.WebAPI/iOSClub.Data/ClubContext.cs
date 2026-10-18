@@ -18,6 +18,7 @@ public sealed class ClubContext(DbContextOptions<ClubContext> options) : DbConte
     public DbSet<ArticleDO> Articles { get; init; }
     public DbSet<CategoryDO> Categories { get; init; }
     public DbSet<ClientApplicationDO> ClientApplications { get; init; }
+    public DbSet<ImportHistoryDO> ImportHistories { get; init; }
     public DbSet<ActivityDO> Activities { get; init; }
     public DbSet<ActivityParticipantDO> ActivityParticipants { get; init; }
     public DbSet<ActivityOperationLogDO> ActivityOperationLogs { get; init; }
@@ -85,6 +86,10 @@ public sealed class ClubContext(DbContextOptions<ClubContext> options) : DbConte
         modelBuilder.Entity<ActivityParticipantDO>()
             .HasIndex(p => new { p.ActivityId, p.StudentId })
             .IsUnique();
+
+        // ImportHistoryDO 索引：按部门 + 时间倒序拉取导入历史
+        modelBuilder.Entity<ImportHistoryDO>()
+            .HasIndex(h => new { h.DepartmentName, h.ImportedAt });
 
         // ParadeDB BM25 全文检索索引（pg_search）
         modelBuilder.Entity<ArticleDO>()

@@ -1,4 +1,5 @@
 using iOSClub.Data;
+using iOSClub.Data.DataObjects;
 using iOSClub.DataApi.Repositories;
 using Microsoft.EntityFrameworkCore;
 
@@ -242,6 +243,126 @@ public class DepartmentRepositoryTests
 
         // Assert
         Assert.Equal(2, result);
+    }
+
+    [Fact]
+    public async Task GetDepartmentStaffsAsync_ReturnsOnlyThatDepartmentsStaff()
+    {
+        // Arrange
+        await _context.Database.EnsureDeletedAsync();
+        await _context.Database.EnsureCreatedAsync();
+
+        var tech = new DepartmentDO { Key = "tech", Name = "技术部", Description = "技术" };
+        var pr = new DepartmentDO { Key = "pr", Name = "宣传部", Description = "宣传" };
+        await _context.Departments.AddRangeAsync(tech, pr);
+        await _context.Staffs.AddRangeAsync(
+            new StaffDO { UserId = "0000000001", Name = "甲", Identity = "Department", Department = tech },
+            new StaffDO { UserId = "0000000002", Name = "乙", Identity = "Minister", Department = tech },
+            new StaffDO { UserId = "0000000003", Name = "丙", Identity = "Department", Department = pr });
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _departmentRepository.GetDepartmentStaffsAsync("技术部");
+
+        // Assert
+        Assert.Equal(2, result.Count);
+        Assert.Contains(result, s => s.UserId == "0000000001");
+        Assert.Contains(result, s => s.UserId == "0000000002");
+        Assert.DoesNotContain(result, s => s.UserId == "0000000003");
+    }
+
+    [Fact]
+    public async Task GetStaffCountAsync_ReturnsZero_ForEmptyDepartment()
+    {
+        // Arrange
+        await _context.Database.EnsureDeletedAsync();
+        await _context.Database.EnsureCreatedAsync();
+        await _context.Departments.AddAsync(new DepartmentDO { Key = "tech", Name = "技术部", Description = "技术" });
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _departmentRepository.GetStaffCountAsync("技术部");
+
+        // Assert
+        Assert.Equal(0, result);
+    }
+
+    [Fact]
+    public async Task GetStaffCountAsync_DoesNotCountOtherDepartments()
+    {
+        // Arrange
+        await _context.Database.EnsureDeletedAsync();
+        await _context.Database.EnsureCreatedAsync();
+
+        var tech = new DepartmentDO { Key = "tech", Name = "技术部", Description = "技术" };
+        var pr = new DepartmentDO { Key = "pr", Name = "宣传部", Description = "宣传" };
+        await _context.Departments.AddRangeAsync(tech, pr);
+        await _context.Staffs.AddAsync(
+            new StaffDO { UserId = "0000000003", Name = "丙", Identity = "Department", Department = pr });
+        await _context.SaveChangesAsync();
+
+        // Act + Assert
+        Assert.Equal(0, await _departmentRepository.GetStaffCountAsync("技术部"));
+        Assert.Equal(1, await _departmentRepository.GetStaffCountAsync("宣传部"));
+    }
+
+    [Fact]
+    public async Task DeleteDepartmentAsync_ReturnsFalse_WhenNotFound()
+    {
+        // Arrange
+        await _context.Database.EnsureDeletedAsync();
+        await _context.Database.EnsureCreatedAsync();
+
+        // Act
+        var result = await _departmentRepository.DeleteDepartmentAsync("不存在的部门");
+
+        // Assert
+        Assert.False(result);
+    }
+
+    [Fact]
+    public async Task GetDepartmentByNameAsync_ReturnsNull_WhenNotFound()
+    {
+        // Arrange
+        await _context.Database.EnsureDeletedAsync();
+        await _context.Database.EnsureCreatedAsync();
+
+        // Act
+        var result = await _departmentRepository.GetDepartmentByNameAsync("不存在的部门");
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task GetDepartmentByKeyAsync_ReturnsNull_WhenNotFound()
+    {
+        // Arrange
+        await _context.Database.EnsureDeletedAsync();
+        await _context.Database.EnsureCreatedAsync();
+
+        // Act
+        var result = await _departmentRepository.GetDepartmentByKeyAsync("no-such-key");
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task AddDepartmentAsync_ReturnsFalse_WhenDuplicateName()
+    {
+        // Arrange
+        await _context.Database.EnsureDeletedAsync();
+        await _context.Database.EnsureCreatedAsync();
+        await _context.Departments.AddAsync(new DepartmentDO { Key = "tech", Name = "技术部", Description = "技术" });
+        await _context.SaveChangesAsync();
+
+        // Act —— 主键 Name 重复，仓库层应捕获异常返回 false
+        var result = await _departmentRepository.AddDepartmentAsync(
+            new DepartmentDO { Key = "tech2", Name = "技术部", Description = "重复" });
+
+        // Assert
+        Assert.False(result);
     }
 
 }

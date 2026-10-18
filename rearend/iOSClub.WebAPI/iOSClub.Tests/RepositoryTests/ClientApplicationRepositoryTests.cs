@@ -152,6 +152,9 @@ public class ClientApplicationRepositoryTests
         
         // 使用Bogus生成1个客户端应用
         var clientApp = BogusDataGenerator.ClientApplicationFaker.Generate();
+        // Faker 的 IsActive 是随机的，而 ValidateCredentialsAsync 只接受 IsActive 的应用，
+        // 不固定的话这个测试会随机失败。
+        clientApp.IsActive = true;
         var originalSecret = clientApp.ClientSecret;
         // 保存原始密钥到数据库，不进行哈希处理
         await context.ClientApplications.AddAsync(clientApp);

@@ -12,6 +12,17 @@ public interface IStaffRepository
 {
     Task<IEnumerable<StaffVO>> GetPermissionMembersAsync();
     Task<(bool Success, string Error)> UpdateRoleAsync(string userId, string identity, string? departmentName, string operatorId);
+
+    /// <summary>
+    /// 将已存在的成员调整为部门内身份（部员/部长）或社团领导身份（社长）。
+    /// 与 UpdateRoleAsync 不同：本方法面向管理员在部门管理页的人事调动，
+    /// 只允许在 Department / Minister / President 之间调整，禁止触碰 Founder。
+    /// </summary>
+    /// <param name="userId">成员ID</param>
+    /// <param name="identity">目标身份：Department / Minister / President</param>
+    /// <param name="departmentName">目标部门名称；President 会被强制清空部门</param>
+    /// <returns>是否成功及错误信息</returns>
+    Task<(bool Success, string Error)> AssignRoleAsync(string userId, string identity, string? departmentName);
     /// <summary>
     /// 获取所有员工
     /// </summary>
@@ -112,6 +123,49 @@ public class StaffRepository(IDbContextFactory<ClubContext> factory) : IStaffRep
         if (staff.Identity == "Founder" && identity != "Founder" && await context.Staffs.CountAsync(s => s.Identity == "Founder") <= 1) return (false, "至少需要保留一个 Founder");
         staff.Identity = identity; staff.Department = department;
         await context.SaveChangesAsync(); return (true, "");
+    }
+
+    public async Task<(bool Success, string Error)> AssignRoleAsync(string userId, string identity, string? departmentName)
+    {
+        // 允许的人事调动范围：部员 ↔ 部长 ↔ 社长。
+        // Founder 不在此列，避免部门管理页误改创始人。
+        var allowed = new[] { "Department", "Minister", "President" };
+        if (!allowed.Contains(identity)) return (false, "身份标识无效");
+
+        await using var context = await factory.CreateDbContextAsync();
+        var staff = await context.Staffs.Include(s => s.Department).FirstOrDefaultAsync(s => s.UserId == userId);
+        if (staff == null) return (false, "成员不存在");
+        if (staff.Identity == "Founder") return (false, "不能调整创始人的身份");
+
+        // 社长属于社团层面的身份，不隶属于任何部门。
+        if (identity is "President")
+        {
+            staff.Identity = identity;
+            staff.Department = null;
+            return await SaveAsync(context);
+        }
+
+        // 部长 / 部员必须指定一个存在的部门。
+        if (string.IsNullOrWhiteSpace(departmentName)) return (false, "该身份必须指定部门");
+        var department = await context.Departments.FirstOrDefaultAsync(d => d.Name == departmentName);
+        if (department == null) return (false, "部门不存在");
+
+        staff.Identity = identity;
+        staff.Department = department;
+        return await SaveAsync(context);
+    }
+
+    private static async Task<(bool Success, string Error)> SaveAsync(ClubContext context)
+    {
+        try
+        {
+            await context.SaveChangesAsync();
+            return (true, "");
+        }
+        catch
+        {
+            return (false, "保存失败");
+        }
     }
     public async Task<IEnumerable<StaffDO>> GetAllStaffAsync()
     {

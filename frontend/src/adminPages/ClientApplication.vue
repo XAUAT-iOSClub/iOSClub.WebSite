@@ -244,7 +244,7 @@
           <div class="detail-group">
             <label class="detail-label">配置</label>
             <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 space-y-3">
-              <div v-for="(uri, idx) in selectedApp?.redirectUris.split(';')" :key="idx" class="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-300 break-all">
+              <div v-for="(uri, idx) in toUriList(selectedApp?.redirectUris)" :key="idx" class="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-300 break-all">
                 <Icon icon="ion:link-outline" class="mt-0.5 text-gray-400 shrink-0" />
                 <span>{{ uri }}</span>
               </div>
@@ -330,6 +330,13 @@ const editForm = ref<UpdateClientAppModel>({
 const editRedirectUrisText = ref('');
 const currentEditClientId = ref('');
 
+// 后端 ClientAppVO.RedirectUris 为字符串数组；兼容早期按分号拼接的字符串返回。
+const toUriList = (uris: unknown): string[] => {
+  if (Array.isArray(uris)) return uris.filter(Boolean) as string[];
+  if (typeof uris === 'string') return uris.split(';').map(u => u.trim()).filter(Boolean);
+  return [];
+};
+
 // 过滤逻辑
 const filteredClientApps = computed(() => {
   if (!searchQuery.value.trim()) {
@@ -410,8 +417,8 @@ const handleCreateSubmit = async () => {
 const openEditModal = (app: ClientApplication) => {
   selectedApp.value = app;
   currentEditClientId.value = app.clientId;
-  editForm.value = { ...app, redirectUris: app.redirectUris.split(';') };
-  editRedirectUrisText.value = app.redirectUris.split(';').join('\n');
+  editForm.value = { ...app, redirectUris: toUriList(app.redirectUris) };
+  editRedirectUrisText.value = toUriList(app.redirectUris).join('\n');
   showEditModal.value = true;
 };
 const handleEditModalClose = () => showEditModal.value = false;
