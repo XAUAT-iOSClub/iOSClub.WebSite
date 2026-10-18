@@ -205,23 +205,26 @@ public class LoginServiceTests
     }
 
     [Fact]
-    public async Task Login_RedisAlreadyHasToken_ReturnsExistingToken()
+    public async Task Login_WithStoredToken_IssuesNewToken()
     {
         // Arrange
         var loginModel = new LoginDTO { UserId = "1234567890", Password = "password123" };
-        var existingToken = "existing-jwt-token";
+        var storedToken = "existing-jwt-token";
+        var newToken = "new-jwt-token";
         var student = new StudentDO { UserId = loginModel.UserId, UserName = "Test Student" };
 
         _studentRepoMock.Setup(s => s.LoginAndGetStudentAsync(loginModel.UserId, loginModel.Password)).ReturnsAsync(student);
         _staffRepoMock.Setup(s => s.GetStaffByIdWithoutOtherData(loginModel.UserId)).ReturnsAsync((StaffDO?)null);
-        _redisDbMock.Setup(r => r.StringGetAsync($"token:{loginModel.UserId}", It.IsAny<CommandFlags>())).ReturnsAsync(existingToken);
+        _redisDbMock.Setup(r => r.StringGetAsync($"token:{loginModel.UserId}", It.IsAny<CommandFlags>())).ReturnsAsync(storedToken);
+        _tokenGeneratorMock.Setup(t => t.GetMemberToken(It.IsAny<MemberVO>(), It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>())).Returns((newToken, "mock-refresh-token"));
 
         // Act
         var result = await _loginService.Login(loginModel);
 
         // Assert
-        Assert.Equal(existingToken, result);
-        _tokenGeneratorMock.Verify(t => t.GetMemberToken(It.IsAny<MemberVO>(), It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        // 登录不再复用 Redis 里的旧 token，而是每次签发新 token。
+        Assert.Equal(newToken, result);
+        _tokenGeneratorMock.Verify(t => t.GetMemberToken(It.IsAny<MemberVO>(), It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>()), Times.Once);
     }
 
     [Fact]
