@@ -18,6 +18,10 @@ ARG BUILD_CONFIGURATION=Release
 RUN dotnet publish "./iOSClub.WebAPI.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 FROM base AS final
+USER root
 WORKDIR /app
 COPY --from=publish /app/publish .
+RUN mkdir -p /app/data /app/logs /app/keys \
+    && chown -R $APP_UID:$APP_UID /app/data /app/logs /app/keys
+USER $APP_UID
 ENTRYPOINT ["dotnet", "iOSClub.WebAPI.dll"]

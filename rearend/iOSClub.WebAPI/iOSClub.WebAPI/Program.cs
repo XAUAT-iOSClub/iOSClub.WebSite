@@ -341,8 +341,9 @@ if (string.IsNullOrEmpty(sql))
 
 if (string.IsNullOrEmpty(sql))
 {
+    var sqlitePath = Environment.GetEnvironmentVariable("SQLITE_DB_PATH") ?? "Data.db";
     builder.Services.AddDbContextFactory<ClubContext>(opt =>
-        opt.UseSqlite("Data Source=Data.db",
+        opt.UseSqlite($"Data Source={sqlitePath}",
             o => o.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)));
 
     builder.Services.AddDataProtection()

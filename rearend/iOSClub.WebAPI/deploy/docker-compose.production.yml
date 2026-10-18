@@ -1,0 +1,21 @@
+services:
+  app:
+    image: ${IMAGE:?IMAGE must be set to an immutable image tag}
+    container_name: iosclub-webapi
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      SQLITE_DB_PATH: /app/data/Data.db
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    volumes:
+      - app-data:/app/data
+      - app-logs:/app/logs
+      - app-keys:/app/keys
+
+volumes:
+  app-data:
+  app-logs:
+  app-keys:

@@ -1,0 +1,107 @@
+name: Backend CI/CD
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'rearend/iOSClub.WebAPI/**'
+      - '.github/workflows/backend-ci-cd.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'rearend/iOSClub.WebAPI/**'
+      - '.github/workflows/backend-ci-cd.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: iosclub-backend-image
+  cancel-in-progress: false
+
+env:
+  DOTNET_VERSION: 10.0.x
+  REGISTRY: ghcr.io
+  MIRROR_REGISTRY: ${{ vars.MIRROR_REGISTRY }}
+  MIRROR_NAMESPACE: ${{ vars.MIRROR_NAMESPACE }}
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Restore
+        run: dotnet restore rearend/iOSClub.WebAPI/iOSClub.WebAPI.sln
+      - name: Build
+        run: dotnet build rearend/iOSClub.WebAPI/iOSClub.WebAPI.sln --no-restore --configuration Release
+      - name: Test
+        run: dotnet test rearend/iOSClub.WebAPI/iOSClub.WebAPI.sln --no-build --configuration Release --verbosity normal
+
+  publish:
+    name: Build and push image
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve image tags
+        id: image
+        shell: bash
+        run: |
+          repository="$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          image="${REGISTRY}/${repository}-backend"
+          name="${repository##*/}-backend"
+          {
+            echo "ghcr_tags<<TAGS_EOF"
+            echo "${image}:${GITHUB_SHA}"
+            echo "${image}:latest"
+            echo "TAGS_EOF"
+            if [[ -n "$MIRROR_REGISTRY" && -n "$MIRROR_NAMESPACE" ]]; then
+              echo "mirror_tags<<TAGS_EOF"
+              echo "${MIRROR_REGISTRY}/${MIRROR_NAMESPACE}/${name}:${GITHUB_SHA}"
+              echo "${MIRROR_REGISTRY}/${MIRROR_NAMESPACE}/${name}:latest"
+              echo "TAGS_EOF"
+            fi
+          } >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - name: Sign in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push to GHCR
+        uses: docker/build-push-action@v6
+        with:
+          context: rearend/iOSClub.WebAPI
+          file: rearend/iOSClub.WebAPI/Dockerfile
+          push: true
+          tags: ${{ steps.image.outputs.ghcr_tags }}
+          provenance: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Sign in to mirror registry
+        if: env.MIRROR_REGISTRY != '' && env.MIRROR_NAMESPACE != ''
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.MIRROR_REGISTRY }}
+          username: ${{ secrets.MIRROR_USERNAME }}
+          password: ${{ secrets.MIRROR_PASSWORD }}
+      - name: Push to mirror registry
+        if: env.MIRROR_REGISTRY != '' && env.MIRROR_NAMESPACE != ''
+        uses: docker/build-push-action@v6
+        with:
+          context: rearend/iOSClub.WebAPI
+          file: rearend/iOSClub.WebAPI/Dockerfile
+          push: true
+          tags: ${{ steps.image.outputs.mirror_tags }}
+          provenance: false
+          cache-from: type=gha
+        timeout-minutes: 40
