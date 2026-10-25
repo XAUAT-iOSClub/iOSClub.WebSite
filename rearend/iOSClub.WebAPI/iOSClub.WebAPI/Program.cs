@@ -561,45 +561,26 @@ using (var scope = app.Services.CreateScope())
         if (app.Environment.IsDevelopment())
         {
             var founder = await context.Staffs.FirstOrDefaultAsync(x => x.Identity == "Founder");
-            if (founder is { UserId: not null and not "" })
+            if (founder is { UserId: not null and not "" } &&
+                !await context.Students.AnyAsync(x => x.UserId == founder.UserId))
             {
                 var password = Environment.GetEnvironmentVariable("FOUNDER_PASSWORD", EnvironmentVariableTarget.Process);
                 if (string.IsNullOrWhiteSpace(password)) password = "iosclub123";
 
                 Console.WriteLine($"Creating Student profile for Founder: {founder.Name} ({founder.UserId})");
-                if (!await context.Students.AnyAsync(x => x.UserId == founder.UserId))
+                context.Students.Add(new StudentDO
                 {
-                    context.Students.Add(new StudentDO
-                    {
-                        UserId = founder.UserId,
-                        UserName = founder.Name,
-                        Academy = "计算机科学与技术学院",
-                        PoliticalLandscape = "共青团员",
-                        Gender = "男",
-                        ClassName = "计科2301",
-                        PhoneNum = "13800138000",
-                        EMail = "iosclub@example.com",
-                        PasswordHash = DataTool.StringToHash(password),
-                        JoinTime = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
-                    });
-                }
-                else
-                {
-                    var student = await context.Students.FirstOrDefaultAsync(x => x.UserId == founder.UserId);
-                    if (student != null)
-                    {
-                        student.UserName = founder.Name;
-                        student.Academy = "计算机科学与技术学院";
-                        student.PoliticalLandscape = "共青团员";
-                        student.Gender = "男";
-                        student.ClassName = "计科2301";
-                        student.PhoneNum = "13800138000";
-                        student.EMail = "iosclub@example.com";
-                        student.PasswordHash = DataTool.StringToHash(password);
-                        student.JoinTime = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
-                        context.Students.Update(student);
-                    }
-                }
+                    UserId = founder.UserId,
+                    UserName = founder.Name,
+                    Academy = "计算机科学与技术学院",
+                    PoliticalLandscape = "共青团员",
+                    Gender = "男",
+                    ClassName = "计科2301",
+                    PhoneNum = "13800138000",
+                    EMail = "iosclub@example.com",
+                    PasswordHash = DataTool.StringToHash(password),
+                    JoinTime = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+                });
             }
         }
 
