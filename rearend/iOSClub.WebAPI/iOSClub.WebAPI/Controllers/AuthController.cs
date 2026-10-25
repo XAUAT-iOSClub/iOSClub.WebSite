@@ -65,16 +65,6 @@ public class AuthController(
             return Ok(ApiResponse<string>.Success(studentToken, "登录成功"));
         }
 
-        // 如果学生登录失败，尝试员工登录
-        var staffToken = await loginService.StaffLogin(loginModel, clientId, scope);
-        if (!string.IsNullOrEmpty(staffToken))
-        {
-            // 从Redis中获取刷新令牌
-            var refreshToken = await loginService.GetRefreshToken(loginModel.UserId, clientId);
-            Response.Headers.Append("X-Refresh-Token", refreshToken);
-            return Ok(ApiResponse<string>.Success(staffToken, "登录成功"));
-        }
-        
         return Ok(ApiResponse<string>.Fail(ErrorCode.UserNotFound, "用户不存在或密码错误"));
     }
 

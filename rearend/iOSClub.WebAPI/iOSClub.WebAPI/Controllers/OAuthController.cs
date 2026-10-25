@@ -94,12 +94,6 @@ public class OAuthController(ILoginService loginService, IConnectionMultiplexer 
         // 首先尝试普通用户登录
         var token = await loginService.Login(loginModel);
 
-        // 如果普通用户登录失败，尝试员工登录
-        if (string.IsNullOrEmpty(token))
-        {
-            token = await loginService.StaffLogin(loginModel);
-        }
-
         // 如果登录仍然失败，返回错误
         if (string.IsNullOrEmpty(token))
             return Ok(ApiResponse<object>.Fail(ErrorCode.UserNotFound, "用户登录失败"));

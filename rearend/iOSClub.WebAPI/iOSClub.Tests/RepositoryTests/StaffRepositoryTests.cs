@@ -129,9 +129,8 @@ public class StaffRepositoryTests
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
         
-        // 使用Bogus生成1个Founder身份的员工
         var staff = BogusDataGenerator.StaffFaker.Generate();
-        staff.Identity = "Founder"; // Founder身份不需要部门
+        staff.Identity = "President";
 
         // Act
         var result = await _staffRepository.CreateStaffAsync(staff);
@@ -156,6 +155,7 @@ public class StaffRepositoryTests
         
         // 使用Bogus生成1个员工
         var staff = BogusDataGenerator.StaffFaker.Generate();
+        staff.Identity = "Department";
         await context.Staffs.AddAsync(staff);
         await context.SaveChangesAsync();
         
@@ -187,6 +187,7 @@ public class StaffRepositoryTests
         
         // 使用Bogus生成1个员工
         var staff = BogusDataGenerator.StaffFaker.Generate();
+        staff.Identity = "Department";
         await context.Staffs.AddAsync(staff);
         await context.SaveChangesAsync();
 
@@ -216,6 +217,7 @@ public class StaffRepositoryTests
         
         // 使用Bogus生成1个员工，并关联到第一个部门
         var staff = BogusDataGenerator.StaffFaker.Generate();
+        staff.Identity = "Department";
         staff.Department = departments[0];
         await context.Staffs.AddAsync(staff);
         await context.SaveChangesAsync();
@@ -372,5 +374,43 @@ public class StaffRepositoryTests
         // Assert
         Assert.DoesNotContain(result, m => m.UserId == "0000000001");
         Assert.Contains(result, m => m.UserId == "0000000003");
+    }
+
+    [Fact]
+    public async Task OrdinaryWrites_CannotCreatePromoteModifyDeleteOrMoveFounder()
+    {
+        await using (var context = new ClubContext(_options))
+        {
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.EnsureCreatedAsync();
+            context.Departments.Add(new DepartmentDO { Key = "tech", Name = "技术部" });
+            context.Staffs.AddRange(
+                new StaffDO { UserId = "0000000000", Name = "创始人", Identity = "Founder" },
+                new StaffDO { UserId = "0000000001", Name = "社长", Identity = "President" });
+            await context.SaveChangesAsync();
+        }
+
+        Assert.False(await _staffRepository.CreateStaffAsync(new StaffDO
+        {
+            UserId = "0000000002", Name = "另一个创始人", Identity = "Founder"
+        }));
+        Assert.False(await _staffRepository.UpdateStaffAsync(new StaffDO
+        {
+            UserId = "0000000001", Name = "已提权", Identity = "Founder"
+        }));
+        Assert.False(await _staffRepository.UpdateStaffAsync(new StaffDO
+        {
+            UserId = "0000000000", Name = "已篡改", Identity = "President"
+        }));
+        Assert.False(await _staffRepository.DeleteStaffAsync("0000000000"));
+        Assert.False(await _staffRepository.ChangeStaffDepartmentAsync("0000000000", "技术部"));
+
+        await using var verify = new ClubContext(_options);
+        var founder = await verify.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "0000000000");
+        Assert.Equal("Founder", founder.Identity);
+        Assert.Equal("创始人", founder.Name);
+        Assert.Null(founder.Department);
+        Assert.Equal("President", (await verify.Staffs.SingleAsync(s => s.UserId == "0000000001")).Identity);
+        Assert.False(await verify.Staffs.AnyAsync(s => s.UserId == "0000000002"));
     }
 }

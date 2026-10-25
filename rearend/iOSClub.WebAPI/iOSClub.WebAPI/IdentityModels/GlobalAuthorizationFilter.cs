@@ -1,19 +1,22 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Net.Http.Headers;
 using System.Security.Claims;
 using iOSClub.Data.VOs;
 using iOSClub.DataApi.Services;
+using iOSClub.WebAPI.Common;
 using iOSClub.WebAPI.Common.Security;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace iOSClub.WebAPI.IdentityModels;
 
 public class GlobalAuthorizationFilter(
     ILoginService loginService,
-    JwtService jwtService) : IAsyncAuthorizationFilter
+    JwtService jwtService,
+    ILogger<GlobalAuthorizationFilter> logger) : IAsyncAuthorizationFilter
 {
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
     {
-        // 仅在请求的动作或控制器标注了 [Authorize] 且未标注 [AllowAnonymous] 时才执行校验
         var endpointMetadata = context.ActionDescriptor.EndpointMetadata;
         var hasAuthorize = endpointMetadata?.Any(m =>
             m is Microsoft.AspNetCore.Authorization.AuthorizeAttribute
@@ -21,28 +24,27 @@ public class GlobalAuthorizationFilter(
         var hasAllowAnonymous =
             endpointMetadata?.Any(m => m is Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute) == true;
 
-        if (!hasAuthorize || hasAllowAnonymous)
+        var bearer = context.HttpContext.Request.Headers.Authorization.FirstOrDefault();
+        if (!AuthenticationHeaderValue.TryParse(bearer, out var authorization) ||
+            !string.Equals(authorization.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
 
-        var bearer = context.HttpContext.Request.Headers.Authorization.FirstOrDefault();
-        if (string.IsNullOrEmpty(bearer) || !bearer.StartsWith("Bearer "))
+        context.HttpContext.User = new ClaimsPrincipal(new ClaimsIdentity());
+        if (hasAuthorize && !hasAllowAnonymous)
         {
-            return;
+            context.Result = new UnauthorizedObjectResult(ApiResponse.Fail(ErrorCode.InvalidToken, "登录会话已失效，请重新登录"));
         }
 
         try
         {
-            var jwtParts = bearer.Split(' ', 2);
-            if (jwtParts.Length != 2)
+            var token = authorization.Parameter;
+            if (string.IsNullOrWhiteSpace(token))
             {
                 return;
             }
 
-            var token = jwtParts[1];
-
-            // 使用JwtService进行token验证，确保使用相同的密钥和验证逻辑
             var (isValid, claims) = jwtService.ValidateAccessToken(token);
 
             if (!isValid)
@@ -50,32 +52,25 @@ public class GlobalAuthorizationFilter(
                 return;
             }
 
-            // 验证token是否在Redis中存在（防止已注销的token继续使用）
             var enumerable = claims as Claim[] ?? claims.ToArray();
             var userId = enumerable.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value ??
                          enumerable.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
             var clientId = enumerable.FirstOrDefault(c => c.Type == "client_id")?.Value ?? "";
 
-            if (!string.IsNullOrEmpty(userId))
+            if (string.IsNullOrEmpty(userId) || !await loginService.ValidateToken(userId, token, clientId))
             {
-                var isValidInRedis = await loginService.ValidateToken(userId, token, clientId);
-                if (!isValidInRedis)
-                {
-                    return;
-                }
+                return;
             }
 
-            // 创建ClaimsPrincipal
             var claimsIdentity = new ClaimsIdentity(enumerable, "JWT");
             var claimsPrincipal = new ClaimsPrincipal(claimsIdentity);
 
-            // 设置用户上下文
             context.HttpContext.User = claimsPrincipal;
+            context.Result = null;
         }
         catch (Exception ex)
         {
-            // 记录异常但不中断流程
-            Console.WriteLine($"Token validation error: {ex.Message}");
+            logger.LogWarning(ex, "登录会话验证失败");
         }
     }
 }

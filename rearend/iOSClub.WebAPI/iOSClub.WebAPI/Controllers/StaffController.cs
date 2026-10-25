@@ -6,6 +6,7 @@ using iOSClub.DataApi.Repositories;
 using iOSClub.WebAPI.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace iOSClub.WebAPI.Controllers;
 
@@ -80,6 +81,9 @@ public class StaffController(IStaffRepository staffRepository, ILogger<StaffCont
     [HttpPost("Create")]
     public async Task<ActionResult<ApiResponse>> CreateStaff([FromBody] StaffCreateDTO staff)
     {
+        if (staff.Identity == "Founder")
+            return Ok(ApiResponse.Fail(ErrorCode.InsufficientPermission, "创始人权限只能通过专用权限接口设置"));
+
         var result = await staffRepository.CreateStaffAsync(staff.Adapt<StaffDO>());
         if (!result)
         {
@@ -119,6 +123,12 @@ public class StaffController(IStaffRepository staffRepository, ILogger<StaffCont
             return Ok(ApiResponse<object>.Fail(ErrorCode.UserNotFound, "员工不存在"));
         }
 
+        if (targetStaff.Identity == "Founder" || staff.Identity == "Founder")
+            return Ok(ApiResponse<object>.Fail(ErrorCode.InsufficientPermission, "创始人权限只能通过专用权限接口设置"));
+
+        if (staff.UserId == User.FindFirstValue(ClaimTypes.NameIdentifier) && staff.Identity != targetStaff.Identity)
+            return Ok(ApiResponse<object>.Fail(ErrorCode.InsufficientPermission, "不能修改自己的权限"));
+
         var result = await staffRepository.UpdateStaffAsync(staff.Adapt<StaffDO>());
         if (!result)
         {
@@ -157,6 +167,9 @@ public class StaffController(IStaffRepository staffRepository, ILogger<StaffCont
 
             return Ok(ApiResponse<object>.Fail(ErrorCode.UserNotFound, "员工不存在"));
         }
+
+        if (targetStaff.Identity == "Founder" || userId == User.FindFirstValue(ClaimTypes.NameIdentifier))
+            return Ok(ApiResponse<object>.Fail(ErrorCode.InsufficientPermission, "不能移除创始人或自己的权限"));
 
         var result = await staffRepository.DeleteStaffAsync(userId);
         if (!result)
@@ -205,6 +218,10 @@ public class StaffController(IStaffRepository staffRepository, ILogger<StaffCont
     public async Task<ActionResult<ApiResponse<object>>> ChangeStaffDepartment(string userId,
         [FromQuery] string? departmentName)
     {
+        var targetStaff = await staffRepository.GetStaffByIdAsync(userId);
+        if (targetStaff?.Identity == "Founder" || userId == User.FindFirstValue(ClaimTypes.NameIdentifier))
+            return Ok(ApiResponse<object>.Fail(ErrorCode.InsufficientPermission, "不能调整创始人或自己的部门权限"));
+
         var result = await staffRepository.ChangeStaffDepartmentAsync(userId, departmentName);
         if (!result)
         {
@@ -233,6 +250,9 @@ public class StaffController(IStaffRepository staffRepository, ILogger<StaffCont
     [HttpPost("assign-role")]
     public async Task<ActionResult<ApiResponse<object>>> AssignRole([FromBody] StaffRoleAssignDTO model)
     {
+        if (model.UserId == User.FindFirstValue(ClaimTypes.NameIdentifier))
+            return Ok(ApiResponse<object>.Fail(ErrorCode.InsufficientPermission, "不能修改自己的权限"));
+
         var (success, error) = await staffRepository.AssignRoleAsync(model.UserId, model.Identity, model.DepartmentName);
         if (!success)
         {

@@ -95,8 +95,9 @@ public class DepartmentImportService(IDbContextFactory<ClubContext> factory) : I
             .Where(s => s.Department != null && s.Department.Name == departmentName)
             .ToListAsync();
 
-        // 不允许把 Founder 纳入部门名单覆盖流程
-        if (current.Any(s => s.Identity == "Founder"))
+        var incomingIds = incoming.Select(m => m.UserId).ToHashSet(StringComparer.Ordinal);
+        if (current.Any(s => s.Identity == "Founder") ||
+            await context.Staffs.AnyAsync(s => s.Identity == "Founder" && incomingIds.Contains(s.UserId)))
             throw new BusinessException(ErrorCode.InvalidStatusForOperation, "部门名单中存在创始人，无法覆盖");
 
         // 一并加载当前部门成员的学生档案，用于备份完整信息
@@ -124,8 +125,6 @@ public class DepartmentImportService(IDbContextFactory<ClubContext> factory) : I
                 };
             })
             .ToList();
-
-        var incomingIds = incoming.Select(m => m.UserId).ToHashSet(StringComparer.Ordinal);
 
         // 1. 删除不在新名单中的原部门成员（仅解除部门关系，保留其学生档案）
         foreach (var staff in current.Where(s => !incomingIds.Contains(s.UserId)))

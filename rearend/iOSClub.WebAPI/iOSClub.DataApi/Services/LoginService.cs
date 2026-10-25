@@ -56,15 +56,6 @@ public interface ILoginService
     public Task<bool> ValidateToken(string userId, string token, string clientId);
 
     /// <summary>
-    /// 员工登录
-    /// </summary>
-    /// <param name="model">数据</param>
-    /// <param name="clientId">客户端 ID</param>
-    /// <param name="scope">权限</param>
-    /// <returns>凭证</returns>
-    public Task<string> StaffLogin(LoginDTO model, string clientId = "", string scope = "");
-
-    /// <summary>
     /// 修改用户密码
     /// </summary>
     /// <param name="userId">用户ID</param>
@@ -532,42 +523,6 @@ public class LoginService(
             return false;
 
         return storedToken == token;
-    }
-
-    public async Task<string> StaffLogin(LoginDTO model, string clientId = "", string scope = "")
-    {
-        var staff = await staffRepository.GetStaffByIdWithoutOtherData(model.Password);
-
-        if (staff == null || staff.Name != model.UserId)
-            return "";
-
-        var memberModel = new MemberVO()
-        {
-            UserName = staff.Name,
-            UserId = staff.UserId,
-            Identity = staff.Identity
-        };
-
-        var s = await GetClientKey(clientId);
-
-        var redisKey = $"{TokenPrefix}{model.Password}{s}";
-        // 生成访问令牌和刷新令牌
-        var (accessToken, refreshToken) =
-            tokenGenerator.GetMemberToken(memberModel, model.RememberMe, scope, clientId: clientId);
-
-        // 将访问令牌存储到Redis中（可选，因为JWT本身包含过期时间）
-        await _db.StringSetAsync(redisKey, accessToken, TimeSpan.FromHours(2 * (model.RememberMe ? 12 : 1)));
-
-        // 将刷新令牌存储到Redis中，设置过期时间
-        var refreshTokenKey = $"{RefreshTokenPrefix}{model.Password}{s}";
-        await _db.StringSetAsync(refreshTokenKey, refreshToken, TimeSpan.FromHours(RefreshTokenExpiryHours));
-
-        // 存储用户信息，便于后续验证
-        var userInfoKey = $"user:{model.Password}{s}";
-        await _db.StringSetAsync(userInfoKey, JsonSerializer.Serialize(memberModel),
-            TimeSpan.FromHours(RefreshTokenExpiryHours * (model.RememberMe ? 12 : 2)));
-
-        return accessToken;
     }
 
     public async Task<bool> ChangePassword(string userId, string oldPassword, string newPassword)

@@ -1,5 +1,6 @@
 using System.Text;
 using iOSClub.WebAPI.Common;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using StackExchange.Redis;
 
@@ -7,13 +8,14 @@ namespace iOSClub.WebAPI.Controllers;
 
 [ApiController]
 [Route("[controller]")]
+[Authorize(Roles = "Founder")]
 public class CacheController(
     IConnectionMultiplexer redis,
     ILogger<CacheController> logger) : ControllerBase
 {
     private readonly IDatabase _db = redis.GetDatabase();
 
-    [HttpGet("/clean")]
+    [HttpPost("/clean")]
     public async Task<ActionResult<ApiResponse<string>>> CleanData()
     {
         try

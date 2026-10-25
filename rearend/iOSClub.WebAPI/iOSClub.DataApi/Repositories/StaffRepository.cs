@@ -248,14 +248,15 @@ public class StaffRepository(IDbContextFactory<ClubContext> factory) : IStaffRep
 
     public async Task<bool> CreateStaffAsync(StaffDO staff)
     {
+        if (staff.Identity is not ("President" or "Minister" or "Department"))
+            return false;
+
         await using var context = await factory.CreateDbContextAsync();
 
         if (await StaffExistsAsync(staff.UserId))
             return false;
 
-        if (staff.Identity == "Member" ||
-            (!(staff.Identity == "Founder" || staff.Identity == "President" || staff.Identity == "Minister") &&
-             staff.Department == null))
+        if (staff.Identity == "Department" && staff.Department == null)
             throw new ArgumentException("会员必须指定部门");
 
         if (staff.Department != null)
@@ -269,10 +270,13 @@ public class StaffRepository(IDbContextFactory<ClubContext> factory) : IStaffRep
 
     public async Task<bool> UpdateStaffAsync(StaffDO staff)
     {
+        if (staff.Identity is not ("Member" or "President" or "Minister" or "Department"))
+            return false;
+
         await using var context = await factory.CreateDbContextAsync();
 
         var existingStaff = await context.Staffs.FirstOrDefaultAsync(s => s.UserId == staff.UserId);
-        if (existingStaff == null)
+        if (existingStaff == null || existingStaff.Identity == "Founder")
             return false;
 
         // 更新字段
@@ -288,7 +292,7 @@ public class StaffRepository(IDbContextFactory<ClubContext> factory) : IStaffRep
         await using var context = await factory.CreateDbContextAsync();
 
         var staff = await context.Staffs.FirstOrDefaultAsync(s => s.UserId == userId);
-        if (staff == null)
+        if (staff == null || staff.Identity == "Founder")
             return false;
 
         context.Staffs.Remove(staff);
@@ -318,7 +322,7 @@ public class StaffRepository(IDbContextFactory<ClubContext> factory) : IStaffRep
             .Include(s => s.Department)
             .FirstOrDefaultAsync(s => s.UserId == userId);
 
-        if (staff == null)
+        if (staff == null || staff.Identity == "Founder")
             return false;
 
         if (string.IsNullOrEmpty(departmentName))

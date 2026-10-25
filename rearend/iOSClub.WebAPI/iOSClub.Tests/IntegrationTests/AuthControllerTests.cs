@@ -3,6 +3,7 @@ using iOSClub.Data.DataObjects;
 using iOSClub.Data.DTOs;
 using iOSClub.Data.VOs; 
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing; 
 using Microsoft.Extensions.DependencyInjection; 
 using Microsoft.EntityFrameworkCore; 
@@ -12,7 +13,6 @@ using iOSClub.DataApi.Repositories;
 using iOSClub.WebAPI.Common;
 using StackExchange.Redis;
 using System.Net;
-using System.Net.Http.Headers;
 using Newtonsoft.Json;
 using System.Net.Http.Json; 
 
@@ -59,6 +59,7 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         // 创建HttpClient并配置服务 
         _client = _factory.WithWebHostBuilder(builder => 
         { 
+            builder.UseEnvironment("Testing");
             builder.ConfigureServices(services => 
             { 
                 // 替换ClubContext为内存数据库版本。
@@ -164,6 +165,88 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Contains(studentModel.UserName == "23456" ? "userName" : "userId", result.Detail);
     }
     
+    [Theory]
+    [InlineData("/Auth/login", false)]
+    [InlineData("/Auth/login", true)]
+    [InlineData("/OAuth/exchange", false)]
+    [InlineData("/OAuth/exchange", true)]
+    public async Task Login_StaffNameAndStudentIdWithoutPassword_IsRejected(string endpoint, bool hasStudent)
+    {
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var staff = new StaffDO { UserId = "2021000001", Name = "测试干部", Identity = "Founder" };
+        context.Staffs.Add(staff);
+        if (hasStudent)
+        {
+            context.Students.Add(new StudentDO
+            {
+                UserId = staff.UserId,
+                UserName = staff.Name,
+                PasswordHash = DataTool.StringToHash("real-password")
+            });
+        }
+        await context.SaveChangesAsync();
+        _tokenGeneratorMock.Setup(t => t.GetMemberToken(It.IsAny<MemberVO>(), It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Returns(("unauthorized-staff-token", "unauthorized-refresh-token"));
+
+        var response = await _client.PostAsJsonAsync(endpoint, new
+        {
+            UserId = staff.Name,
+            UserName = staff.Name,
+            Password = staff.UserId
+        });
+
+        Assert.False(response.IsSuccessStatusCode);
+        var result = JsonConvert.DeserializeObject<ApiResponse<object>>(await response.Content.ReadAsStringAsync());
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCode.UserNotFound, result.ErrorCode);
+        Assert.Null(result.Data);
+        Assert.False(response.Headers.Contains("X-Refresh-Token"));
+    }
+
+    [Theory]
+    [InlineData("/Auth/login", "Founder")]
+    [InlineData("/Auth/login", "President")]
+    [InlineData("/Auth/login", "Minister")]
+    [InlineData("/OAuth/exchange", "Founder")]
+    [InlineData("/OAuth/exchange", "President")]
+    [InlineData("/OAuth/exchange", "Minister")]
+    public async Task Login_StaffWithRealStudentPassword_PreservesStaffRole(string endpoint, string role)
+    {
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var student = new StudentDO
+        {
+            UserId = "2021000001",
+            UserName = "测试干部",
+            PasswordHash = DataTool.StringToHash("real-password")
+        };
+        context.Students.Add(student);
+        context.Staffs.Add(new StaffDO { UserId = student.UserId, Name = student.UserName, Identity = role });
+        await context.SaveChangesAsync();
+        var expectedToken = $"verified-{role}-token";
+        _tokenGeneratorMock.Setup(t => t.GetMemberToken(
+                It.Is<MemberVO>(m => m.UserId == student.UserId && m.Identity == role),
+                It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Returns((expectedToken, "verified-refresh-token"));
+
+        var response = await _client.PostAsJsonAsync(endpoint, new
+        {
+            UserId = student.UserId,
+            UserName = student.UserName,
+            Password = "real-password"
+        });
+
+        response.EnsureSuccessStatusCode();
+        using var body = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var data = body.RootElement.GetProperty("data");
+        var actualToken = endpoint == "/Auth/login" ? data.GetString() : data.GetProperty("token").GetString();
+        Assert.Equal(expectedToken, actualToken);
+    }
+
     [Fact] 
     public async Task Login_StudentSuccess_ReturnsToken() 
     { 
@@ -307,9 +390,6 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         var loginResponse = await _client.PostAsJsonAsync("/Auth/login", loginModel); 
         loginResponse.EnsureSuccessStatusCode(); 
         
-        // 设置Authorization头 
-        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token); 
-        
         // Act 
         var response = await _client.PostAsync($"/Auth/logout?userId={student.UserId}", null); 
         
@@ -323,8 +403,6 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.True(result.Data); 
         Assert.Equal("登出成功", result.Message); 
         
-        // 清除Authorization头 
-        _client.DefaultRequestHeaders.Authorization = null; 
     } 
     
     [Fact] 
