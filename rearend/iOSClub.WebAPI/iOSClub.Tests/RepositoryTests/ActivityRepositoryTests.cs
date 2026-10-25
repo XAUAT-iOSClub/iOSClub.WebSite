@@ -74,12 +74,12 @@ public class ActivityRepositoryTests
             new ActivityParticipantDO
             {
                 ActivityId = activity.Id, Name = "测试同学一", StudentId = "2024000001",
-                Academy = "计算机和信息工程学院", ClassName = "计科2301"
+                Academy = "计算机与信息工程学院", ClassName = "计科2301"
             },
             new ActivityParticipantDO
             {
                 ActivityId = activity.Id, Name = "测试同学二", StudentId = "2024000002",
-                Academy = "计算机和信息工程学院", ClassName = "计科2301"
+                Academy = "计算机与信息工程学院", ClassName = "计科2301"
             });
         await context.SaveChangesAsync();
 

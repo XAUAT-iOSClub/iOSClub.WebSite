@@ -70,7 +70,7 @@ public class ActivityExcelServiceTests
             var row = sheet.CreateRow(i + 1);
             row.CreateCell(0).SetCellValue($"测试同学{i + 1}");
             row.CreateCell(1).SetCellValue($"{(2024000001L + i):0000000000}");
-            row.CreateCell(2).SetCellValue("计算机和信息工程学院");
+            row.CreateCell(2).SetCellValue("计算机与信息工程学院");
             row.CreateCell(3).SetCellValue($"计科{2300 + i % 100}");
         }
     }

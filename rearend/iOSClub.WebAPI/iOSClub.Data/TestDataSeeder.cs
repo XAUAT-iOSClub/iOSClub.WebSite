@@ -34,7 +34,7 @@ public static class TestDataSeeder
                 {
                     UserId = a.UserId,
                     UserName = a.Name,
-                    Academy = "计算机和信息工程学院",
+                    Academy = "计算机与信息工程学院",
                     PoliticalLandscape = "共青团员",
                     Gender = a.Gender,
                     ClassName = a.ClassName,

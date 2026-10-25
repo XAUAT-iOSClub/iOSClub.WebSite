@@ -572,7 +572,7 @@ using (var scope = app.Services.CreateScope())
                 {
                     UserId = founder.UserId,
                     UserName = founder.Name,
-                    Academy = "计算机科学与技术学院",
+                    Academy = "计算机与信息工程学院",
                     PoliticalLandscape = "共青团员",
                     Gender = "男",
                     ClassName = "计科2301",

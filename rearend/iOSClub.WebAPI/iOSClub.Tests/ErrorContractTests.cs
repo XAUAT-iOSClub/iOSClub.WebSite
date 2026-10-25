@@ -191,7 +191,7 @@ public class StudentCreateDtoValidationTests
     {
         UserId = "2021000001",
         UserName = "张三",
-        Academy = "计算机和信息工程学院",
+        Academy = "计算机与信息工程学院",
         PoliticalLandscape = "共青团员",
         Gender = "男",
         ClassName = "2021级1班",

@@ -9,7 +9,7 @@ public static class SignRecord
     public static readonly string[] Academies =
     [
         "人工智能与机器人学院",
-        "计算机和信息工程学院",
+        "计算机与信息工程学院",
         "信息与控制工程学院",
         "理学院",
         "机电工程学院",
