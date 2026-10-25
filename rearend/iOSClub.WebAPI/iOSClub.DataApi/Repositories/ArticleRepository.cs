@@ -116,7 +116,7 @@ public class ArticleRepository(IDbContextFactory<ClubContext> factory, ICategory
         if (article == null)
             return null;
 
-        return accessScope == null || IsAccessible(accessScope, article) ? article : null;
+        return accessScope == null || ArticleAccessPolicy.CanAccess(accessScope, article) ? article : null;
     }
 
     public async Task<bool> CreateOrUpdate(ArticleDO model)
@@ -186,18 +186,12 @@ public class ArticleRepository(IDbContextFactory<ClubContext> factory, ICategory
         return await context.SaveChangesAsync() > 0;
     }
 
-    private static readonly Dictionary<string, int> IdentityLevels = new()
-    {
-        ["Founder"] = 0, ["President"] = 1, ["Minister"] = 2,
-        ["Department"] = 3, ["Member"] = 4, [""] = 5
-    };
-
     public async Task<Dictionary<string, IEnumerable<ArticleDO>>> GetAllCategoryArticles(ArticleAccessScope accessScope)
     {
         await using var context = await factory.CreateDbContextAsync();
 
-        var allowedIdentities = GetAllowedIdentities(accessScope.Identity);
-        var canAccessAllDepartments = CanAccessAllDepartments(accessScope.Identity);
+        var allowedIdentities = ArticleAccessPolicy.GetAllowedIdentities(accessScope.Identity);
+        var canAccessAllDepartments = ArticleAccessPolicy.CanAccessAllDepartments(accessScope.Identity);
 
         var query = context.Articles
             .AsNoTracking()
@@ -235,41 +229,6 @@ public class ArticleRepository(IDbContextFactory<ClubContext> factory, ICategory
                     Name = x.CategoryName
                 }
             }).AsEnumerable());
-    }
-
-    private static bool IsIdentityExist(string identity, string? neededIdentity)
-    {
-        if (string.IsNullOrEmpty(neededIdentity) ||
-            (identity == "" && neededIdentity == "Member"))
-            return true;
-
-        return IdentityLevels.TryGetValue(identity, out var identityLevel) &&
-               IdentityLevels.TryGetValue(neededIdentity, out var neededLevel) &&
-               identityLevel <= neededLevel;
-    }
-
-    private static bool IsAccessible(ArticleAccessScope accessScope, ArticleDO article)
-    {
-        if (!IsIdentityExist(accessScope.Identity, article.Identity))
-            return false;
-
-        return string.IsNullOrEmpty(article.VisibleToDepartment) ||
-               CanAccessAllDepartments(accessScope.Identity) ||
-               article.VisibleToDepartment == accessScope.DepartmentName;
-    }
-
-    private static bool CanAccessAllDepartments(string identity)
-        => identity is "Founder" or "President";
-
-    private static string[] GetAllowedIdentities(string identity)
-    {
-        if (!IdentityLevels.TryGetValue(identity, out var level))
-            return [""];
-
-        return IdentityLevels
-            .Where(kvp => kvp.Value >= level)
-            .Select(kvp => kvp.Key)
-            .ToArray();
     }
 
     [Serializable]
@@ -339,8 +298,8 @@ public class ArticleRepository(IDbContextFactory<ClubContext> factory, ICategory
     {
         await using var context = await factory.CreateDbContextAsync();
 
-        var allowedIdentities = GetAllowedIdentities(accessScope.Identity);
-        var canAccessAllDepartments = CanAccessAllDepartments(accessScope.Identity);
+        var allowedIdentities = ArticleAccessPolicy.GetAllowedIdentities(accessScope.Identity);
+        var canAccessAllDepartments = ArticleAccessPolicy.CanAccessAllDepartments(accessScope.Identity);
 
         return await context.Articles
             .AsNoTracking()

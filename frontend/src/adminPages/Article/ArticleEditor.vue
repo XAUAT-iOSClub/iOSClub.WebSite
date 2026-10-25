@@ -199,6 +199,7 @@ import { ArticleService } from '../../services/ArticleService'
 import type { ArticleModel, ArticleCreateDto, ArticleUpdateDto, CategoryModel } from '../../models'
 import MarkdownComponent from '../../components/MarkdownComponent.vue'
 import { useLayoutStore } from '../../stores/LayoutStore'
+import { useAuthorizationStore } from '../../stores/Authorization'
 import { CategoryService } from '../../services/CategoryService'
 import { DepartmentService } from '../../services/DepartmentService'
 
@@ -239,13 +240,30 @@ const editForm = ref<EditFormType>({
   lastWriteTime: new Date().toISOString(),
 })
 
-const identityOptions = [
+const authorizationStore = useAuthorizationStore()
+
+const allIdentityOptions = [
   { label: '所有人 (Member)', value: 'Member' },
   { label: '部员仅见 (Department)', value: 'Department' },
   { label: '部长仅见 (Minister)', value: 'Minister' },
   { label: '社长仅见 (President)', value: 'President' },
   { label: '创始人 (Founder)', value: 'Founder' }
 ]
+
+// 与后端 ArticleAccessPolicy 一致：数值越小职级越高。
+// 只能把文章权限设置为自己职级或更宽松的档位，否则后端会拒绝。
+const identityLevels: Record<string, number> = {
+  Founder: 0,
+  President: 1,
+  Minister: 2,
+  Department: 3,
+  Member: 4
+}
+
+const identityOptions = computed(() => {
+  const currentLevel = identityLevels[authorizationStore.getRole ?? 'Member'] ?? 4
+  return allIdentityOptions.filter(option => identityLevels[option.value] >= currentLevel)
+})
 
 // --- Computed ---
 const previewContent = computed(() => {

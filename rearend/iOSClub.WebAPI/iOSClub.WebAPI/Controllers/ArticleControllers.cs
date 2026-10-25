@@ -20,13 +20,15 @@ public class ArticleController(
     : ControllerBase
 {
     /// <summary>
-    /// 获取所有文章（公开访问）
+    /// 获取当前用户可见的文章列表
     /// </summary>
     [Authorize(Roles = "Founder,President,Minister,Department")]
     [HttpGet]
     public async Task<ActionResult<ApiResponse<IEnumerable<ArticleListItemVO>>>> GetArticles()
     {
-        var articles = await articleRepository.GetAll();
+        var accessScope = await GetAccessScope();
+        var articles = (await articleRepository.GetAll())
+            .Where(article => ArticleAccessPolicy.CanAccess(accessScope, article));
         return Ok(ApiResponse<IEnumerable<ArticleListItemVO>>.Success(articles.Adapt<List<ArticleListItemVO>>()
             .OrderByDescending(x => x.LastWriteTime)));
     }
@@ -61,6 +63,19 @@ public class ArticleController(
         {
             var errorMessage = string.Join(", ", validationResults.Select(v => v.ErrorMessage));
             return Ok(ApiResponse<ArticleVO>.Fail(ErrorCode.ParameterValidationFailed, errorMessage));
+        }
+
+        if (!ArticleAccessPolicy.IsKnownIdentity(createDto.Identity))
+        {
+            return Ok(ApiResponse<ArticleVO>.Fail(ErrorCode.ParameterValidationFailed,
+                "访问权限取值无效，允许的值为 Founder、President、Minister、Department、Member 或留空"));
+        }
+
+        var accessScope = await GetAccessScope();
+        if (!ArticleAccessPolicy.CanAssignIdentity(accessScope, createDto.Identity))
+        {
+            return Ok(ApiResponse<ArticleVO>.Fail(ErrorCode.InsufficientPermission,
+                "不能将文章访问权限设置为高于自己的职级"));
         }
 
         var visibleToDepartment = NormalizeDepartment(createDto.VisibleToDepartment);
@@ -129,6 +144,19 @@ public class ArticleController(
             return Ok(ApiResponse.Fail(ErrorCode.ParameterValidationFailed, errorMessage));
         }
 
+        if (!ArticleAccessPolicy.IsKnownIdentity(updateDto.Identity))
+        {
+            return Ok(ApiResponse.Fail(ErrorCode.ParameterValidationFailed,
+                "访问权限取值无效，允许的值为 Founder、President、Minister、Department、Member 或留空"));
+        }
+
+        var accessScope = await GetAccessScope();
+        if (!ArticleAccessPolicy.CanAssignIdentity(accessScope, updateDto.Identity))
+        {
+            return Ok(ApiResponse.Fail(ErrorCode.InsufficientPermission,
+                "不能将文章访问权限设置为高于自己的职级"));
+        }
+
         var visibleToDepartment = NormalizeDepartment(updateDto.VisibleToDepartment);
         if (visibleToDepartment != null &&
             !await departmentRepository.DepartmentExistsAsync(visibleToDepartment))
@@ -137,11 +165,16 @@ public class ArticleController(
                 $"部门 '{visibleToDepartment}' 不存在"));
         }
 
-        // 检查文章是否存在
+        // 检查文章是否存在，且当前用户是否有权修改
         var existingArticle = await articleRepository.GetFromPath(path);
         if (existingArticle == null)
         {
             return Ok(ApiResponse.Fail(ErrorCode.ArticleNotFound, $"未找到路径为 '{path}' 的文章"));
+        }
+
+        if (!ArticleAccessPolicy.CanAccess(accessScope, existingArticle))
+        {
+            return Ok(ApiResponse.Fail(ErrorCode.InsufficientPermission, "无权修改该文章"));
         }
 
         // 更新文章信息
@@ -173,11 +206,16 @@ public class ArticleController(
             return Ok(ApiResponse.Fail(ErrorCode.ParameterEmpty, "路径不能为空"));
         }
 
-        // 检查文章是否存在
+        // 检查文章是否存在，且当前用户是否有权删除
         var existingArticle = await articleRepository.GetFromPath(path);
         if (existingArticle == null)
         {
             return Ok(ApiResponse.Fail(ErrorCode.ArticleNotFound, $"未找到路径为 '{path}' 的文章"));
+        }
+
+        if (!ArticleAccessPolicy.CanAccess(await GetAccessScope(), existingArticle))
+        {
+            return Ok(ApiResponse.Fail(ErrorCode.InsufficientPermission, "无权删除该文章"));
         }
 
         var success = await articleRepository.Delete(path);
@@ -226,6 +264,18 @@ public class ArticleController(
         if (articleOrders == null || articleOrders.Count == 0)
         {
             return Ok(ApiResponse.Fail(ErrorCode.ParameterEmpty, "文章顺序字典不能为空"));
+        }
+
+        // 顺序调整也是一种修改：只能操作自己可见的文章
+        var accessScope = await GetAccessScope();
+        var accessiblePaths = (await articleRepository.GetAll())
+            .Where(article => ArticleAccessPolicy.CanAccess(accessScope, article))
+            .Select(article => article.Path)
+            .ToHashSet(StringComparer.Ordinal);
+
+        if (articleOrders.Keys.Any(path => !accessiblePaths.Contains(path)))
+        {
+            return Ok(ApiResponse.Fail(ErrorCode.InsufficientPermission, "无权调整未授权文章的顺序"));
         }
 
         var success = await articleRepository.UpdateArticleOrders(articleOrders);
