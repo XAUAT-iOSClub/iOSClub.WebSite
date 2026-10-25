@@ -1,6 +1,7 @@
 import {url} from './Url';
 import type {StudentCreateDTO, LoginModel} from '../models';
 import {apiRequest, readApiResponse} from './ApiService';
+import MessageService from './MessageService';
 
 /**
  * 密码哈希函数
@@ -92,10 +93,15 @@ export class AuthService {
                 url: `${url}/Auth/logout?userId=${userId}&clientId=${clientId}`,
                 method: 'POST'
             });
-            this.clearTokens();
             return true;
         } catch (error) {
+            // Server-side revoke may fail (offline / 5xx), but the local session
+            // must never survive logout. Report the remote failure separately.
+            MessageService.warning('服务器撤销会话失败，本地登录状态已清除');
+            console.error('退出登录时服务端撤销失败:', error);
             return false;
+        } finally {
+            this.clearTokens();
         }
     }
 

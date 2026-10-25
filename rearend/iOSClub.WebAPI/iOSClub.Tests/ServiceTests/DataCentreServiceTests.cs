@@ -528,4 +528,60 @@ public class DataCentreServiceTests
         Assert.Equal("技术部", (await context.Departments.SingleAsync()).Name);
         Assert.Single(await context.Staffs.ToListAsync());
     }
+
+    // C12：数据交换文件必须能恢复普通部员、部门归属、分类和文章，而不只是学生/部门/社长/资源。
+    [Fact]
+    public async Task ImportAllDataAsync_RestoresAllStaffsDepartmentsCategoriesAndArticles()
+    {
+        await using (var seed = new ClubContext(_options))
+        {
+            await seed.Database.EnsureDeletedAsync();
+            await seed.Database.EnsureCreatedAsync();
+        }
+
+        var data = new AllDataImportDTO
+        {
+            Departments =
+            [
+                new DepartmentDO { Name = "技术部", Key = "tech", Description = "技术方向" }
+            ],
+            Staffs =
+            [
+                new StaffDO { UserId = "0000000000", Name = "创始人", Identity = "Founder" },
+                new StaffDO
+                {
+                    UserId = "20210001", Name = "部员甲", Identity = "Department",
+                    Department = new DepartmentDO { Name = "技术部", Key = "tech" }
+                }
+            ],
+            Categories =
+            [
+                new CategoryDO { Id = "cat-1", Name = "公告", Order = 1, Description = "站内公告" }
+            ],
+            Articles =
+            [
+                new ArticleDO
+                {
+                    Path = "hello", Title = "你好", Content = "正文", CategoryId = "cat-1",
+                    Identity = "Member", ArticleOrder = 3
+                }
+            ]
+        };
+
+        var result = await _dataCentreService.ImportAllDataAsync(data);
+
+        Assert.Equal(5, result.Added);
+        Assert.Equal(0, result.Skipped);
+
+        await using var context = new ClubContext(_options);
+        Assert.Equal(2, await context.Staffs.CountAsync());
+        var member = await context.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "20210001");
+        Assert.Equal("技术部", member.Department?.Name);
+        Assert.Equal("公告", (await context.Categories.SingleAsync()).Name);
+
+        var article = await context.Articles.SingleAsync();
+        Assert.Equal("cat-1", article.CategoryId);
+        Assert.Equal("你好", article.Title);
+        Assert.Equal(3, article.ArticleOrder);
+    }
 }

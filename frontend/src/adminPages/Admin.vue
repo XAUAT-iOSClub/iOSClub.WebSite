@@ -108,7 +108,7 @@
 
 <script setup lang="ts">
 import {ref, computed, onMounted, onBeforeUnmount, defineComponent, h} from 'vue'
-import {useMessage, useDialog} from 'naive-ui'
+import {useMessage} from 'naive-ui'
 import Icon from '@/components/Icon.vue'
 import {DataCentreService} from '../services/DataCentreService'
 import {MonitoringService} from '../services/MonitoringService'
@@ -126,7 +126,6 @@ interface StatItemConfig {
 
 // Stores & Utils
 const message = useMessage()
-const dialog = useDialog()
 const authorizationStore = useAuthorizationStore()
 const layoutStore = useLayoutStore()
 
@@ -235,57 +234,24 @@ const uploadFiles = async (event: Event) => {
 }
 
 const downloadAllData = async () => {
-  const token = localStorage.getItem('Authorization')
-  if (!token) return message.error('未授权')
-
+  // DataCentreService.exportJson 自己携带 AuthService 的 accessToken，
+  // 不再依赖历史遗留的 localStorage.Authorization 键。
   try {
     const blob = await DataCentreService.exportJson()
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `backup-${new Date().toISOString().split('T')[0]}.json`
+    a.download = `partial-export-${new Date().toISOString().split('T')[0]}.json`
     document.body.appendChild(a)
     a.click()
     setTimeout(() => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url)
     }, 100)
-    message.success('备份已导出')
+    message.success('部分数据已导出（不能用于完整还原）')
   } catch {
     message.error('导出失败')
   }
-}
-
-const removeAllData = () => {
-  const d = dialog.warning({
-    title: '抹除所有数据',
-    content: '此操作将清空数据库且无法撤销。请确保已备份数据。',
-    positiveText: '确认抹除',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      d.loading = true
-      try {
-        const token = localStorage.getItem('Authorization')
-        if (!token) throw new Error('No Token')
-
-        const res = await fetch('https://www.xauat.site/api/Admin/RemoveAllData', {
-          method: 'DELETE',
-          headers: {'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json'}
-        })
-
-        if (res.ok) {
-          message.success('数据已重置')
-          await fetchData()
-        } else {
-          throw new Error('API Error')
-        }
-      } catch {
-        message.error('重置失败')
-      } finally {
-        d.loading = false
-      }
-    }
-  })
 }
 
 const fetchMonitoringData = async () => {
@@ -372,22 +338,12 @@ const ActionsComponent = defineComponent({
                 isOpen.value = false;
                 downloadAllData()
               },
+              title: '仅导出部分实体，不能作为完整备份或完整还原依据',
               class: 'w-full text-left px-3 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 transition-colors flex items-center gap-2'
             }, [
               h(Icon, {icon: 'download', class: 'w-4 h-4'}),
-              h('span', '导出备份')
+              h('span', '导出部分数据')
             ]),
-            h('div', {class: 'h-px bg-gray-100 dark:bg-gray-700 my-1 mx-2'}),
-            h('button', {
-              onClick: () => {
-                isOpen.value = false;
-                removeAllData()
-              },
-              class: 'w-full text-left px-3 py-2 text-sm rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2'
-            }, [
-              h(Icon, {icon: 'trash', class: 'w-4 h-4'}),
-              h('span', '清空数据')
-            ])
           ])
         ])
       ])

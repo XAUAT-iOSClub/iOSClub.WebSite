@@ -126,7 +126,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, defineComponent, h } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, defineComponent, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDialog, useMessage, NButton, NTag } from 'naive-ui'
 // 图标统一使用 Lucide
@@ -134,14 +134,21 @@ import Icon from '@/components/Icon.vue'
 import { ArticleService } from '../../services/ArticleService'
 import type { ArticleModel } from '../../models'
 import { useLayoutStore } from '../../stores/LayoutStore'
+import { useAuthorizationStore } from '../../stores/Authorization'
 
 const router = useRouter()
 const dialog = useDialog()
 const message = useMessage()
 const layoutStore = useLayoutStore()
+const authorizationStore = useAuthorizationStore()
 
 const articles = ref<ArticleModel[]>([])
 const loading = ref(false)
+
+// 分类写操作只允许 Founder / President（后端 CategoryController 同样的边界）。
+const canManageCategories = computed(() =>
+  ['Founder', 'President'].includes(authorizationStore.getRole || '')
+)
 
 // --- 业务逻辑 ---
 
@@ -222,7 +229,7 @@ const deleteArticle = (article: ArticleModel) => {
     onPositiveClick: async () => {
       try {
         await ArticleService.deleteArticle(article.path)
-        message.success('已移至废纸篓') // 拟物化文案
+        message.success('已永久删除') // 删除不可恢复，与确认弹窗文案保持一致
         await fetchArticles()
       } catch (error) {
         message.error('删除失败')
@@ -252,14 +259,16 @@ onMounted(() => {
         // 创建文章
         renderCircleBtn('plus', openCreateModal, '新建文章'),
 
-        // 分类管理 (胶囊按钮风格)
-        h('button', {
-          class: 'h-9 px-4 rounded-full flex items-center gap-2 text-sm font-medium transition-all duration-200 bg-gray-100/80 hover:bg-gray-200/80 dark:bg-white/10 dark:hover:bg-white/20 backdrop-blur-md text-gray-700 dark:text-white active:scale-95',
-          onClick: goToCategoryManager
-        }, [
-          h(Icon, { icon: 'folder', class: 'w-4 h-4' }),
-          h('span', '分类管理')
-        ]),
+        // 分类管理 (胶囊按钮风格) — 仅 Founder/President 可见
+        ...(canManageCategories.value
+          ? [h('button', {
+            class: 'h-9 px-4 rounded-full flex items-center gap-2 text-sm font-medium transition-all duration-200 bg-gray-100/80 hover:bg-gray-200/80 dark:bg-white/10 dark:hover:bg-white/20 backdrop-blur-md text-gray-700 dark:text-white active:scale-95',
+            onClick: goToCategoryManager
+          }, [
+            h(Icon, { icon: 'folder', class: 'w-4 h-4' }),
+            h('span', '分类管理')
+          ])]
+          : []),
       ])
     }
   })

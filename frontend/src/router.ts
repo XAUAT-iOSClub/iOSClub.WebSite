@@ -178,13 +178,13 @@ const routes = [
             {
                 path: 'Category',
                 name: 'CategoryManager',
-                meta: { title: "分类管理 - 西建大 iOS Club" },
+                meta: { title: "分类管理 - 西建大 iOS Club", categoryWriteOnly: true },
                 component: () => import('./adminPages/Category/CategoryManager.vue'),
             },
             {
                 path: 'Category/:id',
                 name: 'CategorySetting',
-                meta: { title: "分类设置 - 西建大 iOS Club" },
+                meta: { title: "分类设置 - 西建大 iOS Club", categoryWriteOnly: true },
                 component: () => import('./adminPages/Category/CategorySetting.vue'),
             },
             {
@@ -257,10 +257,21 @@ router.beforeEach((to, _from, next) => {
     // Set page title
     document.title = (to.meta.title as string) || "西建大 iOS Club";
 
+    // Automatic refreshes update localStorage only; resync the Pinia mirror so
+    // the checks below see the new token instead of bouncing to /login.
+    authorizationStore.syncFromStorage();
+
+    const role = authorizationStore.getRole;
+    const canWriteCategories = role === 'Founder' || role === 'President';
+
     // Check if route requires authentication — also validate JWT expiry
     if (to.meta.requiresAuth && !authorizationStore.isTokenValid) {
         next('/login');
-    } else if (to.meta.founderOnly && authorizationStore.getRole !== 'Founder') {
+    } else if (to.meta.founderOnly && role !== 'Founder') {
+        next('/access-denied');
+    } else if (to.meta.categoryWriteOnly && !canWriteCategories) {
+        // Menu hiding is not the permission boundary: block direct navigation.
+        // The API still enforces this server-side.
         next('/access-denied');
     } else {
         next();

@@ -150,11 +150,29 @@ public class DataCentreController(
         try
         {
             await using var context = await dbContextFactory.CreateDbContextAsync();
+            // 部员与部门的关系保存在 StaffDO.Department 导航上；不 Include 就导出成无部门。
+            var staffs = await context.Staffs.Include(staff => staff.Department).ToListAsync();
+            // 只保留部门标识信息，避免把部门对象下的完整部员列表再级联导出一次。
+            foreach (var staff in staffs) staff.OutputWhenOtherList();
+
+            // 文章和分类互为导航属性，EF 会同时补齐两侧；导出前断开，
+            // 否则序列化会沿 Category.Articles.Category… 形成对象环。
+            var articles = await context.Articles.ToListAsync();
+            foreach (var article in articles) article.Category = null;
+
+            var categories = await context.Categories.ToListAsync();
+            foreach (var category in categories) category.Articles.Clear();
+
+            var departments = await context.Departments.ToListAsync();
+            foreach (var department in departments) department.Staffs.Clear();
+
             var allData = new AllDataImportDTO
             {
                 Students = await context.Students.ToListAsync(),
-                Departments = await context.Departments.ToListAsync(),
-                Presidents = await context.Staffs.Where(staff => staff.Identity == "President").ToListAsync(),
+                Departments = departments,
+                Staffs = staffs,
+                Categories = categories,
+                Articles = articles,
                 Resources = await context.Resources.ToListAsync(),
             };
 

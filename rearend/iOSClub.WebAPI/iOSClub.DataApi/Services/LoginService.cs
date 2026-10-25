@@ -288,6 +288,18 @@ public class LoginService(
         var s = await GetClientKey(clientId);
         var accessTokenKey = $"{TokenPrefix}{userId}{s}";
         var refreshTokenKey = $"{RefreshTokenPrefix}{userId}{s}";
+        var userInfoKey = $"user:{userId}{s}";
+
+        // 刷新接口用 user:{id} 缓存重建新令牌。注册路径此前漏写这个键，
+        // 导致新注册用户不重新登录就无法完成第一次刷新。
+        var student = await studentRepository.GetByIdAsync(userId);
+        var staff = await staffRepository.GetStaffByIdWithoutOtherData(userId);
+        var memberInfo = new MemberVO
+        {
+            UserId = userId,
+            UserName = student?.UserName ?? staff?.Name ?? "",
+            Identity = staff?.Identity ?? "Member"
+        };
 
         var batch = _db.CreateBatch();
         _ = batch.StringSetAsync(accessTokenKey, accessToken, TimeSpan.FromMinutes(20 * 24));
@@ -295,6 +307,9 @@ public class LoginService(
         {
             _ = batch.StringSetAsync(refreshTokenKey, refreshToken, TimeSpan.FromHours(RefreshTokenExpiryHours));
         }
+
+        _ = batch.StringSetAsync(userInfoKey, JsonSerializer.Serialize(memberInfo),
+            TimeSpan.FromHours(RefreshTokenExpiryHours * 2));
 
         batch.Execute();
     }

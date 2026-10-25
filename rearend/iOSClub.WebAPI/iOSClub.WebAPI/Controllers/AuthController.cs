@@ -78,6 +78,15 @@ public class AuthController(
     [HttpPost("logout")]
     public async Task<ActionResult<ApiResponse<bool>>> Logout(string userId, string clientId = "")
     {
+        // 会话撤销只能作用于当前令牌对应的账号。userId 来自查询参数，不能直接信任：
+        // 否则任意登录用户都能让别人的 token/refresh/user 三个键一起失效。
+        var currentUser = HttpContext.User.GetUser();
+        if (currentUser == null)
+            return Ok(ApiResponse<bool>.Fail(ErrorCode.Unauthorized, "用户未认证"));
+
+        if (!string.Equals(currentUser.UserId, userId, StringComparison.Ordinal))
+            return Ok(ApiResponse<bool>.Fail(ErrorCode.InsufficientPermission, "只能撤销本人的会话"));
+
         var result = await loginService.Logout(userId, clientId);
         return Ok(result
             ? ApiResponse<bool>.Success(true, "登出成功")

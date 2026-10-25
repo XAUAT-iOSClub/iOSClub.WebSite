@@ -5,7 +5,7 @@ using iOSClub.DataApi.Services;
 using iOSClub.DataApi.Repositories;
 using iOSClub.WebAPI.IdentityModels;
 using Microsoft.AspNetCore.Authorization;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 using StackExchange.Redis;
 using System.Security.Cryptography;
 using Microsoft.IdentityModel.Tokens;
@@ -508,12 +508,12 @@ public class SSOController(
     /// </summary>
     public class TokenRequest
     {
-        [JsonProperty("grant_type")] public string GrantType { get; set; } = "";
-        [JsonProperty("code")] public string Code { get; set; } = "";
-        [JsonProperty("client_id")] public string ClientId { get; set; } = "";
-        [JsonProperty("client_secret")] public string ClientSecret { get; set; } = "";
-        [JsonProperty("redirect_uri")] public string RedirectUri { get; set; } = "";
-        [JsonProperty("code_verifier")] public string? CodeVerifier { get; set; }
+        [JsonPropertyName("grant_type")] public string GrantType { get; set; } = "";
+        [JsonPropertyName("code")] public string Code { get; set; } = "";
+        [JsonPropertyName("client_id")] public string ClientId { get; set; } = "";
+        [JsonPropertyName("client_secret")] public string ClientSecret { get; set; } = "";
+        [JsonPropertyName("redirect_uri")] public string RedirectUri { get; set; } = "";
+        [JsonPropertyName("code_verifier")] public string? CodeVerifier { get; set; }
     }
 
     /// <summary>
@@ -820,7 +820,8 @@ public class SSOController(
                 }
             }
 
-            // 为用户生成访问令牌
+            // 账号模型约定：每个可用账号都必须有 Student 档案。
+            // 产品已决定不再支持只有 Staff 的账号，SSO 与主站、改密保持同一要求。
             var member = await studentRepository.GetByIdAsync(authCodeInfo.UserId);
             if (member == null)
             {
@@ -1026,13 +1027,11 @@ public class SSOController(
                 return null;
             }
 
-            var identity = "Member";
-
             var staff = await staffRepository.GetStaffByIdWithoutOtherData(userId);
-            if (staff != null)
-            {
-                identity = staff.Identity;
-            }
+            var identity = staff?.Identity ?? "Member";
+            var userName = member.UserName;
+            var email = member.EMail ?? "";
+            var phoneNum = member.PhoneNum;
 
             var now = DateTime.UtcNow;
             var jwtId = Guid.NewGuid().ToString(); // 用于防止重放攻击
@@ -1040,7 +1039,7 @@ public class SSOController(
             var claims = new List<Claim>
             {
                 new(JwtRegisteredClaimNames.Sub, userId),
-                new(JwtRegisteredClaimNames.UniqueName, member.UserName),
+                new(JwtRegisteredClaimNames.UniqueName, userName),
                 new(ClaimTypes.Role, identity),
                 new(ClaimTypes.NameIdentifier, userId),
                 new(JwtRegisteredClaimNames.Jti, jwtId), // JWT ID 防止重放攻击
@@ -1048,8 +1047,8 @@ public class SSOController(
                     ClaimValueTypes.Integer64),
                 new("scope", DefaultScore),
                 new("client_id", clientId),
-                new("email", member.EMail ?? ""),
-                new("phone_numb", member.PhoneNum),
+                new("email", email),
+                new("phone_numb", phoneNum),
                 new("at_hash", ComputeAtHash(accessToken)) // 访问令牌哈希，供 OIDC 客户端校验
             };
 
@@ -1158,12 +1157,15 @@ public class SSOController(
 
         // logger.LogInformation("User info request successful for user {UserId}", userId);
 
-        var identity = "Member";
         var staff = await staffRepository.GetStaffByIdWithoutOtherData(userId);
-        if (staff != null)
-        {
-            identity = staff.Identity;
-        }
+        var identity = staff?.Identity ?? "Member";
+        var userName = member.UserName;
+        var academy = member.Academy;
+        var className = member.ClassName;
+        var joinTime = member.JoinTime.ToString("yyyy-MM-dd");
+        var gender = member.Gender;
+        var email = member.EMail ?? "";
+        var phoneNum = member.PhoneNum;
 
         // 获取访问令牌中的scope信息
         var scopes = DefaultScore.Split(" ").ToList(); // 默认包含openid
@@ -1210,18 +1212,18 @@ public class SSOController(
         // profile scope - 基本信息
         if (scopes.Contains("profile") || scopes.Contains("full"))
         {
-            userInfo.TryAdd("name", member.UserName);
-            userInfo.TryAdd("nickname", member.UserName);
-            userInfo.TryAdd("academy", member.Academy);
-            userInfo.TryAdd("class", member.ClassName);
-            userInfo.TryAdd("joinTime", member.JoinTime.ToString("yyyy-MM-dd"));
-            userInfo.TryAdd("avatar", $"https://www.xauat.site/assets/Centre/{member.Gender}生.png");
+            userInfo.TryAdd("name", userName);
+            userInfo.TryAdd("nickname", userName);
+            userInfo.TryAdd("academy", academy);
+            userInfo.TryAdd("class", className);
+            userInfo.TryAdd("joinTime", joinTime);
+            userInfo.TryAdd("avatar", $"https://www.xauat.site/assets/Centre/{gender}生.png");
         }
 
         // email scope - 邮箱信息
         if (scopes.Contains("email") || scopes.Contains("full"))
         {
-            userInfo.TryAdd("email", member.EMail ?? "");
+            userInfo.TryAdd("email", email);
         }
 
         // read scope - 角色信息
@@ -1233,7 +1235,7 @@ public class SSOController(
         // phone scope - 手机信息
         if (scopes.Contains("phone") || scopes.Contains("full"))
         {
-            userInfo.TryAdd("phone", member.PhoneNum);
+            userInfo.TryAdd("phone", phoneNum);
         }
 
         return Ok(userInfo);
@@ -1321,8 +1323,8 @@ public class SSOController(
     /// </summary>
     public class StoreSessionRequest
     {
-        [JsonProperty("state")] public string State { get; set; } = "";
-        [JsonProperty("client_id")] public string ClientId { get; set; } = "";
+        [JsonPropertyName("state")] public string State { get; set; } = "";
+        [JsonPropertyName("client_id")] public string ClientId { get; set; } = "";
     }
 
     /// <summary>

@@ -42,7 +42,7 @@ public interface IDataCentreService
     public Task<List<GenderCountVO>> GetGenderDataAsync();
 
     /// <summary>
-    /// 导入完整备份数据。按主键合并：库中没有的插入，已存在的就地更新，
+    /// 导入数据交换文件。按主键合并：库中没有的插入，已存在的就地更新，
     /// 因此重复导入同一份备份（例如把导出的备份再传回来）不会因主键冲突失败。
     /// </summary>
     /// <param name="data">备份数据</param>
@@ -153,7 +153,9 @@ public class DataCentreService(IDbContextFactory<ClubContext> contextFactory) : 
         return genderData;
     }
 
-    // 导入完整备份数据：按主键合并，而不是无脑 AddRange
+    // 导入数据交换文件：按主键合并，而不是无脑 AddRange。
+    // 覆盖 Students / Departments / Staffs / Categories / Articles / Resources，
+    // 不含活动、参与者、客户端应用与导入历史，因此不是完整备份语义。
     public async Task<DataImportResultVO> ImportAllDataAsync(AllDataImportDTO data)
     {
         // 与 StudentRepository.UpdateManyAsync 保持一致：导入前先清洗学号里的空格和入社时间
@@ -176,10 +178,28 @@ public class DataCentreService(IDbContextFactory<ClubContext> contextFactory) : 
             department.Staffs.Clear();
         }
 
+        // 分类里可能夹带文章列表，文章由 data.Articles 单独合并；
+        // 不清理的话 Add 会级联插入，与文章主键冲突
+        foreach (var category in data.Categories)
+        {
+            result.Skipped += category.Articles.Count;
+            category.Articles.Clear();
+        }
+
         // 文章的分类导航对象同理，只保留分类ID，避免级联插入 Categories
         foreach (var article in data.Articles)
         {
             article.Category = null;
+        }
+
+        // 部员的部门导航在导入时按名称重新挂到库中已有的部门实体上，
+        // 避免 EF 把 StaffDO.Department 当成新的部门级联插入。
+        var staffDepartmentNames = new Dictionary<string, string>();
+        foreach (var staff in data.Staffs.Concat(data.Presidents))
+        {
+            var departmentName = staff.Department?.Name;
+            if (!string.IsNullOrWhiteSpace(departmentName)) staffDepartmentNames[staff.UserId] = departmentName;
+            staff.Department = null;
         }
 
         await using var context = await contextFactory.CreateDbContextAsync();
@@ -189,13 +209,25 @@ public class DataCentreService(IDbContextFactory<ClubContext> contextFactory) : 
         var departments = await context.Departments.ToDictionaryAsync(x => x.Name);
         var staffs = await context.Staffs.ToDictionaryAsync(x => x.UserId);
         var resources = await context.Resources.ToDictionaryAsync(x => x.Id);
+        var categories = await context.Categories.ToDictionaryAsync(x => x.Id);
         var articles = await context.Articles.ToDictionaryAsync(x => x.Path);
 
+        // 先部门、后部员/文章，保证外键指向的实体已进入上下文
         result.Add(Merge(context, students, data.Students, x => x.UserId, (current, incoming) => current.Update(incoming)));
         result.Add(Merge(context, departments, data.Departments, x => x.Name, ApplyDepartment));
-        result.Add(Merge(context, staffs, data.Presidents.Where(x => x.Identity == "President"), x => x.UserId, ApplyStaff));
+        result.Add(Merge(context, staffs, data.Staffs.Concat(data.Presidents), x => x.UserId, ApplyStaff));
         result.Add(Merge(context, resources, data.Resources, x => x.Id, ApplyResource));
+        result.Add(Merge(context, categories, data.Categories, x => x.Id, ApplyCategory));
         result.Add(Merge(context, articles, data.Articles, x => x.Path, ApplyArticle));
+
+        foreach (var (userId, departmentName) in staffDepartmentNames)
+        {
+            if (staffs.TryGetValue(userId, out var staff) &&
+                departments.TryGetValue(departmentName, out var department))
+            {
+                staff.Department = department;
+            }
+        }
 
         // 只提交一次：EF 会按外键依赖排序，部门先于引用它的部员和文章入库
         await context.SaveChangesAsync();
@@ -272,6 +304,13 @@ public class DataCentreService(IDbContextFactory<ClubContext> contextFactory) : 
         if (!string.IsNullOrEmpty(incoming.Name)) current.Name = incoming.Name;
         if (!string.IsNullOrEmpty(incoming.Description)) current.Description = incoming.Description;
         if (!string.IsNullOrEmpty(incoming.Tag)) current.Tag = incoming.Tag;
+    }
+
+    private static void ApplyCategory(CategoryDO current, CategoryDO incoming)
+    {
+        if (!string.IsNullOrEmpty(incoming.Name)) current.Name = incoming.Name;
+        if (!string.IsNullOrEmpty(incoming.Description)) current.Description = incoming.Description;
+        current.Order = incoming.Order;
     }
 
     private static void ApplyArticle(ArticleDO current, ArticleDO incoming)

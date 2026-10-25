@@ -147,8 +147,10 @@ const menuItems = [
   {name: '概览', path: '/Centre', icon: 'house'},
   {name: '个人档案', path: '/Centre/PersonalData', icon: 'user'},
   {name: '社团部门', path: '/Centre/Department', icon: 'building-complex', requiresRole: 'Minister'},
-  {name: '社团资源', path: '/Centre/Resources', icon: 'library', requiresRole: 'Minister'},
-  {name: '公告文章', path: '/Centre/Article', icon: 'newspaper', requiresRole: 'Minister'},
+  // Resource read API requires Department+, so Department members get the entry.
+  {name: '社团资源', path: '/Centre/Resources', icon: 'library', requiresRole: 'Department'},
+  // Article API allows Department+ (PRD 6.7 matrix).
+  {name: '公告文章', path: '/Centre/Article', icon: 'newspaper', requiresRole: 'Department'},
   {name: '活动记录', path: '/Centre/Activity', icon: 'calendar', requiresRole: 'Minister'},
   {name: '成员管理', path: '/Centre/MemberData', icon: 'users', requiresRole: 'Minister'},
   {name: '权限管理', path: '/Centre/FounderPermission', icon: 'shield-check', requiresRole: 'Founder'},

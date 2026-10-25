@@ -389,6 +389,9 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         // 先登录获取token 
         var loginResponse = await _client.PostAsJsonAsync("/Auth/login", loginModel); 
         loginResponse.EnsureSuccessStatusCode(); 
+
+        // 登出只允许撤销当前 JWT 对应的会话，因此测试身份必须与被撤销的 userId 一致。
+        _client.DefaultRequestHeaders.Add("X-Test-UserId", student.UserId);
         
         // Act 
         var response = await _client.PostAsync($"/Auth/logout?userId={student.UserId}", null); 
@@ -404,6 +407,29 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal("登出成功", result.Message); 
         
     } 
+
+    /// <summary>
+    /// 登出接口的 userId 必须是当前 JWT 用户本人；此前实现直接信任查询参数，
+    /// 任意登录用户都能撤销别人的 Redis 会话。
+    /// </summary>
+    [Fact]
+    public async Task Logout_OtherUsersSession_ReturnsForbidden_AndKeepsTargetSession()
+    {
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        _client.DefaultRequestHeaders.Add("X-Test-UserId", "20210001");
+
+        var response = await _client.PostAsync("/Auth/logout?userId=20210002", null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var result = JsonConvert.DeserializeObject<ApiResponse<bool>>(await response.Content.ReadAsStringAsync());
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCode.InsufficientPermission, result.ErrorCode);
+        // 别人的 user/token/refresh 键一个都不能删
+        _redisDbMock.Verify(d => d.KeyDeleteAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()), Times.Never);
+    }
     
     [Fact] 
     public async Task RefreshToken_ValidRefreshToken_ReturnsNewToken() 
