@@ -187,17 +187,25 @@ public class StudentCreateDtoValidationTests
             validateAllProperties: true);
     }
 
+    private static StudentCreateDTO ValidDto() => new()
+    {
+        UserId = "2021000001",
+        UserName = "张三",
+        Academy = "计算机和信息工程学院",
+        PoliticalLandscape = "共青团员",
+        Gender = "男",
+        ClassName = "2021级1班",
+        PhoneNum = "13800138000",
+        Password = "Password123"
+    };
+
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
     public void EmptyPassword_FailsValidation(string password)
     {
-        var dto = new StudentCreateDTO
-        {
-            UserId = "2021000001",
-            UserName = "张三",
-            Password = password
-        };
+        var dto = ValidDto();
+        dto.Password = password;
 
         Assert.False(Validate(dto, out var results));
         Assert.Contains(results, r => r.MemberNames.Contains(nameof(StudentCreateDTO.Password)));
@@ -206,13 +214,94 @@ public class StudentCreateDtoValidationTests
     [Fact]
     public void NonEmptyPassword_PassesValidation()
     {
-        var dto = new StudentCreateDTO
-        {
-            UserId = "2021000001",
-            UserName = "张三",
-            Password = "Password123"
-        };
+        Assert.True(Validate(ValidDto(), out _));
+    }
+
+    [Theory]
+    [InlineData("23456")]      // 姓名是纯数字
+    [InlineData("张三3")]      // 姓名混入数字
+    [InlineData("张")]         // 姓名过短
+    public void InvalidUserName_FailsValidation(string userName)
+    {
+        var dto = ValidDto();
+        dto.UserName = userName;
+
+        Assert.False(Validate(dto, out var results));
+        Assert.Contains(results, r => r.MemberNames.Contains(nameof(StudentCreateDTO.UserName)));
+    }
+
+    [Theory]
+    [InlineData("LIJIAJUN")]   // 字母
+    [InlineData("20210001")]   // 8 位
+    [InlineData("20210000011")] // 11 位
+    [InlineData("20210000AB")] // 混入字母
+    public void InvalidUserId_FailsValidation(string userId)
+    {
+        var dto = ValidDto();
+        dto.UserId = userId;
+
+        Assert.False(Validate(dto, out var results));
+        Assert.Contains(results, r => r.MemberNames.Contains(nameof(StudentCreateDTO.UserId)));
+    }
+
+    [Theory]
+    [InlineData(nameof(StudentCreateDTO.Academy), "不存在的学院")]
+    [InlineData(nameof(StudentCreateDTO.PoliticalLandscape), "不明身份")]
+    [InlineData(nameof(StudentCreateDTO.Gender), "未知")]
+    [InlineData(nameof(StudentCreateDTO.PhoneNum), "12345")]
+    public void InvalidEnumeratedOrFormattedField_FailsValidation(string field, string value)
+    {
+        var dto = ValidDto();
+        typeof(StudentCreateDTO).GetProperty(field)!.SetValue(dto, value);
+
+        Assert.False(Validate(dto, out var results));
+        Assert.Contains(results, r => r.MemberNames.Contains(field));
+    }
+}
+
+/// <summary>
+/// 更新 DTO 的格式校验测试。
+/// <para>
+/// StudentUpdateDTO 的语义是"空值表示不修改该字段"，所以可选字段为空时必须放行，
+/// 否则前端只改手机号也会因为没带姓名而被 400 拦下。
+/// </para>
+/// </summary>
+public class StudentUpdateDtoValidationTests
+{
+    private static bool Validate(object model, out List<ValidationResult> results)
+    {
+        results = [];
+        return Validator.TryValidateObject(model, new ValidationContext(model), results,
+            validateAllProperties: true);
+    }
+
+    [Fact]
+    public void EmptyOptionalFields_PassValidation()
+    {
+        var dto = new StudentUpdateDTO { UserId = "2021000001" };
 
         Assert.True(Validate(dto, out _));
+    }
+
+    [Theory]
+    [InlineData("23456")]
+    [InlineData("张三3")]
+    public void InvalidUserName_FailsValidation(string invalid)
+    {
+        var dto = new StudentUpdateDTO { UserId = "2021000001", UserName = invalid };
+
+        Assert.False(Validate(dto, out var results));
+        Assert.Contains(results, r => r.MemberNames.Contains(nameof(StudentUpdateDTO.UserName)));
+    }
+
+    [Theory]
+    [InlineData("LIJIAJUN")]
+    [InlineData("12345")]
+    public void InvalidPhoneNum_FailsValidation(string invalid)
+    {
+        var dto = new StudentUpdateDTO { UserId = "2021000001", PhoneNum = invalid };
+
+        Assert.False(Validate(dto, out var results));
+        Assert.Contains(results, r => r.MemberNames.Contains(nameof(StudentUpdateDTO.PhoneNum)));
     }
 }

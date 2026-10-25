@@ -11,8 +11,9 @@ using iOSClub.DataApi.Services;
 using iOSClub.DataApi.Repositories;
 using iOSClub.WebAPI.Common;
 using StackExchange.Redis;
+using System.Net;
 using System.Net.Http.Headers;
-using Newtonsoft.Json; 
+using Newtonsoft.Json;
 using System.Net.Http.Json; 
 
 namespace iOSClub.Tests.IntegrationTests; 
@@ -105,32 +106,63 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         // 于是 MapperConfig 里的哈希映射抛 "密码不能为空"，接口返回 500。
         var studentModel = new StudentCreateDTO
         {
-            UserId = "20210001",
-            UserName = "Test Student",
-            Password = "password123",
-            Academy = "Computer Science",
+            UserId = "2021000001",
+            UserName = "测试学生",
+            Password = "Password123",
+            Academy = "计算机和信息工程学院",
             Gender = "男",
             PoliticalLandscape = "共青团员",
             ClassName = "2021级1班",
             PhoneNum = "13800138000"
         };
-        
-        var expectedToken = "mock-jwt-token"; 
-        _tokenGeneratorMock.Setup(t => t.GetMemberToken(It.IsAny<MemberVO>(), It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>())).Returns((expectedToken, "mock-refresh-token")); 
-        
-        // Act 
-        var response = await _client.PostAsJsonAsync("/Auth/signup", studentModel); 
-        
-        // Assert 
-        response.EnsureSuccessStatusCode(); // 200 OK 
-        var content = await response.Content.ReadAsStringAsync(); 
-        var result = JsonConvert.DeserializeObject<ApiResponse<string>>(content); 
-        
-        Assert.NotNull(result); 
-        Assert.True(result.Code == 200); 
-        Assert.Equal(expectedToken, result.Data); 
-        Assert.Equal("注册成功", result.Message); 
-    } 
+
+        var expectedToken = "mock-jwt-token";
+        _tokenGeneratorMock.Setup(t => t.GetMemberToken(It.IsAny<MemberVO>(), It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>())).Returns((expectedToken, "mock-refresh-token"));
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/Auth/signup", studentModel);
+
+        // Assert
+        response.EnsureSuccessStatusCode(); // 200 OK
+        var content = await response.Content.ReadAsStringAsync();
+        var result = JsonConvert.DeserializeObject<ApiResponse<string>>(content);
+
+        Assert.NotNull(result);
+        Assert.True(result.Code == 200);
+        Assert.Equal(expectedToken, result.Data);
+        Assert.Equal("注册成功", result.Message);
+    }
+
+    /// <summary>
+    /// 非法姓名/学号必须在进入 action 之前被 DataAnnotations 拦下，返回统一信封的 400。
+    /// </summary>
+    [Theory]
+    [InlineData("23456", "2021000001")]      // 姓名是纯数字
+    [InlineData("张三", "LIJIAJUN")]          // 学号是字母
+    [InlineData("张三", "20210001")]          // 学号只有 8 位
+    public async Task Register_InvalidNameOrStudentId_ReturnsValidationError(string userName, string userId)
+    {
+        var studentModel = new StudentCreateDTO
+        {
+            UserId = userId,
+            UserName = userName,
+            Password = "Password123",
+            Academy = "计算机和信息工程学院",
+            Gender = "男",
+            PoliticalLandscape = "共青团员",
+            ClassName = "2021级1班",
+            PhoneNum = "13800138000"
+        };
+
+        var response = await _client.PostAsJsonAsync("/Auth/signup", studentModel);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var content = await response.Content.ReadAsStringAsync();
+        var result = JsonConvert.DeserializeObject<ApiResponse<string>>(content);
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCode.ParameterValidationFailed, result.ErrorCode);
+        Assert.Contains(studentModel.UserName == "23456" ? "userName" : "userId", result.Detail);
+    }
     
     [Fact] 
     public async Task Login_StudentSuccess_ReturnsToken() 

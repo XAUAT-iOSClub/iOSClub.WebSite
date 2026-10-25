@@ -104,7 +104,7 @@ const fetchAcademyOptions = async () => {
   }
 }
 
-const politicalLandscapeOptions = ['群众', '共青团员', '中共党员'].map(p => ({label: p, value: p}))
+const politicalLandscapeOptions = ['群众', '共青团员', '中共党员', '中共预备党员'].map(p => ({label: p, value: p}))
 const genderOptions = ['男', '女']
 
 // --- Data Models ---
@@ -128,20 +128,39 @@ const passwordForm = ref({
 })
 
 // --- Validation Rules ---
+// 与后端 StudentUpdateDTO 的 DataAnnotations 保持一致
+const namePattern = /^[\p{L}· ]{2,20}$/u
+const studentIdPattern = /^\d{10}$/
+const classNamePattern = /^.{2,20}$/
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+// 邮箱非必填：空值放行，只在填了内容时校验格式
+const emailValidator = (_rule: any, value: string | null) => {
+  if (!value) return true
+  return emailPattern.test(value) || new Error('请输入有效的邮箱地址')
+}
+
 const rules = {
-  userName: {required: true, message: '请输入姓名', trigger: 'blur'},
+  userName: [
+    {required: true, message: '请输入姓名', trigger: 'blur'},
+    {pattern: namePattern, message: '姓名应为2-20个汉字或字母，不能包含数字或特殊符号', trigger: 'blur'}
+  ],
   userId: [
     {required: true, message: '请输入学号', trigger: 'blur'},
-    {min: 10, max: 10, message: '学号应为10位数字', trigger: 'blur'}
+    {pattern: studentIdPattern, message: '学号必须是10位数字', trigger: 'blur'}
   ],
   academy: {required: true, message: '请选择学院', trigger: 'change'},
-  className: {required: true, message: '请输入专业班级', trigger: 'blur'},
+  className: [
+    {required: true, message: '请输入专业班级', trigger: 'blur'},
+    {pattern: classNamePattern, message: '班级名称长度需为2-20个字符', trigger: 'blur'}
+  ],
   phoneNum: [
     {required: true, message: '请输入手机号', trigger: 'blur'},
     {pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: 'blur'}
   ],
   politicalLandscape: {required: true, message: '请选择政治面貌', trigger: 'change'},
-  gender: {required: true, message: '请选择性别', trigger: 'change'}
+  gender: {required: true, message: '请选择性别', trigger: 'change'},
+  eMail: {validator: emailValidator, trigger: 'blur'}
 }
 
 const passwordRules = {

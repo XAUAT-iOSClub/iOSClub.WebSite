@@ -71,7 +71,10 @@ export class AuthService {
         const data = await readApiResponse<string>(response);
 
         if (data.errorCode !== 0 || !data.data) {
-            throw new Error(data.message || '注册失败');
+            // 后端校验失败时 message 只有“请求参数验证失败”，具体字段原因在 detail 里
+            // （形如 "userName: 姓名应为2-20个汉字或字母…"），直接展示给用户。
+            const reason = data.detail ? `${data.message}：${data.detail}` : data.message;
+            throw new Error(reason || '注册失败');
         }
 
         const accessToken = data.data;

@@ -50,17 +50,20 @@
 
             <!-- 步骤 1: 基本信息 -->
             <div v-if="currentStep === 1" key="step1" class="space-y-4">
-              <n-form-item path="name" :rule="{ required: true, message: '', trigger: 'blur' }" class="apple-input">
-                <n-input v-model:value="form.name" placeholder="姓名">
+              <n-form-item path="name"
+                           :rule="[{ required: true, message: '请输入姓名', trigger: 'blur' }, { pattern: namePattern, message: '姓名应为2-20个汉字或字母，不能包含数字或特殊符号', trigger: 'blur' }]"
+                           class="apple-input">
+                <n-input v-model:value="form.name" placeholder="姓名" :maxlength="20">
                   <template #prefix>
                     <Icon icon="ion:person-outline" class="input-icon"/>
                   </template>
                 </n-input>
               </n-form-item>
 
-              <n-form-item path="studentId" :rule="{ required: true, message: '', trigger: 'blur' }"
+              <n-form-item path="studentId"
+                           :rule="[{ required: true, message: '请输入学号', trigger: 'blur' }, { pattern: studentIdPattern, message: '学号必须是10位数字', trigger: 'blur' }]"
                            class="apple-input">
-                <n-input v-model:value="form.studentId" placeholder="学号">
+                <n-input v-model:value="form.studentId" placeholder="学号" :maxlength="10">
                   <template #prefix>
                     <Icon icon="ion:card-outline" class="input-icon"/>
                   </template>
@@ -68,12 +71,12 @@
               </n-form-item>
 
               <div class="grid grid-cols-2 gap-4">
-                <n-form-item path="gender" :rule="{ required: true, message: '', trigger: 'change' }">
+                <n-form-item path="gender" :rule="{ required: true, message: '请选择性别', trigger: 'change' }">
                   <n-select v-model:value="form.gender" :options="genderOptions" placeholder="性别"
                             class="apple-select"/>
                 </n-form-item>
 
-                <n-form-item path="political" :rule="{ required: true, message: '', trigger: 'change' }">
+                <n-form-item path="political" :rule="{ required: true, message: '请选择政治面貌', trigger: 'change' }">
                   <n-select v-model:value="form.political" :options="politicalOptions" placeholder="政治面貌"
                             class="apple-select"/>
                 </n-form-item>
@@ -82,22 +85,25 @@
 
             <!-- 步骤 2: 学校信息 -->
             <div v-else-if="currentStep === 2" key="step2" class="space-y-4">
-              <n-form-item path="major" :rule="{ required: true, message: '', trigger: 'change' }" class="apple-select">
+              <n-form-item path="major" :rule="{ required: true, message: '请选择学院', trigger: 'change' }" class="apple-select">
                 <n-select v-model:value="form.major" :options="academyOptions" placeholder="选择学院"
                 />
               </n-form-item>
 
-              <n-form-item path="className" :rule="{ required: true, message: '', trigger: 'blur' }"
+              <n-form-item path="className"
+                           :rule="[{ required: true, message: '请输入班级', trigger: 'blur' }, { pattern: classNamePattern, message: '班级名称长度需为2-20个字符', trigger: 'blur' }]"
                            class="apple-input">
-                <n-input v-model:value="form.className" placeholder="班级 (如: 机电2401)">
+                <n-input v-model:value="form.className" placeholder="班级 (如: 机电2401)" :maxlength="20">
                   <template #prefix>
                     <Icon icon="ion:people-outline" class="input-icon"/>
                   </template>
                 </n-input>
               </n-form-item>
 
-              <n-form-item path="phone" :rule="{ required: true, message: '', trigger: 'blur' }" class="apple-input">
-                <n-input v-model:value="form.phone" placeholder="手机号码">
+              <n-form-item path="phone"
+                           :rule="[{ required: true, message: '请输入手机号', trigger: 'blur' }, { pattern: phonePattern, message: '请输入正确的手机号', trigger: 'blur' }]"
+                           class="apple-input">
+                <n-input v-model:value="form.phone" placeholder="手机号码" :maxlength="11">
                   <template #prefix>
                     <Icon icon="ion:call-outline" class="input-icon"/>
                   </template>
@@ -105,9 +111,9 @@
               </n-form-item>
 
               <n-form-item path="email"
-                           :rule="[{ required: true, message: '' }, { validator: emailValidator, trigger: 'blur' }]"
+                           :rule="[{ required: true, message: '请输入邮箱' }, { validator: emailValidator, trigger: 'blur' }]"
                            class="apple-input">
-                <n-input v-model:value="form.email" placeholder="电子邮箱">
+                <n-input v-model:value="form.email" placeholder="电子邮箱" :maxlength="256">
                   <template #prefix>
                     <Icon icon="ion:mail-outline" class="input-icon"/>
                   </template>
@@ -276,9 +282,16 @@ const genderOptions = [
 const politicalOptions = [
   {label: '群众', value: '群众'},
   {label: '共青团员', value: '共青团员'},
-  {label: '预备党员', value: '预备党员'},
+  // 与后端 SignRecord.PoliticalLandscapes 保持一致，不能简写成“预备党员”
+  {label: '中共预备党员', value: '中共预备党员'},
   {label: '中共党员', value: '中共党员'},
 ]
+
+// 与后端 StudentCreateDTO 的 DataAnnotations 保持一致
+const namePattern = /^[\p{L}· ]{2,20}$/u
+const studentIdPattern = /^\d{10}$/
+const classNamePattern = /^.{2,20}$/
+const phonePattern = /^1[3-9]\d{9}$/
 
 // 学院列表由后端 /Info/academies 提供，保持与 SignRecord.Academies 校验一致
 const academyOptions = ref<{ label: string; value: string }[]>([])
@@ -301,6 +314,13 @@ const passwordValidator = (_rule: any, value: string) => {
 
 const validateCurrentStep = async (): Promise<boolean> => {
   errorMsg.value = ''
+
+  // 先去掉首尾空白，避免用户无意输入的空格被当成"非法字符"
+  form.name = form.name.trim()
+  form.studentId = form.studentId.trim()
+  form.className = form.className.trim()
+  form.phone = form.phone.trim()
+  form.email = form.email.trim()
 
   // 手动简单检查，提升 UX (直接反馈为空)
   let emptyFields: string[] = []

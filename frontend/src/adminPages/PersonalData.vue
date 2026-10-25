@@ -407,13 +407,34 @@ const userInfo = reactive<MemberVO>({
   className: '', phoneNum: '', identity: '', joinTime: '', eMail: null
 });
 
+// 与后端 StudentUpdateDTO 的 DataAnnotations 保持一致
+const namePattern = /^[\p{L}· ]{2,20}$/u
+const studentIdPattern = /^\d{10}$/
+const classNamePattern = /^.{2,20}$/
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+// 邮箱非必填：空值放行，只在填了内容时校验格式
+const emailValidator = (_rule: any, value: string | null) => {
+  if (!value) return true
+  return emailPattern.test(value) || new Error('邮箱格式错误')
+}
+
 const rules = {
-  userName: [{required: true, message: '姓名必填', trigger: 'blur'}],
-  userId: [{required: true, min: 10, max: 10, message: '10位学号', trigger: 'blur'}],
+  userName: [
+    {required: true, message: '姓名必填', trigger: 'blur'},
+    {pattern: namePattern, message: '姓名应为2-20个汉字或字母，不能包含数字或特殊符号', trigger: 'blur'}
+  ],
+  userId: [
+    {required: true, message: '学号必填', trigger: 'blur'},
+    {pattern: studentIdPattern, message: '学号必须是10位数字', trigger: 'blur'}
+  ],
   academy: {required: true, message: '必选', trigger: 'blur'},
-  className: {required: true, message: '必填', trigger: 'blur'},
-  phoneNum: [{required: true, pattern: /^1\d{10}$/, message: '格式错误', trigger: 'blur'}],
-  eMail: [{pattern: /.+@.+\..+/, message: '格式错误', trigger: 'blur'}]
+  className: [
+    {required: true, message: '必填', trigger: 'blur'},
+    {pattern: classNamePattern, message: '班级名称长度需为2-20个字符', trigger: 'blur'}
+  ],
+  phoneNum: [{required: true, pattern: /^1[3-9]\d{9}$/, message: '手机号格式错误', trigger: 'blur'}],
+  eMail: [{validator: emailValidator, trigger: 'blur'}]
 };
 
 const fetchUserInfo = async () => {

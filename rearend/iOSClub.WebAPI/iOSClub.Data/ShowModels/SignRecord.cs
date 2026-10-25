@@ -39,7 +39,10 @@ public static class SignRecord
         "群众",
         "共青团员",
         "中共党员",
-        "中共预备党员"
+        "中共预备党员",
+        // 历史别名：早期注册页写成了“预备党员”，保留以免旧档案在编辑时被校验拦下。
+        // 新提交一律使用“中共预备党员”。
+        "预备党员"
     ];
 
     public static readonly string[] Genders = ["男", "女"];

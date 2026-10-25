@@ -76,6 +76,14 @@ async function submit() {
     error.value = '学号必须是 10 位数字'
     return
   }
+  if (!/^[\p{L}· ]{2,20}$/u.test(form.value.name.trim())) {
+    error.value = '姓名应为2-20个汉字或字母，不能包含数字或特殊符号'
+    return
+  }
+  if (form.value.className.trim().length < 2 || form.value.className.trim().length > 30) {
+    error.value = '班级名称长度需为2-30个字符'
+    return
+  }
   submitting.value = true
   error.value = ''
   try {
