@@ -310,13 +310,13 @@ public class StudentRepositoryTests
         // 使用Bogus生成学生，并确保有两个学生的Academy是"Computer Science"
         var students = new List<StudentDO>
         {
-            BogusDataGenerator.StudentFaker
+            BogusDataGenerator.StudentFaker.Clone()
                 .RuleFor(s => s.Academy, "Computer Science")
                 .Generate(),
-            BogusDataGenerator.StudentFaker
+            BogusDataGenerator.StudentFaker.Clone()
                 .RuleFor(s => s.Academy, "Mathematics")
                 .Generate(),
-            BogusDataGenerator.StudentFaker
+            BogusDataGenerator.StudentFaker.Clone()
                 .RuleFor(s => s.Academy, "Computer Science")
                 .Generate()
         };
@@ -345,7 +345,7 @@ public class StudentRepositoryTests
         await context.Students.AddAsync(student);
 
         // 使用Bogus生成员工
-        var staff = BogusDataGenerator.StaffFaker
+        var staff = BogusDataGenerator.StaffFaker.Clone()
             .RuleFor(s => s.UserId, student.UserId)
             .RuleFor(s => s.Identity, "President")
             .Generate();
