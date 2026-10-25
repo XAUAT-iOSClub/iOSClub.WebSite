@@ -226,6 +226,7 @@ public class ArticleRepository(IDbContextFactory<ClubContext> factory, ICategory
             {
                 Path = x.Path,
                 Title = x.Title,
+                ArticleOrder = x.ArticleOrder,
                 Identity = x.Identity,
                 VisibleToDepartment = x.VisibleToDepartment,
                 LastWriteTime = x.LastWriteTime,

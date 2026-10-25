@@ -27,7 +27,8 @@ public class ArticleController(
     public async Task<ActionResult<ApiResponse<IEnumerable<ArticleListItemVO>>>> GetArticles()
     {
         var articles = await articleRepository.GetAll();
-        return Ok(ApiResponse<IEnumerable<ArticleListItemVO>>.Success(articles.Adapt<List<ArticleListItemVO>>().OrderByDescending(x => x.LastWriteTime)));
+        return Ok(ApiResponse<IEnumerable<ArticleListItemVO>>.Success(articles.Adapt<List<ArticleListItemVO>>()
+            .OrderByDescending(x => x.LastWriteTime)));
     }
 
     /// <summary>
@@ -228,12 +229,7 @@ public class ArticleController(
         }
 
         var success = await articleRepository.UpdateArticleOrders(articleOrders);
-        if (success)
-        {
-            return Ok(ApiResponse.Success("文章顺序更新成功"));
-        }
-
-        return Ok(ApiResponse.Fail(ErrorCode.OperationFailed, "文章顺序更新失败"));
+        return Ok(success ? ApiResponse.Success("文章顺序更新成功") : ApiResponse.Fail(ErrorCode.OperationFailed, "文章顺序更新失败"));
     }
 
     private async Task<ArticleAccessScope> GetAccessScope()

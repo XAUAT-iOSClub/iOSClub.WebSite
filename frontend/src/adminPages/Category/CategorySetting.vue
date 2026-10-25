@@ -12,13 +12,9 @@
         <div class="flex items-center min-h-[44px] pl-4 pr-0">
           <div class="w-24 shrink-0 text-[17px] text-gray-900 dark:text-white">名称</div>
           <div class="flex-1 border-b border-gray-100 dark:border-[#38383A] py-2 pr-4">
-            <n-input
-                v-model:value="category.name"
-                placeholder="设置分类名称"
-                :bordered="false"
-                class="bg-transparent text-right font-medium"
-                style="--n-caret-color: #007AFF; --n-text-color: inherit; font-size: 17px; text-align: right;"
-            />
+            <n-input v-model:value="category.name" placeholder="设置分类名称" :bordered="false"
+              class="bg-transparent text-right font-medium"
+              style="--n-caret-color: #007AFF; --n-text-color: inherit; font-size: 17px; text-align: right;" />
           </div>
         </div>
 
@@ -27,18 +23,15 @@
           <div class="w-24 shrink-0 text-[17px] text-gray-900 dark:text-white">ID</div>
           <div class="flex-1 py-3 pr-4 flex justify-end items-center">
             <span class="text-[17px] text-gray-500 dark:text-gray-400 font-mono select-all">{{ category.id }}</span>
-            <Icon icon="lock" class="ml-2 w-4 h-4 text-gray-400"/>
+            <Icon icon="lock" class="ml-2 w-4 h-4 text-gray-400" />
           </div>
         </div>
       </div>
 
       <!-- 操作按钮区域 -->
       <div class="mb-8 px-1 flex justify-end">
-        <button
-            @click="updateCategory"
-            :disabled="updatingCategory"
-            class="text-[17px] font-medium text-[#007AFF] disabled:opacity-50 hover:opacity-80 transition-opacity bg-transparent px-4 py-1"
-        >
+        <button @click="updateCategory" :disabled="updatingCategory"
+          class="text-[17px] font-medium text-[#007AFF] disabled:opacity-50 hover:opacity-80 transition-opacity bg-transparent px-4 py-1">
           {{ updatingCategory ? '正在保存...' : '保存更改' }}
         </button>
       </div>
@@ -46,72 +39,55 @@
       <!-- 区域 2: 文章排序 -->
       <div class="flex justify-between items-end mb-2 px-4">
         <h2 class="text-[13px] text-gray-500 dark:text-gray-400 uppercase tracking-wide">文章排序</h2>
-        <button
-            @click="updateArticleOrders"
-            :disabled="updatingArticles"
-            class="text-[15px] text-[#007AFF] font-medium hover:opacity-80 disabled:opacity-50 transition-opacity bg-transparent"
-        >
+        <button @click="updateArticleOrders" :disabled="updatingArticles"
+          class="text-[15px] text-[#007AFF] font-medium hover:opacity-80 disabled:opacity-50 transition-opacity bg-transparent">
           {{ updatingArticles ? '保存顺序...' : '保存顺序' }}
         </button>
       </div>
 
       <div
-          class="bg-white dark:bg-[#1C1C1E] rounded-[10px] overflow-hidden transition-colors duration-300 min-h-[100px]">
+        class="bg-white dark:bg-[#1C1C1E] rounded-[10px] overflow-hidden transition-colors duration-300 min-h-[100px]">
 
         <!-- 加载骨架 -->
         <div v-if="loadingArticles" class="animate-pulse">
           <div v-for="i in 3" :key="i"
-               class="flex items-center pl-4 py-3 border-b border-gray-100 dark:border-[#38383A] last:border-0">
+            class="flex items-center pl-4 py-3 border-b border-gray-100 dark:border-[#38383A] last:border-0">
             <div class="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 mr-3"></div>
             <div class="flex-1 h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
           </div>
         </div>
 
         <!-- 文章列表 -->
-        <draggable
-            v-else-if="articles.length > 0"
-            v-model="articles"
-            item-key="path"
-            handle=".drag-handle"
-            ghost-class="sortable-ghost"
-            chosen-class="sortable-chosen"
-            drag-class="sortable-drag"
-            @start="onDragStart"
-            @end="onDragEnd"
-            class="divide-y divide-gray-100 dark:divide-[#38383A]"
-        >
+        <draggable v-else-if="articles.length > 0" v-model="articles" item-key="path" handle=".drag-handle"
+          ghost-class="sortable-ghost" chosen-class="sortable-chosen" drag-class="sortable-drag" @start="onDragStart"
+          @end="onDragEnd" class="divide-y divide-gray-100 dark:divide-[#38383A]">
           <template #item="{ element: article }">
             <div
-                class="group flex items-center pl-3 pr-4 py-3 bg-white dark:bg-[#1C1C1E] active:bg-gray-50 dark:active:bg-[#2C2C2E] cursor-default transition-colors">
+              class="group flex items-center pl-3 pr-4 py-3 bg-white dark:bg-[#1C1C1E] active:bg-gray-50 dark:active:bg-[#2C2C2E] cursor-default transition-colors">
               <!-- 拖拽手柄 -->
               <div
-                  class="drag-handle p-2 cursor-grab active:cursor-grabbing touch-none text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 transition-colors">
-                <Icon icon="menu" class="w-6 h-6"/>
+                class="drag-handle p-2 cursor-grab active:cursor-grabbing touch-none text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 transition-colors">
+                <Icon icon="menu" class="w-6 h-6" />
               </div>
 
               <!-- 文章内容 -->
               <div class="flex-1 min-w-0 ml-1 mr-3">
                 <div class="flex items-baseline gap-2">
                   <h3 class="text-[17px] text-gray-900 dark:text-white truncate">{{
-                      article.title || '无标题文章'
-                    }}</h3>
+                    article.title || '无标题文章'
+                  }}</h3>
                 </div>
                 <p class="text-[13px] text-gray-500 dark:text-gray-400 truncate font-mono mt-0.5">{{ article.path }}</p>
               </div>
 
               <!-- 标签 -->
-              <n-tag
-                  size="small"
-                  :type="getIdentityType(article.identity)"
-                  :bordered="false"
-                  round
-                  class="shrink-0 opacity-90"
-              >
+              <n-tag size="small" :type="getIdentityType(article.identity)" :bordered="false" round
+                class="shrink-0 opacity-90">
                 {{ getIdentityLabel(article.identity || '') }}
               </n-tag>
 
               <!-- 箭头指示符 (装饰用) -->
-              <Icon icon="chevron-right" class="ml-3 text-gray-300 dark:text-gray-600 w-4 h-4"/>
+              <Icon icon="chevron-right" class="ml-3 text-gray-300 dark:text-gray-600 w-4 h-4" />
             </div>
           </template>
         </draggable>
@@ -119,7 +95,7 @@
         <!-- 空状态 -->
         <div v-else class="flex flex-col items-center justify-center py-12 text-center">
           <div class="w-12 h-12 rounded-full bg-gray-100 dark:bg-[#2C2C2E] flex items-center justify-center mb-3">
-            <Icon icon="files" class="text-gray-400 w-6 h-6"/>
+            <Icon icon="files" class="text-gray-400 w-6 h-6" />
           </div>
           <p class="text-gray-500 dark:text-gray-400 text-[15px]">此分类下暂无文章</p>
         </div>
@@ -134,16 +110,16 @@
 </template>
 
 <script setup lang="ts">
-import {ref, onMounted, h, defineComponent} from 'vue';
-import {useRoute, useRouter} from 'vue-router';
-import {useMessage, NInput, NTag} from 'naive-ui';
+import { ref, onMounted, h, defineComponent } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useMessage, NInput, NTag } from 'naive-ui';
 import Icon from '@/components/Icon.vue'
 import draggable from 'vuedraggable';
-import {CategoryService} from '../../services/CategoryService';
-import {ArticleService} from '../../services/ArticleService';
-import type {CategoryModel} from '../../models';
-import type {ArticleModel} from '../../models';
-import {useLayoutStore} from '../../stores/LayoutStore';
+import { CategoryService } from '../../services/CategoryService';
+import { ArticleService } from '../../services/ArticleService';
+import type { CategoryModel } from '../../models';
+import type { ArticleModel } from '../../models';
+import { useLayoutStore } from '../../stores/LayoutStore';
 
 const route = useRoute();
 const router = useRouter();
@@ -151,7 +127,7 @@ const message = useMessage();
 const layoutStore = useLayoutStore();
 
 const categoryId = ref<string>(route.params.id as string);
-const category = ref<CategoryModel>({id: '', name: '', order: 0});
+const category = ref<CategoryModel>({ id: '', name: '', order: 0 });
 const articles = ref<ArticleModel[]>([]);
 const loadingArticles = ref(false);
 const updatingCategory = ref(false);
@@ -190,7 +166,7 @@ const loadCategory = async () => {
     const foundCategory = await CategoryService.getCategoryById(categoryId.value);
     if (foundCategory) {
       category.value = foundCategory;
-      articles.value = await CategoryService.getCategoryArticles(categoryId.value);
+      articles.value = (await CategoryService.getCategoryArticles(categoryId.value)).concat().sort((a, b) => (a.articleOrder || 0) - (b.articleOrder || 0));
     } else {
       message.error('分类不存在');
       goBack();
@@ -252,8 +228,8 @@ onMounted(async () => {
   // 因为我们自定义了页面 Header，这里可以隐藏全局 Header 或者保持一致
   // 如果你的 layout store 支持隐藏原有的 header 最好
   layoutStore.setPageHeader(
-      category.value.name || '设置',
-      '管理分类信息，并设置分类顺序'
+    category.value.name || '设置',
+    '管理分类信息，并设置分类顺序'
   )
 
   layoutStore.setShowPageActions(true)
@@ -263,7 +239,7 @@ onMounted(async () => {
       return () => h('button', {
         class: 'p-2.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white transition-transform active:scale-95 flex items-center text-sm font-medium shadow-lg shadow-blue-500/30',
         onClick: () => goBack()
-      }, [h(Icon, {icon: 'arrow-left', class: ''})])
+      }, [h(Icon, { icon: 'arrow-left', class: '' })])
     }
   })
   layoutStore.setActionsComponent(ActionsComponent);

@@ -1,5 +1,6 @@
 import {defineStore} from 'pinia';
 import {AuthService} from '../services/AuthService';
+import {decodeJwtPayload} from '../utils/jwt';
 import type {LoginModel, StudentCreateDTO} from '../models';
 
 export const useAuthorizationStore = defineStore('AuthorizationId', {
@@ -11,45 +12,13 @@ export const useAuthorizationStore = defineStore('AuthorizationId', {
         isAuthenticated: (state) => !!state.Authorization && state.Authorization.length > 0,
         // 检查 Token 是否存在且未过期（路由守卫应优先使用此 getter）
         isTokenValid: (state): boolean => {
-            if (!state.Authorization || state.Authorization.length === 0) return false;
-            try {
-                const parts = state.Authorization.split('.');
-                if (parts.length !== 3) return false;
-                const payload = JSON.parse(atob(parts[1]));
-                const exp = payload.exp as number;
-                if (!exp) return false;
-                return exp > Math.floor(Date.now() / 1000);
-            } catch {
-                return false;
-            }
+            const payload = decodeJwtPayload(state.Authorization);
+            const exp = payload?.exp;
+            return typeof exp === 'number' && exp > Math.floor(Date.now() / 1000);
         },
-        getAuthorizationInfo: (state): any => {
-            let strings = state.Authorization.split('.'); // 确保是 JWT 格式
-            if (strings.length !== 3) return null; // 简单校验是否为合法 JWT
-            try {
-                const payload = strings[1].replace(/-/g, '+').replace(/_/g, '/');
-                const decodedPayload = atob(payload);
-                const jsonPayload = decodeURIComponent(encodeURIComponent(decodedPayload));
-                return JSON.parse(jsonPayload);
-            } catch (e) {
-                console.error('解析 Authorization 失败:', e);
-                return null;
-            }
-        },
-        getRole: (state): string | null => {
-            let strings = state.Authorization.split('.'); // 确保是 JWT 格式
-            if (strings.length !== 3) return null; // 简单校验是否为合法 JWT
-            try {
-                const payload = strings[1].replace(/-/g, '+').replace(/_/g, '/');
-                const decodedPayload = atob(payload);
-                const jsonPayload = decodeURIComponent(encodeURIComponent(decodedPayload));
-                const json = JSON.parse(jsonPayload);
-                return json['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
-            } catch (e) {
-                console.error('解析 Authorization 失败:', e);
-                return null;
-            }
-        },
+        getAuthorizationInfo: (state): any => decodeJwtPayload(state.Authorization),
+        getRole: (state): string | null =>
+            decodeJwtPayload(state.Authorization)?.['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] ?? null,
     },
     actions: {
         async signup(stu: StudentCreateDTO): Promise<boolean> {

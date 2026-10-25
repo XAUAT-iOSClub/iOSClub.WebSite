@@ -93,16 +93,17 @@ const fetchCategoryArticles = async () => {
           .filter(a => !specialPagesText.includes(a.title))
           .map(article => ({
             label: article.title || '未命名文档',
-            key: `/Article/${article.path}`
+            key: `/Article/${article.path}`,
+            index: article.articleOrder || 0, // 用于排序
           }))
 
       // 如果是社团简介分类，手动注入特殊页面
       if (category === '社团简介') {
         // 按照特定顺序插入
         const predefinedItems = [
-          {label: '关于我们', key: '/About'},
-          {label: '社团结构', key: '/Structure'},
-          {label: '其他组织', key: '/OtherOrg'}
+          {label: '关于我们', key: '/About', index: -3},
+          {label: '社团结构', key: '/Structure', index: -2},
+          {label: '其他组织', key: '/OtherOrg', index: -1}
         ]
         // 合并：预定义在前，API获取的在后（如果有的话）
         docItems.unshift(...predefinedItems)
@@ -110,7 +111,7 @@ const fetchCategoryArticles = async () => {
 
       newOptions.push({
         label: category,
-        children: docItems
+        children: docItems.sort((a, b) => a.index - b.index) // 按照 articleOrder 排序
       })
     })
 
