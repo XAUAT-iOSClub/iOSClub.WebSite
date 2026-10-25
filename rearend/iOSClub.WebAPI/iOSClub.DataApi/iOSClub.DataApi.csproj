@@ -4,6 +4,8 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <!-- NPOI 采用 OSMF EULA，2.8.x 起要求显式声明接受；本项目从 2.7.x 起已在使用同一许可。 -->
+        <AcceptNPOIOSMFLicense>true</AcceptNPOIOSMFLicense>
     </PropertyGroup>
 
     <ItemGroup>
@@ -14,9 +16,17 @@
       <PackageReference Include="BCrypt.Net-Core" Version="1.6.0" />
       <PackageReference Include="ClosedXML" Version="0.104.2" />
       <PackageReference Include="MailKit" Version="4.17.0" />
-      <PackageReference Include="NPOI" Version="2.7.2" />
+      <!-- NPOI 2.8.x 起用 SkiaSharp 取代 SixLabors.ImageSharp：2.1.9 的多个高危漏洞
+           在整个 2.x 都没有修复版本，只有升级 NPOI 才能彻底移除该依赖。 -->
+      <PackageReference Include="NPOI" Version="2.8.1" />
+      <!-- NPOI 2.8.1 的 nuspec 对 SkiaSharp 声明了 exclude="Runtime"，托管程序集不会复制到输出目录；
+           NPOI.Core.dll 又确实引用它，显式引用可补回运行时资产。 -->
+      <PackageReference Include="SkiaSharp" Version="3.119.4" />
       <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
       <PackageReference Include="StackExchange.Redis" Version="2.10.1" />
+      <!-- MimeKit 4.17.0 传递引入 Pkcs 10.0.0，命中 GHSA-846f / GHSA-2fmv，
+           修复版本为 10.0.13。 -->
+      <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
     </ItemGroup>
 
 </Project>

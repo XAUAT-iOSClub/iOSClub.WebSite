@@ -25,7 +25,10 @@
         <PackageReference Include="prometheus-net.AspNetCore" Version="8.2.1" />
         <PackageReference Include="Scalar.AspNetCore" Version="2.11.0" />
         <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
-        <PackageReference Include="Serilog.Sinks.SQLite" Version="6.0.0" />
+        <!-- 7.0.0 的存储层从 System.Data.SQLite 换成 Microsoft.Data.Sqlite，
+             不再引入声明 win7 RID 的 SQLite 包（NETSDK1206 的来源）。
+             表结构（Timestamp/Level/Exception/RenderedMessage/Properties）不变，已有日志库可继续使用。 -->
+        <PackageReference Include="Serilog.Sinks.SQLite" Version="7.0.0" />
         <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
     </ItemGroup>
 

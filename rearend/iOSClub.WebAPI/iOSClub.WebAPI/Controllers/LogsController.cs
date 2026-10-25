@@ -1,4 +1,3 @@
-using System.Data.SQLite;
 using System.Text.Json;
 using iOSClub.WebAPI.Common;
 using Microsoft.AspNetCore.Authorization;
@@ -281,10 +280,10 @@ public class LogsController
         }
 
         // 清理指定天数前的日志
-        await using var connection = new SQLiteConnection($"Data Source={sqlPath}");
+        await using var connection = new SqliteConnection($"Data Source={sqlPath}");
         await connection.OpenAsync();
         await using var command =
-            new SQLiteCommand("DELETE FROM Logs WHERE Timestamp < @cutoffDate", connection);
+            new SqliteCommand("DELETE FROM Logs WHERE Timestamp < @cutoffDate", connection);
         command.Parameters.AddWithValue("@cutoffDate", DateTime.Now.AddDays(-days));
         var rowsAffected = await command.ExecuteNonQueryAsync();
 

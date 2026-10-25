@@ -80,7 +80,6 @@ public class JwtServiceTests : IDisposable
         foreach (var member in members)
         {
             var result = _jwtService.GenerateTokens(member);
-            Assert.NotNull(result);
             Assert.NotNull(result.AccessToken);
             Assert.NotNull(result.RefreshToken);
         }
