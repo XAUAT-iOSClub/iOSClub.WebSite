@@ -1,4 +1,5 @@
 import type {Page} from '@playwright/test'
+import {gzipSync} from 'node:zlib'
 
 /**
  * Role claim used by rearend JWT tokens and by the frontend store
@@ -110,6 +111,22 @@ const memberFor = (identity: Role) => ({
     identity,
 })
 
+const DEFAULT_PERFORMANCE: MonitoringPerformancePayload = {
+    http: {
+        totalRequests: 3600,
+        windowSeconds: 3600,
+        averageRequestsPerSecond: 1,
+        errorRate: 0,
+        averageResponseTime: 12,
+    },
+    system: {cpuSecondsTotal: 0},
+    timestamp: '2026-01-02T03:04:05Z',
+}
+
+/** 后端成员分页接口以 base64(gzip(JSON)) 下发，这里在 Node 侧做等价编码。 */
+const gzipBase64 = (value: unknown): string =>
+    gzipSync(Buffer.from(JSON.stringify(value), 'utf8')).toString('base64')
+
 /**
  * `.env` points VITE_API_URL at a backend on another origin, so mocked
  * responses must also satisfy CORS (including preflight and exposed headers).
@@ -119,6 +136,39 @@ const CORS_HEADERS: Record<string, string> = {
     'access-control-allow-methods': 'GET,POST,PUT,DELETE,OPTIONS',
     'access-control-allow-headers': 'authorization,content-type',
     'access-control-expose-headers': 'X-Refresh-Token,Content-Disposition',
+}
+
+/** C28：`POST /MemberManagement/update-many` 的逐行结果（对应 BulkUpdateResultVO）。 */
+export interface BulkUpdateResultPayload {
+    created: number
+    updated: number
+    skipped: number
+    failed: number
+    issues: Array<{userId: string; reason: string; kind: 'skipped' | 'failed'}>
+}
+
+export interface BulkUpdateMock {
+    result: BulkUpdateResultPayload
+    /**
+     * 零写入（全部跳过/失败）时，后端用失败业务码返回（HTTP 仍为 200），
+     * 但 `data` 保留计数与原因。前端必须显示失败而不是“数据更新成功”。
+     */
+    zeroWriteFailure?: boolean
+}
+
+/** C30：`GET /Monitoring/performance` 的新契约（windowSeconds / averageRequestsPerSecond）。 */
+export interface MonitoringPerformancePayload {
+    http: {
+        totalRequests: number
+        /** 固定统计窗口（秒），3600 表示近 1 小时。 */
+        windowSeconds: number
+        /** 窗口内平均每秒请求数，取代旧的 requestsPerSecond。 */
+        averageRequestsPerSecond: number
+        errorRate: number
+        averageResponseTime: number
+    }
+    system?: {cpuSecondsTotal: number}
+    timestamp?: string
 }
 
 export interface MockApiOptions {
@@ -131,6 +181,16 @@ export interface MockApiOptions {
     userDataNotFound?: boolean
     /** Token returned by POST /Auth/refresh-token. */
     refreshedToken?: string
+    /** Token returned by POST /Auth/login (OAuth 授权页登录). */
+    loginToken?: string
+    /** POST /SSO/store-session 的行为：默认成功。 */
+    storeSession?: 'ok' | 'http500' | 'successFalse'
+    /** POST /MemberManagement/update-many 的响应；默认成功且零计数。 */
+    bulkUpdate?: BulkUpdateMock
+    /** GET /Monitoring/performance 的响应。 */
+    performance?: MonitoringPerformancePayload
+    /** GET /MemberQuery/all-data/page 返回的成员（分页接口，gzip 压缩后下发）。 */
+    members?: Array<Record<string, any>>
 }
 
 /**
@@ -139,6 +199,7 @@ export interface MockApiOptions {
  */
 export async function mockApi(page: Page, options: MockApiOptions = {}): Promise<void> {
     const articles = options.articles ?? [DEFAULT_ARTICLE]
+    const performance = options.performance ?? DEFAULT_PERFORMANCE
 
     await page.route('https://link.xauat.site/**', route =>
         route.fulfill({status: 200, json: {links: []}}))
@@ -189,6 +250,68 @@ export async function mockApi(page: Page, options: MockApiOptions = {}): Promise
                 return fail(500, 5000, '统计服务不可用')
             }
             return ok({members: 10, staffs: 5, resources: 3, departments: 2})
+        }
+
+        // 图表聚合接口：后台成员页与概览页会并发请求，返回空数组即可。
+        if (['/DataCentre/year', '/DataCentre/college', '/DataCentre/grade', '/DataCentre/gender', '/DataCentre/landscape'].includes(path)) {
+            return ok([])
+        }
+
+        if (path === '/Info/academies') return ok(['测试学院'])
+
+        // 成员中心分页列表：后端下发 base64(gzip(JSON))。
+        if (path === '/MemberQuery/all-data/page' && method === 'GET') {
+            const members = options.members ?? [memberFor(identity)]
+            return ok(gzipBase64({
+                totalCount: members.length,
+                pageSize: 10,
+                currentPage: 1,
+                totalPages: 1,
+                data: members,
+            }))
+        }
+
+        // C28：成员 JSON 导入的逐行结果。
+        if (path === '/MemberManagement/update-many' && method === 'POST') {
+            const mock: BulkUpdateMock = options.bulkUpdate ?? {
+                result: {created: 0, updated: 0, skipped: 0, failed: 0, issues: []},
+            }
+            if (mock.zeroWriteFailure) {
+                // 后端的实际形状：ApiResponseResultFilter 让 HTTP 状态等于 body.code，
+                // 因此零写入失败是 HTTP 400 + ErrorCode=2001，data 仍带计数与原因
+                // （MemberManagementController 用 Ok(FailWithData) 返回）。
+                return json(400, {
+                    code: 400,
+                    errorCode: 2001,
+                    message: `新增 ${mock.result.created}，更新 ${mock.result.updated}，跳过 ${mock.result.skipped}，失败 ${mock.result.failed}`,
+                    data: mock.result,
+                })
+            }
+            return ok(mock.result)
+        }
+
+        // OAuth 授权页的账号密码登录（返回 JWT 与刷新令牌响应头）。
+        if (path === '/Auth/login' && method === 'POST') {
+            const loginToken = options.loginToken
+                || makeJwt('Founder', {expSecondsFromNow: 3600})
+            return ok(loginToken, {'X-Refresh-Token': 'mock-refresh-login'})
+        }
+
+        // C29：SSO 会话存储。Redis 故障时返回 500 且 success:false；
+        // 另外保留 HTTP 200 + success:false 的兼容分支。
+        if (path === '/SSO/store-session' && method === 'POST') {
+            if (options.storeSession === 'http500') {
+                return json(500, {success: false, message: '会话存储失败'})
+            }
+            if (options.storeSession === 'successFalse') {
+                return json(200, {success: false, message: '会话存储失败'})
+            }
+            return json(200, {success: true, message: 'ok'})
+        }
+
+        // C30：监控指标使用固定窗口与窗口内平均值。
+        if (path === '/Monitoring/performance' && method === 'GET') {
+            return ok(performance)
         }
 
         if (path === '/Article' && method === 'GET') return ok(articles)

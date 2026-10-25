@@ -13,9 +13,9 @@ public class ArticleRepositoryTests
 
     public ArticleRepositoryTests()
     {
-        // 使用内存数据库进行测试
+        // 使用内存数据库进行测试；每个测试类实例使用独立库名，避免并发或残留数据互相影响
         _options = new DbContextOptionsBuilder<ClubContext>()
-            .UseInMemoryDatabase(databaseName: "ArticleRepositoryTestDatabase")
+            .UseInMemoryDatabase(databaseName: $"ArticleRepositoryTestDatabase_{Guid.NewGuid()}")
             .Options;
         
         var contextFactory = new TestDbContextFactory(_options);
@@ -52,6 +52,51 @@ public class ArticleRepositoryTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(2, result.Count());
+    }
+
+    [Fact]
+    public async Task GetAll_AndGetFromPath_AgreeOnCategoryIdAndArticleOrder()
+    {
+        // 回归 C26：后台列表投影曾漏掉 CategoryId 与 ArticleOrder，
+        // 导致同一篇文章的列表与详情给出不同的分类归属和排序值。
+        // 使用独立内存库，避免与其他用例共享状态。
+        var options = new DbContextOptionsBuilder<ClubContext>()
+            .UseInMemoryDatabase(databaseName: $"ArticleProjection_{Guid.NewGuid()}")
+            .Options;
+        var contextFactory = new TestDbContextFactory(options);
+        var categoryRepository = new CategoryRepository(contextFactory);
+        var articleRepository = new ArticleRepository(contextFactory, categoryRepository);
+
+        const string path = "projection-consistency";
+        const int articleOrder = 9;
+
+        await using (var context = new ClubContext(options))
+        {
+            await context.Database.EnsureCreatedAsync();
+            var category = new CategoryDO { Id = "category-consistency", Name = "投影一致性", Order = 1 };
+            await context.Categories.AddAsync(category);
+            await context.Articles.AddAsync(new ArticleDO
+            {
+                Path = path,
+                Title = "投影一致性文章",
+                Content = "这是一段用于验证列表与详情投影一致的文章内容。",
+                Identity = "Member",
+                CategoryId = category.Id,
+                ArticleOrder = articleOrder
+            });
+            await context.SaveChangesAsync();
+        }
+
+        // Act
+        var listItem = Assert.Single(await articleRepository.GetAll());
+        var detail = await articleRepository.GetFromPath(path);
+
+        // Assert：列表与详情的分类 ID、排序值必须一致
+        Assert.NotNull(detail);
+        Assert.Equal(detail!.CategoryId, listItem.CategoryId);
+        Assert.Equal(detail.ArticleOrder, listItem.ArticleOrder);
+        Assert.Equal("category-consistency", listItem.CategoryId);
+        Assert.Equal(articleOrder, listItem.ArticleOrder);
     }
 
     [Fact]

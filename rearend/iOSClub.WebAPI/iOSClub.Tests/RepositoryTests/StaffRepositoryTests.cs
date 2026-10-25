@@ -376,6 +376,219 @@ public class StaffRepositoryTests
         Assert.Contains(result, m => m.UserId == "0000000003");
     }
 
+    // ==== C23 / C27：社长不隶属任何部门，更新接口必须真正落库部门 ====
+
+    [Fact]
+    public async Task UpdateStaffAsync_WithoutDepartmentName_KeepsExistingDepartment()
+    {
+        // C27：缺省 DepartmentName 表示“不修改部门”。清空部门走独立的调部门接口，
+        // 否则仅改姓名的调用方会静默把部门抹掉。
+        var (repository, options) = CreateIsolatedRepository();
+        await SeedStaffAsync(options, "Department", "技术部");
+
+        var result = await repository.UpdateStaffAsync(new StaffDO
+        {
+            UserId = "0000000001",
+            Name = "只改姓名",
+            Identity = "Department"
+        });
+
+        Assert.True(result);
+        await using var verify = new ClubContext(options);
+        var saved = await verify.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "0000000001");
+        Assert.Equal("只改姓名", saved.Name);
+        Assert.Equal("技术部", saved.Department!.Name);
+    }
+
+    /// <summary>
+    /// 每条规则用独立的 InMemory 库，避免与既有用例互相污染。
+    /// </summary>
+    private static (StaffRepository Repository, DbContextOptions<ClubContext> Options) CreateIsolatedRepository()
+    {
+        var options = new DbContextOptionsBuilder<ClubContext>()
+            .UseInMemoryDatabase($"StaffRepositoryRules-{Guid.NewGuid()}")
+            .Options;
+        return (new StaffRepository(new TestDbContextFactory(options)), options);
+    }
+
+    private static async Task SeedStaffAsync(DbContextOptions<ClubContext> options, string identity,
+        string? departmentName)
+    {
+        await using var context = new ClubContext(options);
+        var department = new DepartmentDO { Key = "tech", Name = "技术部", Description = "技术" };
+        var other = new DepartmentDO { Key = "design", Name = "设计部", Description = "设计" };
+        context.Departments.AddRange(department, other);
+        context.Staffs.Add(new StaffDO
+        {
+            UserId = "0000000001",
+            Name = "成员",
+            Identity = identity,
+            Department = departmentName == "技术部" ? department : departmentName == "设计部" ? other : null
+        });
+        await context.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task UpdateRoleAsync_PromotesToPresident_ClearsDepartment()
+    {
+        // Arrange —— 部长身上带着“技术部”，Founder 权限接口把它提为社长时不能留下部门
+        var (repository, options) = CreateIsolatedRepository();
+        await SeedStaffAsync(options, "Minister", "技术部");
+
+        // Act
+        var (success, error) = await repository.UpdateRoleAsync("0000000001", "President", "技术部", "9999999999");
+
+        // Assert
+        Assert.True(success, error);
+        await using var verify = new ClubContext(options);
+        var saved = await verify.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "0000000001");
+        Assert.Equal("President", saved.Identity);
+        Assert.Null(saved.Department);
+    }
+
+    [Fact]
+    public async Task UpdateRoleAsync_DemotingLastFounder_IsStillRejected()
+    {
+        // 既有 Founder 保护不能被 C23 的改动削弱
+        var (repository, options) = CreateIsolatedRepository();
+        await SeedStaffAsync(options, "Founder", null);
+
+        var (success, error) = await repository.UpdateRoleAsync("0000000001", "President", null, "9999999999");
+
+        Assert.False(success);
+        Assert.Contains("Founder", error);
+        await using var verify = new ClubContext(options);
+        Assert.Equal("Founder", (await verify.Staffs.SingleAsync(s => s.UserId == "0000000001")).Identity);
+    }
+
+    [Fact]
+    public async Task AssignRoleAsync_PresidentWithDepartmentName_StillClearsDepartment()
+    {
+        // 调用方即使误传部门，社长的部门也必须为空
+        var (repository, options) = CreateIsolatedRepository();
+        await SeedStaffAsync(options, "Minister", "技术部");
+
+        var (success, error) = await repository.AssignRoleAsync("0000000001", "President", "技术部");
+
+        Assert.True(success, error);
+        await using var verify = new ClubContext(options);
+        var saved = await verify.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "0000000001");
+        Assert.Equal("President", saved.Identity);
+        Assert.Null(saved.Department);
+    }
+
+    [Fact]
+    public async Task UpdateStaffAsync_ChangesDepartmentByName()
+    {
+        // C27：Staff/Update 的 DepartmentName 不能再被静默忽略
+        var (repository, options) = CreateIsolatedRepository();
+        await SeedStaffAsync(options, "Minister", "技术部");
+
+        var result = await repository.UpdateStaffAsync(new StaffDO
+        {
+            UserId = "0000000001", Name = "改名后的部长", Identity = "Minister",
+            Department = new DepartmentDO { Name = "设计部" }
+        });
+
+        Assert.True(result);
+        await using var verify = new ClubContext(options);
+        var saved = await verify.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "0000000001");
+        Assert.Equal("改名后的部长", saved.Name);
+        Assert.Equal("Minister", saved.Identity);
+        Assert.Equal("设计部", saved.Department!.Name);
+    }
+
+    [Fact]
+    public async Task UpdateStaffAsync_UnknownDepartment_ReturnsFalseAndKeepsExistingData()
+    {
+        var (repository, options) = CreateIsolatedRepository();
+        await SeedStaffAsync(options, "Minister", "技术部");
+
+        var result = await repository.UpdateStaffAsync(new StaffDO
+        {
+            UserId = "0000000001", Name = "不应该写入的名字", Identity = "Minister",
+            Department = new DepartmentDO { Name = "不存在的部门" }
+        });
+
+        Assert.False(result);
+        await using var verify = new ClubContext(options);
+        var saved = await verify.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "0000000001");
+        Assert.Equal("成员", saved.Name);
+        Assert.Equal("技术部", saved.Department!.Name);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("技术部")]
+    public async Task UpdateStaffAsync_PromotingToPresident_ClearsDepartment(string? departmentName)
+    {
+        // C23：无论请求带不带部门，社长落库后都不能有部门
+        var (repository, options) = CreateIsolatedRepository();
+        await SeedStaffAsync(options, "Minister", "技术部");
+
+        var result = await repository.UpdateStaffAsync(new StaffDO
+        {
+            UserId = "0000000001", Name = "新社长", Identity = "President",
+            Department = departmentName == null ? null : new DepartmentDO { Name = departmentName }
+        });
+
+        Assert.True(result);
+        await using var verify = new ClubContext(options);
+        var saved = await verify.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "0000000001");
+        Assert.Equal("President", saved.Identity);
+        Assert.Null(saved.Department);
+    }
+
+    [Fact]
+    public async Task UpdateStaffAsync_DemotingPresidentToMinister_AssignsDepartment()
+    {
+        // 反向人事调动同样要落库部门，否则社长回到部门时部门丢失
+        var (repository, options) = CreateIsolatedRepository();
+        await SeedStaffAsync(options, "President", null);
+
+        var result = await repository.UpdateStaffAsync(new StaffDO
+        {
+            UserId = "0000000001", Name = "回到部门", Identity = "Minister",
+            Department = new DepartmentDO { Name = "技术部" }
+        });
+
+        Assert.True(result);
+        await using var verify = new ClubContext(options);
+        var saved = await verify.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "0000000001");
+        Assert.Equal("Minister", saved.Identity);
+        Assert.Equal("技术部", saved.Department!.Name);
+    }
+
+    [Fact]
+    public async Task ChangeStaffDepartmentAsync_AssigningDepartmentToPresident_IsRejected()
+    {
+        // C23：社长是社团层面身份，独立调部门接口也不能给他挂部门
+        var (repository, options) = CreateIsolatedRepository();
+        await SeedStaffAsync(options, "President", "技术部");
+
+        var result = await repository.ChangeStaffDepartmentAsync("0000000001", "设计部");
+
+        Assert.False(result);
+        await using var verify = new ClubContext(options);
+        var saved = await verify.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "0000000001");
+        Assert.Equal("技术部", saved.Department!.Name);
+    }
+
+    [Fact]
+    public async Task ChangeStaffDepartmentAsync_ClearingPresidentDepartment_RemainsAllowed()
+    {
+        // 清理历史脏数据（社长身上残留部门）必须仍然可用
+        var (repository, options) = CreateIsolatedRepository();
+        await SeedStaffAsync(options, "President", "技术部");
+
+        var result = await repository.ChangeStaffDepartmentAsync("0000000001", null);
+
+        Assert.True(result);
+        await using var verify = new ClubContext(options);
+        var saved = await verify.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "0000000001");
+        Assert.Null(saved.Department);
+    }
+
     [Fact]
     public async Task OrdinaryWrites_CannotCreatePromoteModifyDeleteOrMoveFounder()
     {

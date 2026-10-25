@@ -94,10 +94,14 @@ public interface IStudentRepository
 
     /// <summary>
     /// 异步批量更新学生
+    /// <para>
+    /// 逐行返回结果：新增、更新、被校验跳过和保存失败分别计数，并给出未写入行的原因。
+    /// 空输入返回空结果且不写库；整批被过滤时不写库，但跳过数量与原因必须可见。
+    /// </para>
     /// </summary>
     /// <param name="list">学生列表</param>
-    /// <returns>是否更新成功</returns>
-    public Task<bool> UpdateManyAsync(List<StudentDO> list);
+    /// <returns>逐行结果统计</returns>
+    public Task<BulkUpdateResultVO> UpdateManyAsync(List<StudentDO> list);
 
     /// <summary>
     /// 异步获取所有成员
@@ -332,18 +336,46 @@ public class StudentRepository(IDbContextFactory<ClubContext> factory) : IStuden
         return result > 0;
     }
 
-    public async Task<bool> UpdateManyAsync(List<StudentDO> list)
+    public async Task<BulkUpdateResultVO> UpdateManyAsync(List<StudentDO> list)
     {
-        // 输入验证
+        var outcome = new BulkUpdateResultVO();
+
+        // 空输入：没有可报告的行，也不触碰数据库
         if (list.Count == 0)
         {
-            return true; // 返回true表示没有需要更新的内容
+            return outcome;
         }
 
-        // 验证列表中的每个学生数据
-        var validStudents = list.Where(model => !string.IsNullOrWhiteSpace(model.UserId))
-            .Where(model =>
-                !string.IsNullOrWhiteSpace(model.PhoneNum) && ValidationTool.IsValidPhoneNumber(model.PhoneNum));
+        // 逐行分类：被既有校验规则过滤掉的行单独记账，不再静默计入成功
+        var validStudents = new List<StudentDO>();
+        foreach (var model in list)
+        {
+            if (string.IsNullOrWhiteSpace(model.UserId))
+            {
+                outcome.Skipped++;
+                outcome.Issues.Add(new BulkUpdateIssueVO
+                {
+                    UserId = model.UserId,
+                    Kind = BulkUpdateIssueVO.KindSkipped,
+                    Reason = "学号不能为空"
+                });
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(model.PhoneNum) || !ValidationTool.IsValidPhoneNumber(model.PhoneNum))
+            {
+                outcome.Skipped++;
+                outcome.Issues.Add(new BulkUpdateIssueVO
+                {
+                    UserId = model.UserId,
+                    Kind = BulkUpdateIssueVO.KindSkipped,
+                    Reason = "手机号格式不正确"
+                });
+                continue;
+            }
+
+            validStudents.Add(model);
+        }
 
         await using var context = await factory.CreateDbContextAsync();
         // 获取所有现有的学生ID
@@ -363,8 +395,10 @@ public class StudentRepository(IDbContextFactory<ClubContext> factory) : IStuden
             .Where(model => existingStudentIds.Contains(model.UserId))
             .ToList();
 
-        // 批量操作：使用EF Core 7.0+的高效批量处理
-        var changes = false;
+        // 本次真正进入写库流程的学号；保存失败时据此逐行标记 failed。
+        // EF Core 的 SaveChanges 是整批事务，一行失败整批都不落库，
+        // 因此失败时不能把其中任何一行算作新增或更新。
+        var pendingUserIds = new List<string>();
 
         // 批量添加新学生
         if (newStudents.Count > 0)
@@ -376,28 +410,58 @@ public class StudentRepository(IDbContextFactory<ClubContext> factory) : IStuden
             }
 
             await context.Students.AddRangeAsync(newStudents);
-            changes = true;
+            pendingUserIds.AddRange(newStudents.Select(student => student.UserId));
         }
 
-        // 批量更新现有学生：使用ExecuteUpdateAsync进行高效的批量更新
-        if (existingStudents.Count > 0)
+        // 批量更新现有学生：逐个取出实体后调用 Update 处理字段覆写规则
+        var updatedCount = 0;
+        foreach (var student in existingStudents)
         {
-            // 对于EF Core 7.0+，可以使用ExecuteUpdateAsync进行批量更新
-            // 这里为每个学生单独更新，因为需要调用Update方法处理复杂的更新逻辑
-            // 在实际应用中，可以根据具体情况选择更高效的批量更新方式
-            foreach (var student in existingStudents)
+            var existingStudent = await context.Students.FirstOrDefaultAsync(s => s.UserId == student.UserId);
+            if (existingStudent == null)
             {
-                var existingStudent = await context.Students.FirstOrDefaultAsync(s => s.UserId == student.UserId);
-                if (existingStudent == null) continue;
-                existingStudent.Update(student);
-                changes = true;
+                // 现有ID快照之后记录被删除：这行没有写入成功，按跳过记账并说明原因
+                outcome.Skipped++;
+                outcome.Issues.Add(new BulkUpdateIssueVO
+                {
+                    UserId = student.UserId,
+                    Kind = BulkUpdateIssueVO.KindSkipped,
+                    Reason = "目标学生不存在，未能更新"
+                });
+                continue;
             }
+
+            existingStudent.Update(student);
+            updatedCount++;
+            pendingUserIds.Add(student.UserId);
         }
 
-        // 只有在有变化时才调用SaveChangesAsync，减少数据库调用
-        if (!changes) return true;
-        var result = await context.SaveChangesAsync();
-        return result > 0;
+        // 与旧实现一致：有变化才调用一次 SaveChanges，保持批量语义与调用次数不变
+        if (pendingUserIds.Count == 0)
+        {
+            return outcome;
+        }
+
+        try
+        {
+            await context.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // 保存失败：整批回滚，逐行标记为 failed，避免把未落库的行算作成功
+            outcome.Failed = pendingUserIds.Count;
+            outcome.Issues.AddRange(pendingUserIds.Select(userId => new BulkUpdateIssueVO
+            {
+                UserId = userId,
+                Kind = BulkUpdateIssueVO.KindFailed,
+                Reason = "保存失败，记录未写入数据库"
+            }));
+            return outcome;
+        }
+
+        outcome.Created = newStudents.Count;
+        outcome.Updated = updatedCount;
+        return outcome;
     }
 
     public async Task<List<MemberVO>> GetAllMembersAsync()

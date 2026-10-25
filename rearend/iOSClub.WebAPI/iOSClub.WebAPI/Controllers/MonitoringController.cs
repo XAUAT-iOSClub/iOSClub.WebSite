@@ -14,6 +14,16 @@ namespace iOSClub.WebAPI.Controllers;
 public class MonitoringController(IDataAccessStatisticsService statisticsService) : ControllerBase
 {
     /// <summary>
+    /// /Monitoring/performance 的固定统计窗口（秒）。
+    /// <para>
+    /// Prometheus 的 http_requests_total 是从进程启动累计的计数器，本身没有窗口概念。
+    /// 接口只能给出"累计请求数 ÷ 固定 3600 秒"这一平均值，因此把窗口显式返回，
+    /// 调用方才能正确理解 averageRequestsPerSecond 的含义。
+    /// </para>
+    /// </summary>
+    private const int MetricsWindowSeconds = 3600;
+
+    /// <summary>
     /// 获取API性能监控数据
     /// </summary>
     /// <returns>监控数据</returns>
@@ -31,7 +41,9 @@ public class MonitoringController(IDataAccessStatisticsService statisticsService
             http = new
             {
                 totalRequests = CalculateTotalRequests(metrics),
-                requestsPerSecond = CalculateRequestsPerSecond(metrics),
+                windowSeconds = MetricsWindowSeconds,
+                // 累计请求数除以固定窗口，只能叫"窗口平均"，不能叫实时速率
+                averageRequestsPerSecond = CalculateAverageRequestsPerSecond(metrics),
                 errorRate = CalculateErrorRate(metrics),
                 averageResponseTime = CalculateAverageResponseTime(metrics),
                 responseTimeByStatus = CalculateResponseTimeByStatus(metrics),
@@ -41,7 +53,8 @@ public class MonitoringController(IDataAccessStatisticsService statisticsService
             // 系统资源指标（如果有）
             system = new
             {
-                cpuUsage = GetSystemMetric(metrics, "process_cpu_seconds_total"),
+                // process_cpu_seconds_total 是进程启动以来的累计 CPU 秒数，不是使用率
+                cpuSecondsTotal = GetSystemMetric(metrics, "process_cpu_seconds_total"),
                 memoryUsage = GetSystemMetric(metrics, "process_working_set_bytes"),
                 gcCollections = GetSystemMetric(metrics, "dotnet_gc_collection_count_total")
             },
@@ -75,7 +88,9 @@ public class MonitoringController(IDataAccessStatisticsService statisticsService
         var httpStats = new
         {
             totalRequests = CalculateTotalRequests(metrics),
-            requestsPerSecond = CalculateRequestsPerSecond(metrics),
+            windowSeconds = MetricsWindowSeconds,
+            // 与 /performance 保持同一含义：累计请求数除以固定窗口的窗口平均
+            averageRequestsPerSecond = CalculateAverageRequestsPerSecond(metrics),
             errorRate = CalculateErrorRate(metrics),
             averageResponseTime = CalculateAverageResponseTime(metrics)
         };
@@ -220,14 +235,18 @@ public class MonitoringController(IDataAccessStatisticsService statisticsService
     }
 
     /// <summary>
-    /// 计算每秒请求数
+    /// 计算固定窗口内的平均每秒请求数
+    /// <para>
+    /// http_requests_total 是累计计数器，这里除以固定的 <see cref="MetricsWindowSeconds"/> 秒，
+    /// 因此结果只是该窗口的平均值，字段名必须体现"average"，不能暗示实时速率。
+    /// </para>
     /// </summary>
     /// <param name="metrics">指标数据</param>
-    /// <returns>每秒请求数</returns>
-    private static double CalculateRequestsPerSecond(Dictionary<string, List<Dictionary<string, object>>> metrics)
+    /// <returns>窗口内平均每秒请求数</returns>
+    private static double CalculateAverageRequestsPerSecond(
+        Dictionary<string, List<Dictionary<string, object>>> metrics)
     {
-        // 简化实现，实际应使用速率计算
-        return CalculateTotalRequests(metrics) / 3600.0; // 假设是最近1小时的数据
+        return CalculateTotalRequests(metrics) / (double)MetricsWindowSeconds;
     }
 
     /// <summary>

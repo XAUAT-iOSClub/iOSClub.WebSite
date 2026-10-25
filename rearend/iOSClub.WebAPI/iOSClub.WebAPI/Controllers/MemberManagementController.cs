@@ -49,32 +49,38 @@ public class MemberManagementController(
 
     /// <summary>
     /// 批量更新或添加学生成员
+    /// <para>
+    /// 响应逐行给出新增、更新、跳过和失败的数量及原因。零写入且存在被跳过或失败的行时，
+    /// 业务码为 <see cref="ErrorCode.OperationFailed"/>，但 <c>data</c> 仍保留完整结果，
+    /// 避免"整批被过滤却提示成功"。
+    /// </para>
     /// </summary>
     /// <param name="list">学生列表</param>
-    /// <returns>更新后的学生列表</returns>
+    /// <returns>逐行更新结果</returns>
     [HttpPost("update-many")]
-    public async Task<ActionResult<ApiResponse<bool>>> UpdateMany(List<StudentUpdateDTO> list)
+    public async Task<ActionResult<ApiResponse<BulkUpdateResultVO>>> UpdateMany(List<StudentUpdateDTO> list)
     {
         var doList = list.Adapt<List<StudentDO>>();
         var result = await studentRepository.UpdateManyAsync(doList);
-        if (result)
+        var message = $"新增 {result.Created}，更新 {result.Updated}，跳过 {result.Skipped}，失败 {result.Failed}";
+
+        // 零写入 + 有未写入行：接口必须失败，但逐行原因仍要能展示
+        if (result.Created + result.Updated == 0 && result.Skipped + result.Failed > 0)
         {
             if (logger.IsEnabled(LogLevel.Information))
             {
-                logger.LogInformation("批量更新学生成功，更新数量: {Count}", list.Count);
+                logger.LogInformation("批量更新学生未写入任何记录：{Message}", message);
             }
 
-            return Ok(ApiResponse<bool>.Success(true, "批量更新学生成功"));
+            return Ok(ApiResponse<BulkUpdateResultVO>.FailWithData(ErrorCode.OperationFailed, result, message));
         }
-        else
+
+        if (logger.IsEnabled(LogLevel.Information))
         {
-            if (logger.IsEnabled(LogLevel.Information))
-            {
-                logger.LogInformation("批量更新学生失败，更新数量: {Count}", list.Count);
-            }
-
-            return Ok(ApiResponse<bool>.Fail(ErrorCode.OperationFailed, "批量更新学生失败"));
+            logger.LogInformation("批量更新学生完成：{Message}", message);
         }
+
+        return Ok(ApiResponse<BulkUpdateResultVO>.Success(result, message));
     }
 
     /// <summary>

@@ -398,6 +398,42 @@ public class DataCentreServiceTests
         Assert.Equal("原有密码哈希", updated.PasswordHash);
     }
 
+    // C23：数据导入也是人员写入路径，导入文件里社长的部门不能被重新挂回。
+    [Fact]
+    public async Task ImportAllDataAsync_DoesNotAttachPresidentToDepartment()
+    {
+        await using (var seed = new ClubContext(_options))
+        {
+            await seed.Database.EnsureDeletedAsync();
+            await seed.Database.EnsureCreatedAsync();
+        }
+
+        var data = new AllDataImportDTO
+        {
+            Departments =
+            [
+                new DepartmentDO { Key = "tech", Name = "技术部", Description = "技术" }
+            ],
+            Staffs =
+            [
+                new StaffDO
+                {
+                    UserId = "20123456",
+                    Name = "社长",
+                    Identity = "President",
+                    Department = new DepartmentDO { Key = "tech", Name = "技术部", Description = "技术" }
+                }
+            ]
+        };
+
+        await _dataCentreService.ImportAllDataAsync(data);
+
+        await using var context = new ClubContext(_options);
+        var saved = await context.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "20123456");
+        Assert.Equal("President", saved.Identity);
+        Assert.Null(saved.Department);
+    }
+
     // 同一份文件里重复出现的学号在 EF 里是"同一实体的两个实例"，跟踪时就会抛错，必须在入库前合并
     [Fact]
     public async Task ImportAllDataAsync_WithDuplicateRowsInSameFile_MergesThemIntoOneRow()

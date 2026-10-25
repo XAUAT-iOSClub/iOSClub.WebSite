@@ -89,6 +89,8 @@ public class ArticleRepository(IDbContextFactory<ClubContext> factory, ICategory
             Title = x.Title,
             LastWriteTime = x.LastWriteTime,
             Category = x.Category == null ? null : new CategoryDO() { Name = x.Category.Name },
+            CategoryId = x.CategoryId,
+            ArticleOrder = x.ArticleOrder,
             Identity = x.Identity,
             VisibleToDepartment = x.VisibleToDepartment
         }).ToListAsync();

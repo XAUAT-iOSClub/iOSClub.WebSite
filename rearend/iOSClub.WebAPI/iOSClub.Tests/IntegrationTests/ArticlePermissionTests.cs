@@ -31,6 +31,7 @@ public class ArticlePermissionTests
     private readonly ArticleRepository _articleRepository;
     private readonly StaffRepository _staffRepository;
     private readonly DepartmentRepository _departmentRepository;
+    private readonly CategoryRepository _categoryRepository;
 
     public ArticlePermissionTests()
     {
@@ -39,7 +40,8 @@ public class ArticlePermissionTests
             .Options;
 
         var factory = new TestDbContextFactory(_options);
-        _articleRepository = new ArticleRepository(factory, new CategoryRepository(factory));
+        _categoryRepository = new CategoryRepository(factory);
+        _articleRepository = new ArticleRepository(factory, _categoryRepository);
         _staffRepository = new StaffRepository(factory);
         _departmentRepository = new DepartmentRepository(factory);
     }
@@ -52,7 +54,7 @@ public class ArticlePermissionTests
             new Claim(ClaimTypes.Role, identity),
         ], "JWT"));
 
-        return new ArticleController(_articleRepository, _staffRepository, _departmentRepository)
+        return new ArticleController(_articleRepository, _staffRepository, _departmentRepository, _categoryRepository)
         {
             ControllerContext = new ControllerContext
             {
@@ -67,6 +69,12 @@ public class ArticlePermissionTests
         return Assert.IsType<ApiResponse>(ok.Value);
     }
 
+    private static ApiResponse<T> Unwrap<T>(ActionResult<ApiResponse<T>> response)
+    {
+        var ok = Assert.IsType<OkObjectResult>(response.Result);
+        return Assert.IsType<ApiResponse<T>>(ok.Value);
+    }
+
     private static ArticleUpdateDTO ValidUpdate(string title, string? identity = "Department", string? department = "科技部")
         => new()
         {
@@ -74,6 +82,16 @@ public class ArticlePermissionTests
             Content = "这是一段足够长的文章内容，用于通过最小长度校验。",
             Identity = identity,
             VisibleToDepartment = department
+        };
+
+    private static ArticleCreateDTO ValidCreate(string path, string? category, string? identity = "Department")
+        => new()
+        {
+            Path = path,
+            Title = "新分类文章",
+            Content = "这是一段足够长的文章内容，用于通过最小长度校验。",
+            Identity = identity,
+            Category = category
         };
 
     private async Task SeedAsync()
@@ -239,5 +257,92 @@ public class ArticlePermissionTests
         Assert.Contains(DepartmentArticlePath, paths);
         Assert.DoesNotContain(MinisterOnlyPath, paths);
         Assert.DoesNotContain(OtherDepartmentArticlePath, paths);
+    }
+
+    // ---- C25：文章写入顺带创建分类的权限边界 ----
+    // 显式分类写入只对 Founder/President 开放（CategoryController.CreateOrUpdate 的角色授权），
+    // 因此部长/部员写文章时引用不存在的分类必须被明确拒绝，且不得偷偷创建分类。
+
+    [Fact]
+    public async Task Department_CreateArticleWithUnknownCategory_IsRejected_AndCategoryIsNotCreated()
+    {
+        await SeedAsync();
+        var controller = CreateController(DepartmentUserId, "Department");
+        const string path = "department-new-category";
+
+        var response = await controller.CreateArticle(ValidCreate(path, "部员想新建的分类"));
+
+        var api = Unwrap(response);
+        Assert.Equal(ErrorCode.InsufficientPermission, api.ErrorCode);
+        Assert.Contains("分类", api.Message);
+        Assert.Null(await _categoryRepository.GetByName("部员想新建的分类"));
+        Assert.Null(await _articleRepository.GetFromPath(path));
+    }
+
+    [Fact]
+    public async Task Minister_CreateArticleWithUnknownCategory_IsRejected_AndCategoryIsNotCreated()
+    {
+        await SeedAsync();
+        var controller = CreateController(MinisterUserId, "Minister");
+        const string path = "minister-new-category";
+
+        var response = await controller.CreateArticle(ValidCreate(path, "部长想新建的分类"));
+
+        var api = Unwrap(response);
+        Assert.Equal(ErrorCode.InsufficientPermission, api.ErrorCode);
+        Assert.Contains("分类", api.Message);
+        Assert.Null(await _categoryRepository.GetByName("部长想新建的分类"));
+        Assert.Null(await _articleRepository.GetFromPath(path));
+    }
+
+    [Fact]
+    public async Task Department_UpdateArticleWithUnknownCategory_IsRejected_AndCategoryIsNotCreated()
+    {
+        await SeedAsync();
+        var controller = CreateController(DepartmentUserId, "Department");
+        var update = ValidUpdate("科技部新标题");
+        update.Category = "部员更新时想新建的分类";
+
+        var response = await controller.UpdateArticle(DepartmentArticlePath, update);
+
+        Assert.Equal(ErrorCode.InsufficientPermission, Unwrap(response).ErrorCode);
+        Assert.Null(await _categoryRepository.GetByName("部员更新时想新建的分类"));
+        var stored = await _articleRepository.GetFromPath(DepartmentArticlePath);
+        Assert.Null(stored!.CategoryId);
+    }
+
+    [Fact]
+    public async Task Founder_CreateArticleWithUnknownCategory_CreatesCategory()
+    {
+        await SeedAsync();
+        var controller = CreateController("2024000004", "Founder");
+        const string path = "founder-new-category";
+
+        var response = await controller.CreateArticle(ValidCreate(path, "社长新建的分类"));
+
+        var created = Assert.IsType<CreatedAtActionResult>(response.Result);
+        var api = Assert.IsType<ApiResponse<ArticleVO>>(created.Value);
+        Assert.Equal(ErrorCode.Success, api.ErrorCode);
+        var category = await _categoryRepository.GetByName("社长新建的分类");
+        Assert.NotNull(category);
+        var stored = await _articleRepository.GetFromPath(path);
+        Assert.Equal(category!.Id, stored!.CategoryId);
+    }
+
+    [Fact]
+    public async Task Founder_UpdateArticleWithUnknownCategory_CreatesCategory()
+    {
+        await SeedAsync();
+        var controller = CreateController("2024000004", "Founder");
+        var update = ValidUpdate("社长更新后的标题", "Department", null);
+        update.Category = "社长更新时新建的分类";
+
+        var response = await controller.UpdateArticle(DepartmentArticlePath, update);
+
+        Assert.Equal(ErrorCode.Success, Unwrap(response).ErrorCode);
+        var category = await _categoryRepository.GetByName("社长更新时新建的分类");
+        Assert.NotNull(category);
+        var stored = await _articleRepository.GetFromPath(DepartmentArticlePath);
+        Assert.Equal(category!.Id, stored!.CategoryId);
     }
 }

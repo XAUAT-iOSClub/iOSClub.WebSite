@@ -194,10 +194,11 @@ public class DataCentreService(IDbContextFactory<ClubContext> contextFactory) : 
 
         // 部员的部门导航在导入时按名称重新挂到库中已有的部门实体上，
         // 避免 EF 把 StaffDO.Department 当成新的部门级联插入。
+        // C23：社长是社团层面身份，导入文件里残留的部门不能再挂回社长。
         var staffDepartmentNames = new Dictionary<string, string>();
         foreach (var staff in data.Staffs.Concat(data.Presidents))
         {
-            var departmentName = staff.Department?.Name;
+            var departmentName = staff.Identity == "President" ? null : staff.Department?.Name;
             if (!string.IsNullOrWhiteSpace(departmentName)) staffDepartmentNames[staff.UserId] = departmentName;
             staff.Department = null;
         }

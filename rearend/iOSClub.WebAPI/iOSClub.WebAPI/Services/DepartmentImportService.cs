@@ -133,8 +133,14 @@ public class DepartmentImportService(IDbContextFactory<ClubContext> factory) : I
         // 2. 逐条 upsert：Staff（部门/职位）+ Student（学生档案字段）
         foreach (var item in incoming)
         {
+            // 从库中补查时必须带上 Department：把社长清成无部门依赖已加载的导航属性，
+            // 否则 EF 认为关系没变化，社长会继续留在原来的部门里。
             var existing = current.FirstOrDefault(s => s.UserId == item.UserId)
-                           ?? await context.Staffs.FirstOrDefaultAsync(s => s.UserId == item.UserId);
+                           ?? await context.Staffs.Include(s => s.Department)
+                               .FirstOrDefaultAsync(s => s.UserId == item.UserId);
+
+            // C23：社长是社团层面身份，名单里的社长行不能挂到被导入的部门上。
+            var targetDepartment = item.Identity == "President" ? null : department;
 
             if (existing == null)
             {
@@ -143,14 +149,14 @@ public class DepartmentImportService(IDbContextFactory<ClubContext> factory) : I
                     UserId = item.UserId,
                     Name = item.Name,
                     Identity = item.Identity,
-                    Department = department
+                    Department = targetDepartment
                 });
             }
             else
             {
                 existing.Name = item.Name;
                 existing.Identity = item.Identity;
-                existing.Department = department;
+                existing.Department = targetDepartment;
             }
 
             var student = studentMap.GetValueOrDefault(item.UserId)

@@ -126,8 +126,20 @@ public class StaffController(IStaffRepository staffRepository, ILogger<StaffCont
         if (targetStaff.Identity == "Founder" || staff.Identity == "Founder")
             return Ok(ApiResponse<object>.Fail(ErrorCode.InsufficientPermission, "创始人权限只能通过专用权限接口设置"));
 
-        if (staff.UserId == User.FindFirstValue(ClaimTypes.NameIdentifier) && staff.Identity != targetStaff.Identity)
-            return Ok(ApiResponse<object>.Fail(ErrorCode.InsufficientPermission, "不能修改自己的权限"));
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (staff.UserId == currentUserId)
+        {
+            if (staff.Identity != targetStaff.Identity)
+                return Ok(ApiResponse<object>.Fail(ErrorCode.InsufficientPermission, "不能修改自己的权限"));
+
+            // C27：与 change-department 接口一致，本人不能调整自己的部门；
+            // 缺省 DepartmentName 视为“部门不变”，改姓名等普通字段仍然放行。
+            var requestedDepartment = string.IsNullOrWhiteSpace(staff.DepartmentName)
+                ? targetStaff.Department?.Name
+                : staff.DepartmentName;
+            if (!string.Equals(requestedDepartment, targetStaff.Department?.Name, StringComparison.Ordinal))
+                return Ok(ApiResponse<object>.Fail(ErrorCode.InsufficientPermission, "不能修改自己的部门"));
+        }
 
         var result = await staffRepository.UpdateStaffAsync(staff.Adapt<StaffDO>());
         if (!result)

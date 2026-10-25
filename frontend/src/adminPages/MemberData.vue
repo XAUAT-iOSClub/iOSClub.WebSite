@@ -562,12 +562,25 @@ const updateMemberUseJson = async (event: Event) => {
     const data = await files[0]?.text().then(x => JSON.parse(x))
     if (!data) throw new Error('Empty data')
     const result = await MemberManagementService.updateManyMembers(data)
-    if (result) {
-      message.success('数据更新成功')
-      await fetchMembers()
+    const counts = `新增 ${result.created} 条，更新 ${result.updated} 条，跳过 ${result.skipped} 条，失败 ${result.failed} 条`
+    const reasons = result.issues
+        .map(issue => `${issue.userId}：${issue.reason}（${issue.kind === 'failed' ? '失败' : '跳过'}）`)
+    const detail = reasons.length ? `；${reasons.join('；')}` : ''
+    const wrote = result.created + result.updated > 0
+    if (!wrote) {
+      // 零写入时后端返回失败业务码（HTTP 400），同样不能提示成功。
+      message.error(`导入失败：未写入任何成员（${counts}）${detail}`)
+    } else if (result.success) {
+      message.success(`数据导入完成：${counts}${detail}`)
+    } else {
+      message.error(`导入未完全成功（${counts}）${detail}`)
     }
+    await fetchMembers()
   } catch (e: any) {
-    message.error('导入失败')
+    message.error(e?.message ? `导入失败：${e.message}` : '导入失败')
+  } finally {
+    // 允许重复选择同一个文件时仍然触发 change。
+    target.value = ''
   }
 }
 

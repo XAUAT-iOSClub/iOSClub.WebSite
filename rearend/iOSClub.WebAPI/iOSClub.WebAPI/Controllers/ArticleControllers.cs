@@ -16,7 +16,8 @@ namespace iOSClub.WebAPI.Controllers;
 public class ArticleController(
     IArticleRepository articleRepository,
     IStaffRepository staffRepository,
-    IDepartmentRepository departmentRepository)
+    IDepartmentRepository departmentRepository,
+    ICategoryRepository categoryRepository)
     : ControllerBase
 {
     /// <summary>
@@ -92,6 +93,13 @@ public class ArticleController(
         {
             return Ok(ApiResponse<ArticleVO>.Fail(ErrorCode.ResourceAlreadyExists,
                 $"路径 '{createDto.Path}' 已存在"));
+        }
+
+        // 文章写入只允许 Founder/President 顺带创建分类，规则与分类写接口一致
+        var categoryError = await GetCategoryWriteErrorAsync(createDto.Category);
+        if (categoryError != null)
+        {
+            return Ok(ApiResponse<ArticleVO>.Fail(ErrorCode.InsufficientPermission, categoryError));
         }
 
         var articleModel = new ArticleDO
@@ -175,6 +183,13 @@ public class ArticleController(
         if (!ArticleAccessPolicy.CanAccess(accessScope, existingArticle))
         {
             return Ok(ApiResponse.Fail(ErrorCode.InsufficientPermission, "无权修改该文章"));
+        }
+
+        // 更新路径与创建路径使用同一条分类写权限规则
+        var categoryError = await GetCategoryWriteErrorAsync(updateDto.Category);
+        if (categoryError != null)
+        {
+            return Ok(ApiResponse.Fail(ErrorCode.InsufficientPermission, categoryError));
         }
 
         // 更新文章信息
@@ -293,6 +308,31 @@ public class ArticleController(
 
         var staff = await staffRepository.GetStaffByIdAsync(user.UserId);
         return new ArticleAccessScope(user.Identity, staff?.Department?.Name);
+    }
+
+    /// <summary>
+    /// 文章写入时分类的权限校验。
+    /// <para>
+    /// 显式分类写入只对 Founder/President 开放（见 <c>CategoryController.CreateOrUpdate</c> 的角色授权），
+    /// 因此文章写入顺带创建缺失分类也沿用同一规则：只有 Founder/President 可以自动建分类；
+    /// 其他职级引用不存在的分类时返回业务错误，且不会创建任何分类。
+    /// </para>
+    /// </summary>
+    /// <param name="categoryName">文章提交的分类名称</param>
+    /// <returns>错误消息；允许写入时返回 null</returns>
+    private async Task<string?> GetCategoryWriteErrorAsync(string? categoryName)
+    {
+        if (string.IsNullOrEmpty(categoryName))
+            return null;
+
+        if (await categoryRepository.GetByName(categoryName) != null)
+            return null;
+
+        var identity = HttpContext.User.GetUser()?.Identity;
+        if (identity is "Founder" or "President")
+            return null;
+
+        return $"分类 '{categoryName}' 不存在，仅创始人（Founder）或社长（President）可以创建新分类";
     }
 
     private static string? NormalizeDepartment(string? departmentName)

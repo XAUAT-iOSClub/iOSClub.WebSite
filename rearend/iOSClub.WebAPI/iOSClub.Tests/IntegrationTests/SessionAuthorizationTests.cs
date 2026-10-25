@@ -91,6 +91,8 @@ public sealed class SessionAuthorizationTests : IDisposable
                 services.AddSingleton(_jwt);
                 services.AddSingleton(redis.Object);
                 services.AddSingleton<IArticleRepository>(new ArticleRepository(factory, new CategoryRepository(factory)));
+                // C25 起 ArticleController 需要 ICategoryRepository 才能激活；这里补齐手工宿主的最小注册。
+                services.AddSingleton<ICategoryRepository>(new CategoryRepository(factory));
                 services.AddSingleton<IStaffRepository>(new StaffRepository(factory));
                 services.AddSingleton<IDepartmentRepository>(new DepartmentRepository(factory));
                 services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

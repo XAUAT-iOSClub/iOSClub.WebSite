@@ -76,6 +76,30 @@ public class DepartmentImportFounderSecurityTests
         Assert.Equal(before, await ReadStateAsync());
     }
 
+    [Fact]
+    public async Task ImportRosterAsync_PresidentRoster_KeepsFounderAndDropsDepartment()
+    {
+        // C23：创始人（Founder）在部门外时名单可以正常导入，
+        // 但名单里的社长不能因此挂上部门，也不能影响 Founder 的身份与部门状态。
+        await SeedAsync(null);
+        var service = new DepartmentImportService(_factory);
+        var dto = new DepartmentImportDTO
+        {
+            Members = [new DepartmentImportMemberDTO { UserId = "0000000003", Name = "新社长", Identity = "President" }]
+        };
+
+        await service.ImportRosterAsync("技术部", dto, "9999999999", "操作员");
+
+        await using var context = _factory.CreateDbContext();
+        var president = await context.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "0000000003");
+        Assert.Equal("President", president.Identity);
+        Assert.Null(president.Department);
+
+        var founder = await context.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "0000000000");
+        Assert.Equal("Founder", founder.Identity);
+        Assert.Null(founder.Department);
+    }
+
     private static List<DepartmentImportMemberDTO> IncomingMembers() =>
     [
         new()

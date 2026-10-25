@@ -764,6 +764,99 @@ public class DepartmentImportServiceTests
     }
 
     [Fact]
+    public async Task ImportRosterAsync_NewPresidentRow_IsNotAttachedToDepartment()
+    {
+        // C23：名单里的社长是社团层面身份，不隶属被导入的部门
+        await SeedDepartmentAsync();
+
+        await _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+        {
+            Members =
+            [
+                new DepartmentImportMemberDTO { UserId = "0000000003", Name = "新社长", Identity = "President" },
+                new DepartmentImportMemberDTO { UserId = "0000000001", Name = "旧部长", Identity = "Minister" }
+            ]
+        }, "9999999999", "操作员");
+
+        await using var context = _contextFactory.CreateDbContext();
+        var president = await context.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "0000000003");
+        Assert.Equal("President", president.Identity);
+        Assert.Null(president.Department);
+
+        // 技术部名单里只剩部长一人，社长没有被算进部门
+        Assert.Equal(1, await context.Staffs.Include(s => s.Department)
+            .CountAsync(s => s.Department != null && s.Department.Name == "技术部"));
+    }
+
+    [Fact]
+    public async Task ImportRosterAsync_ExistingMemberPromotedToPresident_ClearsDepartment()
+    {
+        // C23：原本在部门里的成员被导入为社长时，必须同时解除部门关系
+        await SeedDepartmentAsync();
+
+        await _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+        {
+            Members = [new DepartmentImportMemberDTO { UserId = "0000000001", Name = "旧部长", Identity = "President" }]
+        }, "9999999999", "操作员");
+
+        await using var context = _contextFactory.CreateDbContext();
+        var staff = await context.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "0000000001");
+        Assert.Equal("President", staff.Identity);
+        Assert.Null(staff.Department);
+    }
+
+    [Fact]
+    public async Task RollbackAsync_ToSnapshotWithPresident_KeepsPresidentWithoutDepartment()
+    {
+        // 回滚复用导入流程，同样要遵守社长无部门的规则
+        await SeedDepartmentAsync();
+
+        var v1 = await _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+        {
+            Members = [new DepartmentImportMemberDTO { UserId = "0000000003", Name = "社长", Identity = "President" }]
+        }, "9999999999", "操作员");
+
+        await _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+        {
+            Members = [new DepartmentImportMemberDTO { UserId = "0000000004", Name = "部员", Identity = "Department" }]
+        }, "9999999999", "操作员");
+
+        await _service.RollbackAsync("技术部", v1.HistoryId, "9999999999", "操作员");
+
+        await using var context = _contextFactory.CreateDbContext();
+        var president = await context.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "0000000003");
+        Assert.Equal("President", president.Identity);
+        Assert.Null(president.Department);
+    }
+
+    [Fact]
+    public async Task ImportRosterAsync_PresidentFromOtherDepartment_ClearsExistingDepartment()
+    {
+        // C23：社长原本挂在别的部门时，名单里再次以社长身份导入也必须解除原部门关系
+        await SeedDepartmentAsync();
+        await using (var seed = _contextFactory.CreateDbContext())
+        {
+            var other = new DepartmentDO { Key = "pr", Name = "宣传部", Description = "宣传部" };
+            seed.Departments.Add(other);
+            seed.Staffs.Add(new StaffDO
+            {
+                UserId = "0000000009", Name = "社长", Identity = "President", Department = other
+            });
+            await seed.SaveChangesAsync();
+        }
+
+        await _service.ImportRosterAsync("技术部", new DepartmentImportDTO
+        {
+            Members = [new DepartmentImportMemberDTO { UserId = "0000000009", Name = "社长", Identity = "President" }]
+        }, "9999999999", "操作员");
+
+        await using var context = _contextFactory.CreateDbContext();
+        var president = await context.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "0000000009");
+        Assert.Equal("President", president.Identity);
+        Assert.Null(president.Department);
+    }
+
+    [Fact]
     public async Task RollbackAsync_ThenImportAgain_Works()
     {
         await SeedDepartmentAsync();

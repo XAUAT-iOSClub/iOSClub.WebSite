@@ -165,11 +165,11 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Contains(studentModel.UserName == "23456" ? "userName" : "userId", result.Detail);
     }
     
+    // C21 已移除 /OAuth/exchange 入口，旧的备用登录路径不再存在；
+    // 该路由的移除由 OAuthEntryRemovalTests 单独锁定，这里只保留仍然可用的 /Auth/login。
     [Theory]
     [InlineData("/Auth/login", false)]
     [InlineData("/Auth/login", true)]
-    [InlineData("/OAuth/exchange", false)]
-    [InlineData("/OAuth/exchange", true)]
     public async Task Login_StaffNameAndStudentIdWithoutPassword_IsRejected(string endpoint, bool hasStudent)
     {
         await using var context = new ClubContext(_options);
@@ -207,13 +207,10 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Theory]
-    [InlineData("/Auth/login", "Founder")]
-    [InlineData("/Auth/login", "President")]
-    [InlineData("/Auth/login", "Minister")]
-    [InlineData("/OAuth/exchange", "Founder")]
-    [InlineData("/OAuth/exchange", "President")]
-    [InlineData("/OAuth/exchange", "Minister")]
-    public async Task Login_StaffWithRealStudentPassword_PreservesStaffRole(string endpoint, string role)
+    [InlineData("Founder")]
+    [InlineData("President")]
+    [InlineData("Minister")]
+    public async Task Login_StaffWithRealStudentPassword_PreservesStaffRole(string role)
     {
         await using var context = new ClubContext(_options);
         await context.Database.EnsureDeletedAsync();
@@ -233,7 +230,7 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
                 It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>()))
             .Returns((expectedToken, "verified-refresh-token"));
 
-        var response = await _client.PostAsJsonAsync(endpoint, new
+        var response = await _client.PostAsJsonAsync("/Auth/login", new
         {
             UserId = student.UserId,
             UserName = student.UserName,
@@ -243,7 +240,7 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         response.EnsureSuccessStatusCode();
         using var body = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var data = body.RootElement.GetProperty("data");
-        var actualToken = endpoint == "/Auth/login" ? data.GetString() : data.GetProperty("token").GetString();
+        var actualToken = data.GetString();
         Assert.Equal(expectedToken, actualToken);
     }
 

@@ -118,7 +118,7 @@ public class DepartmentImportControllerTests : IClassFixture<WebApplicationFacto
         Assert.Equal(1, importResult.Data.RoleChanges["Department"][1]);
         Assert.NotNull(importResult.Data.HistoryId);
 
-        // 第二次导入覆盖，应备份前一次的 3 人
+        // 第二次导入覆盖：C23 之后社长不隶属技术部，本次覆盖前技术部实际只有 2 人
         var second = await _client.PostAsJsonAsync("/Department/技术部/import", new DepartmentImportDTO
         {
             FileName = "技术部名单v2.csv",
@@ -130,7 +130,7 @@ public class DepartmentImportControllerTests : IClassFixture<WebApplicationFacto
         });
         var secondResult = JsonConvert.DeserializeObject<ApiResponse<DepartmentImportResultVO>>(
             await second.Content.ReadAsStringAsync());
-        Assert.Equal(3, secondResult!.Data!.BeforeCount);
+        Assert.Equal(2, secondResult!.Data!.BeforeCount);
         Assert.Equal(2, secondResult.Data.AfterCount);
 
         await using (var context = new ClubContext(_options))
@@ -154,8 +154,10 @@ public class DepartmentImportControllerTests : IClassFixture<WebApplicationFacto
         var backupResponse = await _client.GetAsync($"/Department/import-history/{history.Data[0].Id}/backup");
         Assert.Equal(HttpStatusCode.OK, backupResponse.StatusCode);
         var backupJson = await backupResponse.Content.ReadAsStringAsync();
-        Assert.Contains("2023000001", backupJson);
+        // 备份只覆盖部门名单：部长与部员在列，社长（无部门）不在列
+        Assert.Contains("2023000002", backupJson);
         Assert.Contains("2023000003", backupJson);
+        Assert.DoesNotContain("2023000001", backupJson);
     }
 
     [Fact]
@@ -227,7 +229,8 @@ public class DepartmentImportControllerTests : IClassFixture<WebApplicationFacto
             [
                 new DepartmentImportMemberDTO
                 {
-                    UserId = "2023000001", Name = "张三", Identity = "President",
+                    // C23 之后社长不隶属部门，这里用部长验证档案字段随部门名单一起落库与备份
+                    UserId = "2023000001", Name = "张三", Identity = "Minister",
                     Academy = "计算机学院", ClassName = "计科2301", PhoneNum = "13800138001",
                     PoliticalLandscape = "共青团员", Gender = "男", EMail = "zhang@example.com"
                 }

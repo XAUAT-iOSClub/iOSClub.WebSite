@@ -12,9 +12,9 @@ public class ResourceRepositoryTests
 
     public ResourceRepositoryTests()
     {
-        // 使用内存数据库进行测试
+        // 使用内存数据库进行测试；每个测试类实例使用独立库名，避免并发或残留数据互相影响
         _options = new DbContextOptionsBuilder<ClubContext>()
-            .UseInMemoryDatabase(databaseName: "ResourceRepositoryTestDatabase")
+            .UseInMemoryDatabase(databaseName: $"ResourceRepositoryTestDatabase_{Guid.NewGuid()}")
             .Options;
 
         _contextFactory = new TestDbContextFactory(_options);
@@ -139,10 +139,41 @@ public class ResourceRepositoryTests
         var savedResource = await newContext.Resources.FirstOrDefaultAsync(r => r.Name == resource.Name);
 
         // Assert
-        Assert.True(result);
+        Assert.NotNull(result);
         Assert.NotNull(savedResource);
         Assert.Equal(resource.Name, savedResource.Name);
-        Assert.NotNull(savedResource.Id);
+        Assert.Equal(resource.Id, savedResource.Id);
+        Assert.False(string.IsNullOrEmpty(savedResource.Id));
+    }
+
+    [Fact]
+    public async Task AddResourceAsync_ReturnsPersistedResourceWithGeneratedId()
+    {
+        // 回归 C24：仓库在内部生成 Id 后必须把持久化后的 DO 交还调用方，
+        // 否则控制器只能拿着请求 DTO 的空 Id 响应，调用方无法立即按 Id 查询/更新/删除。
+        // 使用独立内存库，避免与其他用例共享状态。
+        var options = new DbContextOptionsBuilder<ClubContext>()
+            .UseInMemoryDatabase(databaseName: $"ResourceAdd_{Guid.NewGuid()}")
+            .Options;
+        var repository = new ResourceRepository(new TestDbContextFactory(options));
+
+        var resource = BogusDataGenerator.ResourceFaker.Generate();
+        resource.Id = string.Empty;
+        var expectedName = resource.Name;
+
+        // Act
+        var added = await repository.AddResourceAsync(resource);
+
+        // Assert
+        Assert.NotNull(added);
+        Assert.False(string.IsNullOrEmpty(added!.Id), "新增资源必须返回服务端生成的非空 Id");
+        Assert.Equal(expectedName, added.Name);
+
+        // 返回的 Id 必须能立即查到同一条资源
+        var persisted = await repository.GetResourceByIdAsync(added.Id);
+        Assert.NotNull(persisted);
+        Assert.Equal(added.Id, persisted!.Id);
+        Assert.Equal(expectedName, persisted.Name);
     }
 
     [Fact]

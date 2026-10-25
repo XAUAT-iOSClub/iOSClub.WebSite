@@ -118,6 +118,13 @@ public interface ILoginService
     /// <param name="clientId">客户端ID</param>
     /// <returns>刷新令牌</returns>
     public Task<string> GetRefreshToken(string userId, string clientId = "");
+
+    /// <summary>
+    /// 根据刷新令牌反查用户ID（供 /SSO/token 的 refresh_token 授权使用）
+    /// </summary>
+    /// <param name="refreshToken">刷新令牌</param>
+    /// <returns>用户ID，令牌未知或已失效时返回空字符串</returns>
+    public Task<string> GetUserIdByRefreshToken(string refreshToken);
 }
 
 public class LoginService(
@@ -134,6 +141,9 @@ public class LoginService(
 
     private const string TokenPrefix = "token:";
     private const string RefreshTokenPrefix = "refresh:";
+    // 刷新令牌反向索引：刷新令牌本身是不透明 GUID，/SSO/token 的
+    // refresh_token 授权只携带令牌，必须靠 refresh-owner:{token} 反查 userId。
+    private const string RefreshOwnerPrefix = "refresh-owner:";
     private const int RefreshTokenExpiryHours = 72; // 刷新令牌过期时间：72小时
 
     public async Task<string> Login(LoginDTO model, string clientId = "", string scope = "")
@@ -172,6 +182,9 @@ public class LoginService(
         var batch = _db.CreateBatch();
         _ = batch.StringSetAsync(redisKey, accessToken, TimeSpan.FromMinutes(20 * (model.RememberMe ? 24 : 1)));
         _ = batch.StringSetAsync(refreshTokenKey, refreshToken, TimeSpan.FromHours(RefreshTokenExpiryHours));
+        // 反向索引与刷新令牌同生命周期，供 refresh_token 授权反查用户
+        _ = batch.StringSetAsync(GetRefreshOwnerKey(refreshToken), model.UserId,
+            TimeSpan.FromHours(RefreshTokenExpiryHours));
         _ = batch.StringSetAsync(userInfoKey, JsonSerializer.Serialize(memberModel),
             TimeSpan.FromHours(RefreshTokenExpiryHours * (model.RememberMe ? 24 : 2)));
         batch.Execute();
@@ -227,6 +240,10 @@ public class LoginService(
         var refreshTokenKey = $"{RefreshTokenPrefix}{userId}{s}";
         await _db.StringSetAsync(refreshTokenKey, refreshToken, TimeSpan.FromHours(RefreshTokenExpiryHours));
 
+        // 写入刷新令牌反向索引，供 /SSO/token 的 refresh_token 授权定位账号
+        await _db.StringSetAsync(GetRefreshOwnerKey(refreshToken), userId,
+            TimeSpan.FromHours(RefreshTokenExpiryHours));
+
         // 存储用户信息，便于后续验证
         var userInfoKey = $"user:{userId}{s}";
         await _db.StringSetAsync(userInfoKey, JsonSerializer.Serialize(memberModel),
@@ -247,11 +264,20 @@ public class LoginService(
             var s = await GetClientKey(clientId);
 
             // 同时删除用户信息、访问令牌和刷新令牌
-            await _db.KeyDeleteAsync([
+            // 登出前先取出当前刷新令牌，以便连同其反向索引一起清理
+            var storedRefreshToken = await _db.StringGetAsync($"{RefreshTokenPrefix}{userId}{s}");
+            var keysToDelete = new List<RedisKey>
+            {
                 $"user:{userId}{s}",
                 $"{TokenPrefix}{userId}{s}",
                 $"{RefreshTokenPrefix}{userId}{s}"
-            ]);
+            };
+            if (storedRefreshToken.HasValue && !string.IsNullOrEmpty(storedRefreshToken))
+            {
+                keysToDelete.Add(GetRefreshOwnerKey(storedRefreshToken.ToString()));
+            }
+
+            await _db.KeyDeleteAsync(keysToDelete.ToArray());
 
             if (logger.IsEnabled(LogLevel.Information))
             {
@@ -306,6 +332,9 @@ public class LoginService(
         if (!string.IsNullOrEmpty(refreshToken))
         {
             _ = batch.StringSetAsync(refreshTokenKey, refreshToken, TimeSpan.FromHours(RefreshTokenExpiryHours));
+            // 注册/补写令牌同样要维护反向索引，否则新签发的刷新令牌无法用于续期
+            _ = batch.StringSetAsync(GetRefreshOwnerKey(refreshToken), userId,
+                TimeSpan.FromHours(RefreshTokenExpiryHours));
         }
 
         _ = batch.StringSetAsync(userInfoKey, JsonSerializer.Serialize(memberInfo),
@@ -391,6 +420,12 @@ public class LoginService(
             // 更新Redis中的令牌信息
             await _db.StringSetAsync($"{TokenPrefix}{userId}{s}", newAccessToken, TimeSpan.FromMinutes(20));
             await _db.StringSetAsync(refreshTokenKey, newRefreshToken, TimeSpan.FromHours(RefreshTokenExpiryHours));
+
+            // 轮换：新刷新令牌写入反向索引，旧令牌的反向索引立即删除，
+            // 保证旧令牌重放时 refresh_token 端点连 userId 都查不到。
+            await _db.StringSetAsync(GetRefreshOwnerKey(newRefreshToken), userId,
+                TimeSpan.FromHours(RefreshTokenExpiryHours));
+            await _db.KeyDeleteAsync(GetRefreshOwnerKey(refreshToken));
 
             // 将旧的刷新令牌加入黑名单
             var isAdded = await AddRefreshTokenToBlacklist(refreshToken);
@@ -514,6 +549,34 @@ public class LoginService(
             if (logger.IsEnabled(LogLevel.Error))
             {
                 logger.LogError(ex, "获取刷新令牌失败，用户ID：{UserId}", userId);
+            }
+
+            return "";
+        }
+    }
+
+    /// <summary>
+    /// 根据刷新令牌反查用户ID（供 /SSO/token 的 refresh_token 授权使用）。
+    /// 刷新令牌是不透明 GUID，请求中不含 userId，只能通过签发时写入的
+    /// refresh-owner:{token} 反向索引定位账号。
+    /// </summary>
+    /// <param name="refreshToken">刷新令牌</param>
+    /// <returns>用户ID，令牌未知或已失效时返回空字符串</returns>
+    public async Task<string> GetUserIdByRefreshToken(string refreshToken)
+    {
+        if (string.IsNullOrEmpty(refreshToken)) return "";
+
+        try
+        {
+            var owner = await _db.StringGetAsync(GetRefreshOwnerKey(refreshToken));
+            if (!owner.HasValue || string.IsNullOrEmpty(owner)) return "";
+            return owner.ToString();
+        }
+        catch (Exception ex)
+        {
+            if (logger.IsEnabled(LogLevel.Error))
+            {
+                logger.LogError(ex, "根据刷新令牌查询用户ID失败");
             }
 
             return "";
@@ -711,6 +774,11 @@ public class LoginService(
 </body>
 </html>";
     }
+
+    /// <summary>
+    /// 刷新令牌反向索引键：refresh-owner:{refreshToken} -> userId
+    /// </summary>
+    private static string GetRefreshOwnerKey(string refreshToken) => $"{RefreshOwnerPrefix}{refreshToken}";
 
     private async Task<string> GetClientKey(string clientId, bool isNotHasEMail = false)
     {

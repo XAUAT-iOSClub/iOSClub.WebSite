@@ -127,17 +127,18 @@ public class ResourceController(
         if (user == null || !IsAdmin(user.Identity))
             return Ok(ApiResponse<ResourceVO>.Fail(ErrorCode.InsufficientPermission, "权限不足，需要管理员身份"));
 
-        var result = await resourceRepository.AddResourceAsync(resource.Adapt<ResourceDO>());
-        if (!result)
+        var createdResource = await resourceRepository.AddResourceAsync(resource.Adapt<ResourceDO>());
+        if (createdResource == null)
             return Ok(ApiResponse<ResourceVO>.Fail(ErrorCode.OperationFailed, "添加资源失败"));
 
         if (logger.IsEnabled(LogLevel.Information))
         {
-            logger.LogInformation("添加资源成功，资源ID: {ResourceId}", resource.Id);
+            logger.LogInformation("添加资源成功，资源ID: {ResourceId}", createdResource.Id);
         }
 
-        return CreatedAtAction(nameof(GetResourceById), new { id = resource.Id },
-            ApiResponse<ResourceVO>.Success(resource.Adapt<ResourceVO>(), "添加资源成功"));
+        // 响应与 Location 一律使用持久化后的 DO：ID 由仓库生成，请求 DTO 里的 ID 始终为空。
+        return CreatedAtAction(nameof(GetResourceById), new { id = createdResource.Id },
+            ApiResponse<ResourceVO>.Success(createdResource.Adapt<ResourceVO>(), "添加资源成功"));
     }
 
     /// <summary>

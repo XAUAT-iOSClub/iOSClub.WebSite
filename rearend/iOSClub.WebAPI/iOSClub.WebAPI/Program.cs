@@ -263,18 +263,10 @@ builder.Services.AddAuthentication(options =>
                 await context.Response.WriteAsJsonAsync(body);
             }
         };
-    })
-    .AddCookie("OAuth2", options =>
-    {
-        options.LoginPath = "/OAuth/login";
-        options.LogoutPath = "/OAuth/logout";
-        options.AccessDeniedPath = "/OAuth/access-denied";
-        options.ExpireTimeSpan = TimeSpan.FromMinutes(30);
-        options.SlidingExpiration = true;
-        options.Cookie.HttpOnly = true;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-        options.Cookie.SameSite = SameSiteMode.None;
     });
+    // C21：原 "OAuth2" Cookie 方案没有对应的外部 OAuth 处理器，Challenge 会指回
+    // 自身 LoginPath 形成循环，logout 又使用未注册的 Cookies 方案。
+    // 该入口已整体移除，第三方登录统一走 /SSO。
 
 #endregion
 

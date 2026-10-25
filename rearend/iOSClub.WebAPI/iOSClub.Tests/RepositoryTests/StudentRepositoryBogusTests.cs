@@ -108,8 +108,9 @@ public class StudentRepositoryBogusTests
         var result = await _studentRepository.UpdateManyAsync(students);
         var allStudents = await _studentRepository.GetAll();
 
-        // Assert
-        Assert.True(result);
+        // Assert：返回值改为逐行结果，15 名新学生都计入新增
+        Assert.Equal(15, result.Created);
+        Assert.Equal(0, result.Skipped);
         Assert.Equal(15, allStudents.Count);
     }
 

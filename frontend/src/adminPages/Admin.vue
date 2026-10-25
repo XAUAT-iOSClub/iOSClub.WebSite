@@ -79,9 +79,10 @@
               </span>
             </div>
             <div class="space-y-1">
-              <span class="text-xs text-gray-500 dark:text-gray-400">每秒请求数</span>
+              <!-- 标签必须写明固定统计窗口，避免把窗口累计平均误解为瞬时 QPS。 -->
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ httpWindowLabel }}</span>
               <span class="text-2xl font-bold text-gray-900 dark:text-white">
-                {{ monitoringData.http.requestsPerSecond.toFixed(2) }}
+                {{ monitoringData.http.averageRequestsPerSecond.toFixed(2) }}
               </span>
             </div>
             <div class="space-y-1">
@@ -145,12 +146,27 @@ const statistics = ref({
 const monitoringData = ref({
   http: {
     totalRequests: 0,
-    requestsPerSecond: 0,
+    // 后端固定 3600 秒统计窗口；平均每秒请求数 = 窗口内请求数 / windowSeconds。
+    windowSeconds: 3600,
+    averageRequestsPerSecond: 0,
     errorRate: 0,
     averageResponseTime: 0
   },
   timestamp: null as Date | null
 })
+
+// 把统计窗口格式化成“1 小时 / 5 分钟 / 30 秒”，用于说明指标含义。
+const formatMonitoringWindow = (seconds: number | undefined): string => {
+  const total = typeof seconds === 'number' && Number.isFinite(seconds) && seconds > 0
+      ? Math.round(seconds)
+      : 3600
+  if (total % 3600 === 0) return `${total / 3600} 小时`
+  if (total % 60 === 0) return `${total / 60} 分钟`
+  return `${total} 秒`
+}
+
+const httpWindowLabel = computed(() =>
+    `近 ${formatMonitoringWindow(monitoringData.value.http.windowSeconds)}平均每秒请求数`)
 
 // Helper: Format numbers nicely (e.g. 1,000)
 const formatNumber = (num: number) => {
@@ -260,12 +276,14 @@ const fetchMonitoringData = async () => {
     const performanceData = await MonitoringService.getPerformanceMetrics()
     monitoringData.value = {
       http: {
-        totalRequests: performanceData.http?.totalRequests ?? 0,
-        requestsPerSecond: performanceData.http?.requestsPerSecond ?? 0,
-        errorRate: performanceData.http?.errorRate ?? 0,
-        averageResponseTime: performanceData.http?.averageResponseTime ?? 0
+        totalRequests: performanceData?.http?.totalRequests ?? 0,
+        windowSeconds: performanceData?.http?.windowSeconds ?? 3600,
+        // 后端已改名为 averageRequestsPerSecond（固定窗口内的平均值）。
+        averageRequestsPerSecond: performanceData?.http?.averageRequestsPerSecond ?? 0,
+        errorRate: performanceData?.http?.errorRate ?? 0,
+        averageResponseTime: performanceData?.http?.averageResponseTime ?? 0
       },
-      timestamp: performanceData.timestamp ? new Date(performanceData.timestamp) : null
+      timestamp: performanceData?.timestamp ? new Date(performanceData.timestamp) : null
     }
   } catch (e) {
     console.error('Failed to fetch monitoring data:', e)

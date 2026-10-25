@@ -510,6 +510,7 @@ public class SSOController(
     {
         [JsonPropertyName("grant_type")] public string GrantType { get; set; } = "";
         [JsonPropertyName("code")] public string Code { get; set; } = "";
+        [JsonPropertyName("refresh_token")] public string RefreshToken { get; set; } = "";
         [JsonPropertyName("client_id")] public string ClientId { get; set; } = "";
         [JsonPropertyName("client_secret")] public string ClientSecret { get; set; } = "";
         [JsonPropertyName("redirect_uri")] public string RedirectUri { get; set; } = "";
@@ -572,6 +573,7 @@ public class SSOController(
             {
                 GrantType = form["grant_type"].FirstOrDefault() ?? "",
                 Code = form["code"].FirstOrDefault() ?? "",
+                RefreshToken = form["refresh_token"].FirstOrDefault() ?? "",
                 ClientId = form["client_id"].FirstOrDefault() ?? "",
                 ClientSecret = form["client_secret"].FirstOrDefault() ?? "",
                 RedirectUri = form["redirect_uri"].FirstOrDefault() ?? "",
@@ -601,6 +603,13 @@ public class SSOController(
             }
 
             return BadRequest(new { error = "invalid_request", error_description = "缺少必需参数: grant_type" });
+        }
+
+        // refresh_token 授权（RFC 6749 §6）：刷新请求只携带刷新令牌，
+        // 由 LoginService 的反向索引定位账号，再走既有校验与轮换逻辑。
+        if (request.GrantType == "refresh_token")
+        {
+            return await HandleRefreshTokenGrant(request);
         }
 
         if (request.GrantType != "authorization_code")
@@ -906,6 +915,114 @@ public class SSOController(
 
             return BadRequest(new { error = "invalid_grant", error_description = "无效的授权码" });
         }
+    }
+
+    /// <summary>
+    /// 处理 grant_type=refresh_token 的令牌续期请求（RFC 6749 §6）。
+    /// 刷新请求只携带刷新令牌与客户端凭据，userId 由 LoginService 的
+    /// refresh-owner 反向索引反查；令牌校验、黑名单检查与轮换沿用既有实现。
+    /// </summary>
+    /// <param name="request">令牌请求</param>
+    /// <returns>新的访问令牌与轮换后的刷新令牌</returns>
+    private async Task<IActionResult> HandleRefreshTokenGrant(TokenRequest request)
+    {
+        if (string.IsNullOrEmpty(request.RefreshToken))
+        {
+            if (logger.IsEnabled(LogLevel.Warning))
+            {
+                logger.LogWarning("Token refresh failed: missing refresh_token parameter");
+            }
+
+            return BadRequest(new { error = "invalid_request", error_description = "缺少必需参数: refresh_token" });
+        }
+
+        // 客户端校验与 authorization_code 分支保持一致：
+        // client_id 缺失时允许用 redirect_uri 反查客户端凭据。
+        if (string.IsNullOrEmpty(request.ClientId))
+        {
+            if (string.IsNullOrEmpty(request.RedirectUri))
+            {
+                if (logger.IsEnabled(LogLevel.Warning))
+                {
+                    logger.LogWarning("Token refresh failed: missing client_id parameter");
+                }
+
+                return BadRequest(new { error = "invalid_request", error_description = "缺少必需参数: client_id" });
+            }
+
+            var app = await clientAppRepository.GetByRedirectUriAsync(request.RedirectUri);
+            request.ClientId = app?.ClientId ?? "";
+            request.ClientSecret = app?.ClientSecret ?? "";
+        }
+
+        if (string.IsNullOrEmpty(request.ClientSecret))
+        {
+            if (logger.IsEnabled(LogLevel.Warning))
+            {
+                logger.LogWarning("Token refresh failed: missing client_secret parameter");
+            }
+
+            return BadRequest(new { error = "invalid_request", error_description = "缺少必需参数: client_secret" });
+        }
+
+        var clientApp = await clientAppRepository.ValidateCredentialsAsync(request.ClientId, request.ClientSecret);
+        if (clientApp == null)
+        {
+            if (logger.IsEnabled(LogLevel.Warning))
+            {
+                logger.LogWarning("Token refresh failed: invalid client credentials for client {ClientId}",
+                    request.ClientId);
+            }
+
+            return Unauthorized(new { error = "invalid_client", error_description = "无效的客户端凭据" });
+        }
+
+        var userId = await loginService.GetUserIdByRefreshToken(request.RefreshToken);
+        if (string.IsNullOrEmpty(userId))
+        {
+            if (logger.IsEnabled(LogLevel.Warning))
+            {
+                logger.LogWarning("Token refresh failed: unknown refresh token for client {ClientId}",
+                    request.ClientId);
+            }
+
+            return BadRequest(new { error = "invalid_grant", error_description = "无效的刷新令牌" });
+        }
+
+        // 令牌未知、已过期、已轮换、已列入黑名单或不属于该客户端时均返回空
+        var newAccessToken = await loginService.RefreshToken(userId, request.RefreshToken, request.ClientId,
+            DefaultScore);
+        if (string.IsNullOrEmpty(newAccessToken))
+        {
+            if (logger.IsEnabled(LogLevel.Warning))
+            {
+                logger.LogWarning("Token refresh failed: refresh token rejected for user {UserId}", userId);
+            }
+
+            return BadRequest(new { error = "invalid_grant", error_description = "无效的刷新令牌" });
+        }
+
+        var newRefreshToken = await loginService.GetRefreshToken(userId, request.ClientId);
+        if (string.IsNullOrEmpty(newRefreshToken))
+        {
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Token refresh failed: unable to get rotated refresh token for user {UserId}",
+                    userId);
+            }
+
+            return BadRequest(new { error = "server_error", error_description = "刷新令牌生成失败" });
+        }
+
+        // scope 不随刷新令牌持久化，SSO 统一使用默认 scope 签发新令牌
+        return Ok(new Dictionary<string, object>
+        {
+            ["access_token"] = newAccessToken,
+            ["refresh_token"] = newRefreshToken,
+            ["token_type"] = "Bearer",
+            ["expires_in"] = 7200,
+            ["scope"] = DefaultScore
+        });
     }
 
     /// <summary>
@@ -1307,6 +1424,10 @@ public class SSOController(
                 {
                     logger.LogError(ex, "Failed to store session in Redis for user {UserId}", user.UserId);
                 }
+
+                // 会话没有真正写入 Redis 时不能返回成功，否则前端会继续成功回调，
+                // 而后端拿不到用户信息。这里向上层暴露存储失败，交由前端提示重试。
+                return StatusCode(500, new { success = false, message = "会话存储失败" });
             }
 
             return Ok(new { success = true, message = "会话存储成功" });

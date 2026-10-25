@@ -58,10 +58,11 @@ public interface IStaffRepository
     Task<bool> CreateStaffAsync(StaffDO staff);
     
     /// <summary>
-    /// 更新员工
+    /// 更新员工。DepartmentName 映射到 <see cref="StaffDO.Department"/> 后按名称解析并落库，
+    /// 部门不存在或目标为社长（社团层面身份，无部门）时按 C23/C27 规则处理。
     /// </summary>
     /// <param name="staff">员工模型</param>
-    /// <returns>是否更新成功</returns>
+    /// <returns>是否更新成功；部门不存在时返回 false</returns>
     Task<bool> UpdateStaffAsync(StaffDO staff);
     
     /// <summary>
@@ -86,7 +87,7 @@ public interface IStaffRepository
     Task<IEnumerable<StaffDO>> GetStaffsByIdentitiesAsync(params string[] identities);
     
     /// <summary>
-    /// 更改员工部门
+    /// 更改员工部门。社长属于社团层面身份，不允许挂部门（清空仍可用）。
     /// </summary>
     /// <param name="userId">员工ID</param>
     /// <param name="departmentName">部门名称，可为null表示移除部门</param>
@@ -114,10 +115,13 @@ public class StaffRepository(IDbContextFactory<ClubContext> factory) : IStaffRep
         if (!allowed.Contains(identity)) return (false, "身份标识无效");
         if (userId == operatorId) return (false, "不能修改自己的权限");
         await using var context = await factory.CreateDbContextAsync();
-        var staff = await context.Staffs.FirstOrDefaultAsync(s => s.UserId == userId);
+        // 必须带上 Department：把社长调整为无部门时，EF 只有加载了导航属性才能识别关系变更。
+        var staff = await context.Staffs.Include(s => s.Department).FirstOrDefaultAsync(s => s.UserId == userId);
         if (staff == null) return (false, "成员不存在");
         if ((identity is "Minister" or "Department") && string.IsNullOrWhiteSpace(departmentName)) return (false, "该身份必须指定部门");
         if (identity == "Founder" && staff.Identity != "Founder" && !string.IsNullOrWhiteSpace(departmentName)) departmentName = null;
+        // C23：社长属于社团层面的身份，Founder 调权入口也不能给他保留部门。
+        if (identity == "President") departmentName = null;
         DepartmentDO? department = null;
         if (!string.IsNullOrWhiteSpace(departmentName)) { department = await context.Departments.FirstOrDefaultAsync(d => d.Name == departmentName); if (department == null) return (false, "部门不存在"); }
         if (staff.Identity == "Founder" && identity != "Founder" && await context.Staffs.CountAsync(s => s.Identity == "Founder") <= 1) return (false, "至少需要保留一个 Founder");
@@ -251,6 +255,10 @@ public class StaffRepository(IDbContextFactory<ClubContext> factory) : IStaffRep
         if (staff.Identity is not ("President" or "Minister" or "Department"))
             return false;
 
+        // C23：社长是社团层面身份，创建入口同样不能挂部门。
+        if (staff.Identity == "President")
+            staff.Department = null;
+
         await using var context = await factory.CreateDbContextAsync();
 
         if (await StaffExistsAsync(staff.UserId))
@@ -275,13 +283,37 @@ public class StaffRepository(IDbContextFactory<ClubContext> factory) : IStaffRep
 
         await using var context = await factory.CreateDbContextAsync();
 
-        var existingStaff = await context.Staffs.FirstOrDefaultAsync(s => s.UserId == staff.UserId);
+        var existingStaff = await context.Staffs
+            .Include(s => s.Department)
+            .FirstOrDefaultAsync(s => s.UserId == staff.UserId);
         if (existingStaff == null || existingStaff.Identity == "Founder")
             return false;
+
+        // C27：DTO 的 DepartmentName 映射到 staff.Department，这里按名称解析并落库；
+        // 以前只改 Name / Identity，部门变更被静默丢弃。
+        // 缺省 DepartmentName 表示“不修改部门”，清空部门走独立的调部门接口；
+        // C23：社长目标无论请求带不带部门都清空。
+        DepartmentDO? department;
+        if (staff.Identity == "President")
+        {
+            department = null;
+        }
+        else if (string.IsNullOrWhiteSpace(staff.Department?.Name))
+        {
+            department = existingStaff.Department;
+        }
+        else
+        {
+            var (resolved, error) = await ResolveDepartmentAsync(context, staff.Identity, staff.Department.Name);
+            if (error.Length > 0)
+                return false;
+            department = resolved;
+        }
 
         // 更新字段
         existingStaff.Name = staff.Name;
         existingStaff.Identity = staff.Identity;
+        existingStaff.Department = department;
 
         context.Staffs.Update(existingStaff);
         return await context.SaveChangesAsync() > 0;
@@ -325,19 +357,34 @@ public class StaffRepository(IDbContextFactory<ClubContext> factory) : IStaffRep
         if (staff == null || staff.Identity == "Founder")
             return false;
 
-        if (string.IsNullOrEmpty(departmentName))
-        {
-            staff.Department = null;
-        }
-        else
-        {
-            var department = await context.Departments.FirstOrDefaultAsync(d => d.Name == departmentName);
-            if (department == null)
-                return false;
+        // C23：社长是社团层面身份，允许清空历史残留部门，但拒绝通过调部门接口给他挂部门。
+        if (staff.Identity == "President" && !string.IsNullOrWhiteSpace(departmentName))
+            return false;
 
-            staff.Department = department;
-        }
+        var (department, error) = await ResolveDepartmentAsync(context, staff.Identity, departmentName);
+        if (error.Length > 0)
+            return false;
 
+        staff.Department = department;
         return await context.SaveChangesAsync() > 0;
+    }
+
+    /// <summary>
+    /// 按名称解析目标部门，供“更新成员”与“调整部门”共用同一套部门规则。
+    /// C23：社长是社团层面身份，任何写入路径都不保留部门；
+    /// C27：名称为空表示清空部门，部门不存在时返回错误而不是静默忽略。
+    /// </summary>
+    /// <param name="context">当前数据库上下文</param>
+    /// <param name="identity">目标身份</param>
+    /// <param name="departmentName">目标部门名称，可为 null 表示清空</param>
+    /// <returns>解析出的部门（null 表示无部门）及错误信息（空串表示成功）</returns>
+    private static async Task<(DepartmentDO? Department, string Error)> ResolveDepartmentAsync(
+        ClubContext context, string identity, string? departmentName)
+    {
+        if (identity == "President" || string.IsNullOrWhiteSpace(departmentName))
+            return (null, "");
+
+        var department = await context.Departments.FirstOrDefaultAsync(d => d.Name == departmentName);
+        return department == null ? (null, "部门不存在") : (department, "");
     }
 }
