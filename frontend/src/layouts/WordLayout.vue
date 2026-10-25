@@ -44,7 +44,7 @@
                 @click="mobileMenuOpen = true"
                 class="rounded-full p-2 text-zinc-500 hover:bg-zinc-100 active:scale-95 dark:text-zinc-400 dark:hover:bg-white/10 transition-all"
             >
-              <Icon icon="lucide:panel-left" class="h-5 w-5"/>
+              <Icon icon="panel-left" class="h-5 w-5"/>
             </button>
 
             <!-- 面包屑导航 -->
@@ -53,11 +53,11 @@
                 <!-- 根节点中文 -->
                 <span class="cursor-default hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors">文档</span>
                 <template v-for="(crumb, index) in breadcrumbs" :key="index">
-                  <Icon icon="lucide:chevron-right" class="h-3.5 w-3.5 text-zinc-300 dark:text-zinc-600"/>
+                  <Icon icon="chevron-right" class="h-3.5 w-3.5 text-zinc-300 dark:text-zinc-600"/>
                   <div class="flex items-center gap-1.5">
                     <!-- 最后一个节点高亮 -->
                     <Icon
-                        :icon="index === breadcrumbs.length - 1 ? 'lucide:file-text' : 'lucide:folder'"
+                        :icon="index === breadcrumbs.length - 1 ? 'file-text' : 'folder'"
                         class="h-3.5 w-3.5"
                         :class="index === breadcrumbs.length - 1 ? 'text-blue-500 dark:text-blue-400' : ''"
                     />
@@ -80,7 +80,7 @@
                 class="group flex items-center justify-center rounded-md p-2 transition-colors hover:bg-zinc-100 dark:hover:bg-white/10"
                 title="搜索 (Cmd+K)"
             >
-              <Icon icon="lucide:search"
+              <Icon icon="search"
                     class="h-4.5 w-4.5 text-zinc-400 transition-colors group-hover:text-zinc-600 dark:group-hover:text-zinc-200"/>
             </button>
 
@@ -95,7 +95,7 @@
             >
               <button
                   class="group flex items-center justify-center rounded-md p-2 transition-colors hover:bg-zinc-100 dark:hover:bg-white/10">
-                <Icon icon="lucide:more-horizontal"
+                <Icon icon="ellipsis"
                       class="h-4.5 w-4.5 text-zinc-400 transition-colors group-hover:text-zinc-600 dark:group-hover:text-zinc-200"/>
               </button>
             </n-dropdown>
@@ -160,7 +160,7 @@
           class="spotlight-container w-[90vw] max-w-[600px] overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-[#1c1c1e]">
         <!-- 搜索输入框 -->
         <div class="flex items-center gap-3 border-b border-zinc-200/50 px-4 py-4 dark:border-white/10">
-          <Icon icon="lucide:search" class="h-5 w-5 text-zinc-500"/>
+          <Icon icon="search" class="h-5 w-5 text-zinc-500"/>
           <n-input
               v-model:value="searchKeyword"
               placeholder="搜索文章..."
@@ -176,7 +176,7 @@
               </div>
               <button v-else-if="searchKeyword" @click="searchKeyword = ''"
                       class="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200">
-                <Icon icon="lucide:x-circle" class="w-4 h-4"/>
+                <Icon icon="circle-x" class="w-4 h-4"/>
               </button>
             </template>
           </n-input>
@@ -194,7 +194,7 @@
           <div v-if="!searchKeyword && !searchResults.length" class="py-12 text-center">
             <div
                 class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800">
-              <Icon icon="lucide:search" class="h-6 w-6 text-zinc-400"/>
+              <Icon icon="search" class="h-6 w-6 text-zinc-400"/>
             </div>
             <p class="text-sm text-zinc-500 dark:text-zinc-400">输入关键词开始搜索文档...</p>
           </div>
@@ -227,7 +227,7 @@
           <!-- 无结果 -->
           <div v-else-if="searchKeyword && !isSearching" class="py-8 text-center">
             <div class="flex justify-center mb-3">
-              <Icon icon="lucide:file-x" class="h-6 w-6 text-zinc-400" />
+              <Icon icon="file-x" class="h-6 w-6 text-zinc-400" />
             </div>
             <p class="text-zinc-500 dark:text-zinc-400">未找到与 "{{ searchKeyword }}" 相关的文章</p>
           </div>
@@ -237,11 +237,11 @@
         <div
             class="border-t border-zinc-200 bg-zinc-50 px-4 py-2 text-[10px] text-zinc-500 dark:border-white/10 dark:bg-zinc-800/50 dark:text-zinc-400 flex justify-between items-center">
           <div class="flex items-center">
-            <Icon icon="lucide:info" class="h-3 w-3 mr-1" />
+            <Icon icon="info" class="h-3 w-3 mr-1" />
             <span>本地搜索支持</span>
           </div>
           <div class="flex items-center">
-            <Icon icon="lucide:corner-down-left" class="h-3 w-3 mr-1" />
+            <Icon icon="corner-down-left" class="h-3 w-3 mr-1" />
             <span class="font-mono">回车键确认搜索</span>
           </div>
         </div>
@@ -263,7 +263,7 @@ import {
   NDropdown,
   useMessage
 } from 'naive-ui'
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import MenuContent from '../components/MenuContent.vue'
 import {ArticleService} from '../services/ArticleService'
 import {useAuthorizationStore} from '../stores/Authorization'

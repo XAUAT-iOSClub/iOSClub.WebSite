@@ -64,7 +64,7 @@
           ">
             <div class="flex items-center gap-3">
               <div class="w-8 h-8 rounded-full bg-[#007aff] flex items-center justify-center text-white">
-                 <Icon icon="ion:chatbubbles-outline" width="18" />
+                 <Icon icon="messages-square" width="18" />
               </div>
               <div class="flex flex-col">
                 <span class="text-xs text-[#86868b] font-medium">QQ 群号</span>
@@ -79,14 +79,14 @@
                 class="text-[#007aff] hover:bg-[#007aff]/10"
             >
               <template #icon>
-                <Icon icon="ion:copy-outline" />
+                <Icon icon="copy" />
               </template>
             </n-button>
           </div>
 
            <!-- 扫码提示 -->
           <div class="flex items-center justify-center gap-2 text-[#86868b] text-xs mt-4">
-            <Icon icon="ion:scan-outline" />
+            <Icon icon="scan" />
             <span>使用 QQ 扫一扫加入群聊</span>
           </div>
         </div>
@@ -103,7 +103,7 @@
 <script setup lang="ts">
 import { h, onMounted } from 'vue'
 import { useMessage, NImage, NButton } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import { NavigateTo } from '../../lib/site'
 import { ios } from '../../services/AuthService'
 
@@ -118,7 +118,7 @@ const handleCopyClick = async () => {
   try {
     await navigator.clipboard.writeText(textToCopy)
     message.success('群号已复制', {
-        icon: () => h(Icon, { icon: 'ion:checkmark-circle', class: 'text-[#007aff]' }),
+        icon: () => h(Icon, { icon: 'circle-check', class: 'text-[#007aff]' }),
         closable: true
     }) 
   } catch (error) {

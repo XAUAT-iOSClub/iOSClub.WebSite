@@ -32,12 +32,12 @@
           <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start pt-4">
             <button @click="scrollToAbout" class="apple-btn-primary">
               <span>了解更多</span>
-              <Icon icon="fluent:arrow-down-20-filled" class="ml-2 text-lg"/>
+              <Icon icon="arrow-down" class="ml-2 text-lg"/>
             </button>
 
             <button @click="router.push('/login')" class="apple-btn-secondary">
               <span>加入我们</span>
-              <Icon icon="fluent:person-add-20-filled" class="ml-2 text-lg"/>
+              <Icon icon="user-plus" class="ml-2 text-lg"/>
             </button>
           </div>
         </div>
@@ -121,7 +121,7 @@
                   class="mt-8 flex items-center text-base font-semibold transition-all duration-300 group-hover:translate-x-1"
                   :style="{ color: card.color }">
                 <span v-if="card.url">了解更多</span>
-                <Icon v-if="card.url" icon="fluent:arrow-right-20-filled" class="ml-2"/>
+                <Icon v-if="card.url" icon="arrow-right" class="ml-2"/>
               </div>
             </div>
 
@@ -136,7 +136,7 @@
         <div class="mt-16 text-center">
           <button @click="router.push('/About')" class="apple-text-link text-lg group">
             深入了解我们的故事
-            <Icon icon="fluent:chevron-right-20-regular"
+            <Icon icon="chevron-right"
                   class="inline-block ml-1 group-hover:translate-x-1 transition-transform"/>
           </button>
         </div>
@@ -162,7 +162,7 @@
              class="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">陕ICP备2024031872号</a>
           <a href="https://gitee.com/XAUATiOSClub" target="_blank"
              class="hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center gap-1">
-             <Icon icon="simple-icons:gitee"/>
+             <Icon icon="brand-gitee"/>
              Gitee
           </a>
         </div>
@@ -174,7 +174,7 @@
 <script setup lang="ts">
 import {ref} from 'vue'
 import {useRouter} from 'vue-router'
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 
 const router = useRouter()
 const logoHovered = ref(false)
@@ -194,10 +194,10 @@ const getBgColor = (hex: string) => {
   return hex + '1A' // 10% opacity
 }
 
-// Data adapted with updated Icons (Fluent UI style for Apple look)
+// Data adapted with updated Icons (Lucide, Apple look)
 const cards: Card[] = [
   {
-    iconName: 'fluent:hat-graduation-20-filled',
+    iconName: 'graduation-cap',
     title: '我们是谁?',
     content: '由 Apple 公司资金支持，受西建大学管中心指导的顶尖科技社团。在这里，创意不再是空想。',
     color: '#0071E3', // Apple Blue
@@ -205,21 +205,21 @@ const cards: Card[] = [
     url: '/About'
   },
   {
-    iconName: 'fluent:people-community-20-filled',
+    iconName: 'users-round',
     title: '结伴同行',
     content: '无论你是代码大神还是小白，这里都有你的位置。',
     color: '#FF9500', // Apple Orange
     bgColor: getBgColor('#FF9500'),
   },
   {
-    iconName: 'fluent:phone-laptop-20-filled',
+    iconName: 'monitor-smartphone',
     title: '不止 iOS',
     content: '跨越专业界限，涵盖软件开发、硬件开发、产品策划与前沿数码体验。',
     color: '#34C759', // Apple Green
     bgColor: getBgColor('#34C759'),
   },
   {
-    iconName: 'fluent:calendar-star-20-filled',
+    iconName: 'calendar-heart',
     title: '精彩活动',
     content: '定期的 WWDC 观影、技术沙龙、Swift 编程挑战赛以及 Apple 官方专家讲座。',
     color: '#FF375F', // Apple Pink
@@ -227,14 +227,14 @@ const cards: Card[] = [
     url: '/Event'
   },
   {
-    iconName: 'fluent:code-circle-20-filled',
+    iconName: 'square-code',
     title: '项目孵化',
     content: '寻找志同道合的 iMember，从 0 到 1 ，构建新的世界。',
     color: '#AF52DE', // Apple Purple
     bgColor: getBgColor('#AF52DE'),
   },
   {
-    iconName: 'fluent:rocket-20-filled',
+    iconName: 'rocket',
     title: '构建社区',
     content: '致力于打造西建大最具影响力的科技社区，连接全校每一位极客。',
     color: '#5E5CE6', // Apple Indigo

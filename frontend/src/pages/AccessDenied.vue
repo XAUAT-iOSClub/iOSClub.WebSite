@@ -4,7 +4,7 @@
       <div class="text-center mb-8">
         <div class="w-20 h-20 mx-auto bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
           <n-icon size="48" color="#ff4d4f">
-            <Icon icon="ant-design:close-circle" />
+            <Icon icon="circle-x" />
           </n-icon>
         </div>
         <h1 class="text-xl md:text-3xl font-semibold bg-gradient-to-r from-red-500 to-red-600 bg-clip-text text-transparent">
@@ -31,7 +31,7 @@
 <script setup lang="ts">
 import {NButton, NIcon} from 'naive-ui'
 import {useRouter, useRoute} from 'vue-router'
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 
 const router = useRouter()
 const route = useRoute()

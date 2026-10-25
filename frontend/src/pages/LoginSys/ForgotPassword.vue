@@ -10,7 +10,8 @@
         <!-- 仿 Apple ID 风格的图标容器 -->
         <div class="icon-wrapper w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-sm transition-transform hover:scale-105 duration-300">
           <Icon
-              :icon="step === 1 ? 'ph:lock-key-open-fill' : 'ph:shield-check-fill'"
+              :icon="step === 1 ? 'lock-keyhole-open' : 'shield-check'"
+              morph
               class="w-10 h-10 transition-all duration-300 icon-color"
           />
         </div>
@@ -35,7 +36,7 @@
                 class="apple-input"
             >
               <template #prefix>
-                <Icon icon="ph:student" class="text-gray-400 text-lg mr-1" />
+                <Icon icon="graduation-cap" class="text-gray-400 text-lg mr-1" />
               </template>
             </n-input>
           </n-form-item>
@@ -70,7 +71,7 @@
                 class="apple-input"
             >
               <template #prefix>
-                <Icon icon="ph:lock-key" class="text-gray-400 text-lg mr-1" />
+                <Icon icon="lock-keyhole" class="text-gray-400 text-lg mr-1" />
               </template>
             </n-input>
           </n-form-item>
@@ -85,7 +86,7 @@
                 class="apple-input"
             >
               <template #prefix>
-                <Icon icon="ph:check-circle" class="text-gray-400 text-lg mr-1" />
+                <Icon icon="circle-check" class="text-gray-400 text-lg mr-1" />
               </template>
             </n-input>
           </n-form-item>
@@ -93,12 +94,12 @@
 
         <!-- 状态提示 -->
         <div v-if="errorMsg" class="flex items-center justify-center gap-1.5 text-red-500 mb-4 text-sm bg-red-50 dark:bg-red-900/20 py-2 rounded-lg">
-          <Icon icon="ph:warning-circle-fill" />
+          <Icon icon="circle-alert" />
           <span>{{ errorMsg }}</span>
         </div>
 
         <div v-if="successMsg" class="flex items-center justify-center gap-1.5 text-green-500 mb-4 text-sm bg-green-50 dark:bg-green-900/20 py-2 rounded-lg">
-          <Icon icon="ph:check-circle-fill" />
+          <Icon icon="circle-check" />
           <span>{{ successMsg }}</span>
         </div>
 
@@ -121,7 +122,7 @@
                 to="/Login"
                 class="flex items-center gap-1 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
             >
-              <Icon icon="ph:arrow-left" />
+              <Icon icon="arrow-left" />
               返回登录
             </router-link>
 
@@ -143,7 +144,8 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { NForm, NFormItem, NInput, NButton, NInputOtp } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
+
 // 假设这里的 Service 路径保持不变
 import { AuthService } from '../../services/AuthService';
 

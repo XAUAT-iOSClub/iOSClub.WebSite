@@ -36,7 +36,7 @@
           <div class="relative group">
             <button class="nav-link">
               关于我们
-              <Icon icon="material-symbols:keyboard-arrow-down-rounded" class="text-gray-400" width="16"/>
+              <Icon icon="chevron-down" class="text-gray-400" width="16"/>
             </button>
             <!-- Custom Dropdown Menu -->
             <div
@@ -61,7 +61,7 @@
           <div class="relative group">
             <button class="nav-link">
               社团动态
-              <Icon icon="material-symbols:keyboard-arrow-down-rounded" class="text-gray-400" width="16"/>
+              <Icon icon="chevron-down" class="text-gray-400" width="16"/>
             </button>
             <!-- Custom Dropdown Menu -->
             <div
@@ -91,7 +91,7 @@
                 class="icon-btn"
                 title="切换主题"
             >
-              <Icon :icon="isDark ? 'solar:moon-stars-bold' : 'solar:sun-2-bold'" class="w-4 h-4"/>
+              <Icon :icon="isDark ? 'moon-star' : 'sun'" morph class="w-4 h-4"/>
             </button>
             <!-- Custom Dropdown Menu -->
             <div
@@ -138,7 +138,8 @@
             @click="drawerVisible = !drawerVisible"
         >
           <Icon
-              :icon="drawerVisible ? 'material-symbols:close-rounded' : 'material-symbols:menu-rounded'"
+              :icon="drawerVisible ? 'x' : 'menu'"
+              morph
               width="24"
           />
         </button>
@@ -234,7 +235,7 @@
 import {ref, onMounted, onUnmounted, computed} from 'vue'
 import {useRouter} from 'vue-router'
 import {useAuthorizationStore} from '../stores/Authorization'
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import {useThemeStore} from '../stores/theme'
 import {storeToRefs} from 'pinia'
 
@@ -244,9 +245,9 @@ const {setThemePreference} = themeStore
 
 // 主题选项配置
 const themeOptions = [
-  {key: 'light', label: '浅色', icon: 'solar:sun-2-bold'},
-  {key: 'dark', label: '深色', icon: 'solar:moon-stars-bold'},
-  {key: 'system', label: '跟随系统', icon: 'basil:desktop-outline'}
+  {key: 'light', label: '浅色', icon: 'sun'},
+  {key: 'dark', label: '深色', icon: 'moon-star'},
+  {key: 'system', label: '跟随系统', icon: 'monitor'}
 ]
 
 // 主题选择处理函数

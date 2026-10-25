@@ -16,7 +16,7 @@
       <div class="pt-10 pb-6 text-center">
         <div
             class="mx-auto w-16 h-16 mb-4 bg-linear-to-b from-gray-100 to-gray-300 dark:from-gray-700 dark:to-gray-800 rounded-[18px] shadow-inner flex items-center justify-center border border-white/20 icon-box">
-          <Icon icon="ion:person" class="text-3xl text-gray-600 dark:text-gray-200"/>
+          <Icon icon="user" class="text-3xl text-gray-600 dark:text-gray-200"/>
         </div>
         <h1 class="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
           iMember ID
@@ -55,7 +55,7 @@
                            class="apple-input">
                 <n-input v-model:value="form.name" placeholder="姓名" :maxlength="20">
                   <template #prefix>
-                    <Icon icon="ion:person-outline" class="input-icon"/>
+                    <Icon icon="user" class="input-icon"/>
                   </template>
                 </n-input>
               </n-form-item>
@@ -65,7 +65,7 @@
                            class="apple-input">
                 <n-input v-model:value="form.studentId" placeholder="学号" :maxlength="10">
                   <template #prefix>
-                    <Icon icon="ion:card-outline" class="input-icon"/>
+                    <Icon icon="credit-card" class="input-icon"/>
                   </template>
                 </n-input>
               </n-form-item>
@@ -95,7 +95,7 @@
                            class="apple-input">
                 <n-input v-model:value="form.className" placeholder="班级 (如: 机电2401)" :maxlength="20">
                   <template #prefix>
-                    <Icon icon="ion:people-outline" class="input-icon"/>
+                    <Icon icon="users" class="input-icon"/>
                   </template>
                 </n-input>
               </n-form-item>
@@ -105,7 +105,7 @@
                            class="apple-input">
                 <n-input v-model:value="form.phone" placeholder="手机号码" :maxlength="11">
                   <template #prefix>
-                    <Icon icon="ion:call-outline" class="input-icon"/>
+                    <Icon icon="phone" class="input-icon"/>
                   </template>
                 </n-input>
               </n-form-item>
@@ -115,7 +115,7 @@
                            class="apple-input">
                 <n-input v-model:value="form.email" placeholder="电子邮箱" :maxlength="256">
                   <template #prefix>
-                    <Icon icon="ion:mail-outline" class="input-icon"/>
+                    <Icon icon="mail" class="input-icon"/>
                   </template>
                 </n-input>
               </n-form-item>
@@ -132,7 +132,7 @@
                     class="apple-input"
                 >
                   <template #prefix>
-                    <Icon icon="ion:lock-closed-outline" class="input-icon"/>
+                    <Icon icon="lock" class="input-icon"/>
                   </template>
                 </n-input>
               </n-form-item>
@@ -149,7 +149,7 @@
                     class="apple-input"
                 >
                   <template #prefix>
-                    <Icon icon="ion:shield-checkmark-outline" class="input-icon"/>
+                    <Icon icon="shield-check" class="input-icon"/>
                   </template>
                 </n-input>
               </n-form-item>
@@ -158,7 +158,7 @@
               <div
                   class="mt-4 p-4 bg-gray-50 dark:bg-white/5 rounded-xl text-sm border border-gray-100 dark:border-white/10">
                 <div class="flex items-center gap-2 mb-2 text-gray-500 dark:text-gray-400">
-                  <Icon icon="ion:information-circle-outline"/>
+                  <Icon icon="info"/>
                   <span class="font-medium">信息预览</span>
                 </div>
                 <div class="space-y-1 text-gray-800 dark:text-gray-200 font-medium pl-1">
@@ -175,7 +175,7 @@
             <div v-else-if="currentStep === 4" key="step4" class="flex flex-col items-center py-6 text-center">
               <div
                   class="w-20 h-20 rounded-full bg-[#34c759]/10 text-[#34c759] flex items-center justify-center mb-6 animate-scale-in">
-                <Icon icon="ion:checkmark-circle" class="text-5xl"/>
+                <Icon icon="circle-check" class="text-5xl"/>
               </div>
               <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">欢迎加入</h2>
               <p class="text-gray-500 dark:text-gray-400">账号已创建，即将跳转...</p>
@@ -187,7 +187,7 @@
         <!-- 错误提示 -->
         <div v-if="errorMsg"
              class="mt-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg flex items-center gap-2 animate-shake">
-          <Icon icon="ion:alert-circle"/>
+          <Icon icon="circle-alert"/>
           {{ errorMsg }}
         </div>
 
@@ -199,7 +199,7 @@
               type="button"
               class="w-12 h-12 rounded-full flex items-center justify-center bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/20 transition-colors"
           >
-            <Icon icon="ion:arrow-back"/>
+            <Icon icon="arrow-left"/>
           </button>
 
           <button
@@ -208,9 +208,9 @@
               type="button"
               class="flex-1 h-12 rounded-full bg-[#0071e3] hover:bg-[#0077ED] active:bg-[#006edb] text-white font-medium text-[15px] transition-all shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            <Icon v-if="loading" icon="svg-spinners:180-ring" class="text-xl"/>
+            <Icon v-if="loading" icon="loader" spin class="text-xl"/>
             <span v-else>{{ currentStep === 3 ? '完成注册' : '继续' }}</span>
-            <Icon v-if="!loading && currentStep !== 3" icon="ion:arrow-forward"/>
+            <Icon v-if="!loading && currentStep !== 3" icon="arrow-right"/>
           </button>
         </div>
 
@@ -219,7 +219,7 @@
           <a href="/Login"
              class="text-sm text-[#0071e3] dark:text-[#2997ff] hover:underline font-medium inline-flex items-center gap-1">
             已有 iMember ID? 立即登录
-            <Icon icon="ion:chevron-forward" class="text-xs"/>
+            <Icon icon="chevron-right" class="text-xs"/>
           </a>
         </div>
 
@@ -232,7 +232,7 @@
 import {ref, reactive, onMounted} from 'vue'
 import {useRouter} from 'vue-router'
 import {NInput, NForm, NFormItem, NSelect} from 'naive-ui'
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import {useAuthorizationStore} from '../../stores/Authorization'
 import {ios} from '../../services/AuthService'
 import {InfoService} from '../../services/InfoService'

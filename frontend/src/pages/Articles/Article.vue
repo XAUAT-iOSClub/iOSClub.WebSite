@@ -11,7 +11,7 @@
     <div v-else-if="!loading && !article" class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
       <div class="bg-white dark:bg-neutral-800 rounded-2xl shadow-lg p-12 text-center">
         <div class="flex justify-center items-center w-full">
-          <Icon icon="mingcute:alert-fill" width="5rem" height="5rem" style="color: #ea580c"
+          <Icon icon="triangle-alert" width="5rem" height="5rem" style="color: #ea580c"
                 class="dark:text-orange-400"/>
         </div>
         <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">文章未找到</h2>
@@ -32,7 +32,7 @@ import {computed, ref, watch} from 'vue';
 import {useRoute, useRouter} from 'vue-router';
 import {ArticleService} from '../../services/ArticleService';
 import MarkdownComponent from '../../components/MarkdownComponent.vue';
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 
 const route = useRoute();
 const router = useRouter();

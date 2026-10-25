@@ -49,7 +49,7 @@
                 />
                 <div v-else
                      class="h-full w-full flex items-center justify-center bg-gray-50 dark:bg-neutral-800 text-gray-300">
-                  <Icon icon="ph:apple-logo-fill" class="text-6xl opacity-20"/>
+                  <Icon icon="brand-apple" class="text-6xl opacity-20"/>
                 </div>
                 <!-- 渐变遮罩 (提升文字可读性) -->
                 <div class="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent pointer-events-none"></div>
@@ -67,7 +67,7 @@
                 <div
                     class="mt-4 flex items-center text-sm font-medium text-secondary group-hover:text-blue-500 transition-colors">
                   <span>阅读全文</span>
-                  <Icon icon="ion:chevron-forward" class="ml-1 w-4 h-4"/>
+                  <Icon icon="chevron-right" class="ml-1 w-4 h-4"/>
                 </div>
               </div>
             </article>
@@ -76,7 +76,7 @@
           <!-- 空状态 -->
           <div v-else class="flex flex-col items-center justify-center py-20 text-center">
             <div class="w-20 h-20 rounded-full bg-gray-100 dark:bg-neutral-800 flex items-center justify-center mb-4">
-              <Icon icon="ph:newspaper" class="text-3xl text-gray-400"/>
+              <Icon icon="newspaper" class="text-3xl text-gray-400"/>
             </div>
             <p class="text-lg text-gray-500 font-medium">暂无文章</p>
           </div>
@@ -101,7 +101,7 @@
                     {{ formatDate(entry.updated) }}
                 </span>
               </div>
-              <Icon icon="ion:chevron-forward" class="w-5 h-5 text-gray-300 dark:text-gray-600 mr-4"/>
+              <Icon icon="chevron-right" class="w-5 h-5 text-gray-300 dark:text-gray-600 mr-4"/>
             </div>
           </div>
         </section>
@@ -120,7 +120,7 @@
 
 <script setup lang="ts">
 import {onMounted, ref} from 'vue';
-import {Icon} from '@iconify/vue';
+import Icon from '@/components/Icon.vue'
 import {NSpin} from 'naive-ui';
 import PageStart from "../../components/PageStart.vue";
 import {loadRssArticles, loadAtomEntries} from '../../services/RssService';

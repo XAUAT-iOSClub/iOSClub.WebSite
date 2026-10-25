@@ -23,7 +23,7 @@
             </div>
             <div
                 class="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center shadow-sm transition-transform group-hover:scale-110">
-              <Icon icon="mdi:ip-network" class="w-6 h-6 text-red-600 dark:text-red-400"/>
+              <Icon icon="network" class="w-6 h-6 text-red-600 dark:text-red-400"/>
             </div>
           </div>
         </div>
@@ -41,7 +41,7 @@
             </div>
             <div
                 class="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center shadow-sm transition-transform group-hover:scale-110">
-              <Icon icon="mdi:ip-network-outline" class="w-6 h-6 text-orange-600 dark:text-orange-400"/>
+              <Icon icon="network" class="w-6 h-6 text-orange-600 dark:text-orange-400"/>
             </div>
           </div>
         </div>
@@ -59,7 +59,7 @@
             </div>
             <div
                 class="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center shadow-sm transition-transform group-hover:scale-110">
-              <Icon icon="mdi:shield-check" class="w-6 h-6 text-blue-600 dark:text-blue-400"/>
+              <Icon icon="shield-check" class="w-6 h-6 text-blue-600 dark:text-blue-400"/>
             </div>
           </div>
         </div>
@@ -70,7 +70,7 @@
         <div v-if="!statsLoading && stats" class="flex items-center justify-between mb-6">
           <div class="flex items-center gap-3">
             <div class="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center">
-              <Icon icon="mdi:chart-line" class="w-5 h-5 text-purple-600 dark:text-purple-400"/>
+              <Icon icon="chart-line" class="w-5 h-5 text-purple-600 dark:text-purple-400"/>
             </div>
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">缓存性能</h3>
           </div>
@@ -87,7 +87,7 @@
         <div class="apple-card p-6">
           <div class="flex items-center gap-3 mb-4">
             <div class="w-8 h-8 rounded-xl bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
-              <Icon icon="mdi:plus-circle" class="w-5 h-5 text-green-600 dark:text-green-400"/>
+              <Icon icon="circle-plus" class="w-5 h-5 text-green-600 dark:text-green-400"/>
             </div>
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">添加黑名单</h3>
           </div>
@@ -115,7 +115,7 @@
                 class="w-full apple-button"
             >
               <template #icon>
-                <Icon icon="mdi:shield-plus"/>
+                <Icon icon="shield-plus"/>
               </template>
               添加到黑名单
             </n-button>
@@ -126,7 +126,7 @@
         <div class="apple-card p-6">
           <div class="flex items-center gap-3 mb-4">
             <div class="w-8 h-8 rounded-xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
-              <Icon icon="mdi:minus-circle" class="w-5 h-5 text-red-600 dark:text-red-400"/>
+              <Icon icon="circle-minus" class="w-5 h-5 text-red-600 dark:text-red-400"/>
             </div>
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">移除黑名单</h3>
           </div>
@@ -153,7 +153,7 @@
                 class="w-full apple-button"
             >
               <template #icon>
-                <Icon icon="mdi:shield-minus"/>
+                <Icon icon="shield-minus"/>
               </template>
               从黑名单移除
             </n-button>
@@ -165,7 +165,7 @@
       <div class="apple-card p-6 mb-8">
         <div class="flex items-center gap-3 mb-4">
           <div class="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
-            <Icon icon="mdi:magnify" class="w-5 h-5 text-blue-600 dark:text-blue-400"/>
+            <Icon icon="search" class="w-5 h-5 text-blue-600 dark:text-blue-400"/>
           </div>
           <h3 class="text-lg font-semibold text-gray-900 dark:text-white">检查 IP</h3>
         </div>
@@ -184,7 +184,7 @@
               class="apple-button"
           >
             <template #icon>
-              <Icon icon="mdi:check-circle"/>
+              <Icon icon="circle-check"/>
             </template>
             检查
           </n-button>
@@ -197,7 +197,8 @@
                : 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'">
           <div class="flex items-center gap-3">
             <Icon
-                :icon="checkResult.isBlacklisted ? 'mdi:shield-alert' : 'mdi:shield-check'"
+                :icon="checkResult.isBlacklisted ? 'shield-alert' : 'shield-check'"
+                morph
                 class="w-6 h-6"
                 :class="checkResult.isBlacklisted ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'"
             />
@@ -224,7 +225,7 @@
             class="apple-button"
         >
           <template #icon>
-            <Icon icon="mdi:refresh"/>
+            <Icon icon="refresh-cw"/>
           </template>
           刷新缓存
         </n-button>
@@ -235,7 +236,7 @@
             class="apple-button"
         >
           <template #icon>
-            <Icon icon="mdi:reload"/>
+            <Icon icon="rotate-cw"/>
           </template>
           重新加载统计
         </n-button>
@@ -248,7 +249,7 @@
 <script setup lang="ts">
 import {ref, onMounted, computed, watch} from 'vue';
 import {useMessage, NInput, NButton, NForm, NFormItem} from 'naive-ui';
-import {Icon} from '@iconify/vue';
+import Icon from '@/components/Icon.vue'
 import * as echarts from 'echarts'
 import {IpBlacklistService, type BlacklistStats, type IpCheckResult} from '../services/IpBlacklistService';
 import {useThemeStore} from '../stores/theme';

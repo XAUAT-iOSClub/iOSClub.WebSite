@@ -19,13 +19,13 @@
               <div class="apple-sub-card p-6 flex flex-col justify-between h-full">
                 <div class="flex items-center justify-between mb-4">
                   <div class="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-                    <Icon icon="ion:ribbon-outline" class="text-xl"/>
+                    <Icon icon="award" class="text-xl"/>
                     <span class="text-sm font-medium">领导核心</span>
                   </div>
                   <div class="flex gap-2">
                     <button v-if="!loading" @click="() => openAddMember(null)" class="apple-icon-btn text-blue-500"
                             data-testid="leader-add" title="添加领导">
-                      <Icon icon="ion:add-circle" width="24"/>
+                      <Icon icon="circle-plus" width="24"/>
                     </button>
                   </div>
                 </div>
@@ -39,7 +39,7 @@
                     <span class="font-medium">{{ member.userName }}</span>
                     <button @click.stop="() => deleteMember(member, ministers)"
                             class="ml-1 opacity-0 group-hover:opacity-100 transition-opacity text-red-500">
-                      <Icon icon="ion:close-circle"/>
+                      <Icon icon="circle-x"/>
                     </button>
                   </div>
                   <div v-if="ministers.length === 0" class="text-gray-400 italic text-sm">暂无领导成员</div>
@@ -50,7 +50,7 @@
               <div class="apple-sub-card p-6 flex flex-col justify-between h-full">
                 <div class="flex items-center justify-between mb-4">
                   <div class="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-                    <Icon icon="ion:people-outline" class="text-xl"/>
+                    <Icon icon="users" class="text-xl"/>
                     <span class="text-sm font-medium">成员总数</span>
                   </div>
                   <n-dropdown
@@ -59,7 +59,7 @@
                       @select="handleOverviewExportSelect"
                   >
                     <button class="apple-icon-btn text-blue-500" title="导出数据">
-                      <Icon icon="ion:cloud-download-outline" width="24"/>
+                      <Icon icon="cloud-download" width="24"/>
                     </button>
                   </n-dropdown>
                 </div>
@@ -86,7 +86,7 @@
                     <!-- Loading State for Charts -->
                     <div v-if="loading"
                          class="absolute inset-0 z-10 flex items-center justify-center bg-white/50 dark:bg-black/50 backdrop-blur-sm">
-                      <Icon icon="ion:load-c" class="animate-spin text-3xl text-blue-500"/>
+                      <Icon icon="loader-circle" class="animate-spin text-3xl text-blue-500"/>
                     </div>
                   </div>
                 </div>
@@ -136,7 +136,7 @@
                   </div>
                   <div class="flex flex-wrap items-center gap-2">
                     <button @click="() => openImportModal(department)" class="apple-btn secondary">
-                      <Icon icon="ion:cloud-upload-outline" class="mr-1"/>
+                      <Icon icon="cloud-upload" class="mr-1"/>
                       导入名单
                     </button>
                     <n-dropdown
@@ -145,21 +145,21 @@
                         @select="(key) => handleExportSelect(department, key)"
                     >
                       <button class="apple-btn secondary">
-                        <Icon icon="ion:download-outline" class="mr-1"/>
+                        <Icon icon="download" class="mr-1"/>
                         导出
-                        <Icon icon="ion:chevron-down" class="ml-1 text-xs"/>
+                        <Icon icon="chevron-down" class="ml-1 text-xs"/>
                       </button>
                     </n-dropdown>
                     <button @click="() => openHistory(department)" class="apple-btn secondary">
-                      <Icon icon="ion:time-outline" class="mr-1"/>
+                      <Icon icon="clock" class="mr-1"/>
                       导入历史
                     </button>
                     <button @click="() => openDepartment(department)" class="apple-btn secondary">
-                      <Icon icon="ion:settings-outline" class="mr-1"/>
+                      <Icon icon="settings" class="mr-1"/>
                       设置
                     </button>
                     <button @click="() => deleteDepartment(department)" class="apple-btn danger">
-                      <Icon icon="ion:trash-outline" class="mr-1"/>
+                      <Icon icon="trash" class="mr-1"/>
                       删除
                     </button>
                   </div>
@@ -182,10 +182,10 @@
                       <button @click="() => openAddMember(department, 'Minister')"
                               class="apple-icon-btn text-blue-500"
                               data-testid="minister-add" title="提拔部长">
-                        <Icon icon="ion:add"/>
+                        <Icon icon="plus"/>
                       </button>
                       <button @click="() => deleteAll(department.ministers)" class="apple-icon-btn text-red-500">
-                        <Icon icon="ion:trash-bin-outline"/>
+                        <Icon icon="trash"/>
                       </button>
                     </div>
                   </div>
@@ -193,11 +193,11 @@
                   <div class="flex flex-wrap gap-2">
                     <div v-for="member in department.ministers" :key="member.userId"
                          class="apple-chip large blue group">
-                      <Icon icon="ion:shield-checkmark" class="mr-1 text-blue-600 dark:text-blue-300 opacity-70"/>
+                      <Icon icon="shield-check" class="mr-1 text-blue-600 dark:text-blue-300 opacity-70"/>
                       <span>{{ member.name }}</span>
                       <button @click="() => deleteMember(member, department.ministers)"
                               class="ml-1 hover:text-red-600 transition-colors">
-                        <Icon icon="ion:close"/>
+                        <Icon icon="x"/>
                       </button>
                     </div>
                     <div v-if="!department.ministers?.length" class="text-sm text-gray-400 py-2">
@@ -241,7 +241,7 @@
           </div>
           <!-- Loading Skeleton for specific tabs -->
           <div v-else class="p-12 flex justify-center">
-            <Icon icon="ion:load-c" class="animate-spin text-4xl text-gray-300"/>
+            <Icon icon="loader-circle" class="animate-spin text-4xl text-gray-300"/>
           </div>
         </n-tab-pane>
       </n-tabs>
@@ -262,7 +262,7 @@
     <div class="space-y-6">
       <div class="relative">
         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Icon icon="ion:search" class="text-gray-400"/>
+          <Icon icon="search" class="text-gray-400"/>
         </div>
         <input
             v-model="searchKeyword"
@@ -284,7 +284,7 @@
             :pagination="{pageSize: 5}"
         />
         <div v-else class="h-full flex flex-col items-center justify-center text-gray-400 gap-2 py-8">
-          <Icon icon="ion:search-outline" width="48" class="opacity-20"/>
+          <Icon icon="search" width="48" class="opacity-20"/>
           <span>{{ searchKeyword ? '未找到匹配成员' : '输入关键词开始搜索' }}</span>
         </div>
       </div>
@@ -300,7 +300,7 @@
             :pagination="{pageSize: 5}"
         />
         <div v-else class="h-full flex flex-col items-center justify-center text-gray-400 gap-2 py-8">
-          <Icon icon="ion:people-outline" width="48" class="opacity-20"/>
+          <Icon icon="users" width="48" class="opacity-20"/>
           <span>{{ candidateList.length === 0 ? '暂无可选成员' : '未找到匹配成员' }}</span>
         </div>
       </div>
@@ -395,18 +395,18 @@
       </p>
       <div class="flex flex-wrap gap-3">
         <button class="apple-btn secondary" @click="triggerImportFileInput">
-          <Icon icon="ion:document-outline" class="mr-1"/>
+          <Icon icon="file" class="mr-1"/>
           选择文件
         </button>
         <button class="apple-btn secondary" @click="downloadImportTemplate">
-          <Icon icon="ion:download-outline" class="mr-1"/>
+          <Icon icon="download" class="mr-1"/>
           下载导入模板
         </button>
       </div>
       <p v-if="importFileName" class="text-sm text-gray-600 dark:text-gray-300">已选择：{{ importFileName }}</p>
       <p v-if="importError" class="text-sm text-red-500">{{ importError }}</p>
       <div class="flex items-start gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 text-sm">
-        <Icon icon="ion:warning-outline" class="mt-0.5 shrink-0"/>
+        <Icon icon="triangle-alert" class="mt-0.5 shrink-0"/>
         <span>导入将覆盖当前部门成员名单，原名单会自动备份。</span>
       </div>
     </div>
@@ -430,7 +430,7 @@
       <ul class="space-y-1 text-sm">
         <li v-for="check in importChecks" :key="check.text" class="flex items-center gap-2"
             :class="check.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500'">
-          <Icon :icon="check.ok ? 'ion:checkmark-circle' : 'ion:close-circle'"/>
+          <Icon :icon="check.ok ? 'circle-check' : 'circle-x'" morph/>
           {{ check.text }}
         </li>
       </ul>
@@ -461,7 +461,7 @@
       :bordered="false"
   >
     <div v-if="historyLoading" class="py-10 flex justify-center">
-      <Icon icon="ion:load-c" class="animate-spin text-3xl text-gray-300"/>
+      <Icon icon="loader-circle" class="animate-spin text-3xl text-gray-300"/>
     </div>
     <div v-else-if="importHistory.length === 0" class="py-10 text-center text-gray-400 text-sm">
       暂无导入记录
@@ -478,11 +478,11 @@
         </div>
         <div class="flex items-center gap-2 shrink-0">
           <button v-if="record.canRollback" class="apple-btn-sm primary" @click="rollbackVersion(record)">
-            <Icon icon="ion:time-outline" class="mr-1"/>
+            <Icon icon="clock" class="mr-1"/>
             回滚
           </button>
           <button class="apple-btn-sm secondary" @click="downloadHistoryBackup(record)">
-            <Icon icon="ion:download-outline" class="mr-1"/>
+            <Icon icon="download" class="mr-1"/>
             下载备份
           </button>
         </div>
@@ -512,7 +512,7 @@ import {
   NDropdown,
 } from 'naive-ui'
 import type {DataTableColumns} from 'naive-ui'
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import {DepartmentService} from '../services/DepartmentService'
 import {StaffService} from '../services/StaffService'
 import type {
@@ -639,7 +639,7 @@ const staffColumns: DataTableColumns<StaffModel> = [
   {
     title: '姓名', key: 'name', width: 100,
     render: (row) => h('div', {class: 'flex items-center gap-2'}, [
-      h(Icon, {icon: 'ion:person-circle-outline', class: 'text-lg text-gray-400'}),
+      h(Icon, {icon: 'circle-user', class: 'text-lg text-gray-400'}),
       h('span', {class: 'font-medium'}, row.name)
     ])
   },
@@ -1439,7 +1439,7 @@ onMounted(() => {
       return () => h('button', {
         class: 'px-4 py-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white transition-transform active:scale-95 flex items-center text-sm font-medium shadow-lg shadow-blue-500/30',
         onClick: () => openDepartment()
-      }, [h(Icon, {icon: 'ion:add', class: 'mr-1'}), '新建部门'])
+      }, [h(Icon, {icon: 'plus', class: 'mr-1'}), '新建部门'])
     }
   })
   layoutStore.setActionsComponent(ActionsComponent);

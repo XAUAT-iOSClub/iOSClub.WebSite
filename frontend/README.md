@@ -14,6 +14,19 @@
 - markdown-it (Markdown解析)
 - Prism (代码高亮)
 - Mermaid (图表渲染)
+- Lucide (图标数据)
+- morphicons (图标形变动画)
+
+## 图标系统
+
+图标统一使用 [Lucide](https://lucide.dev) 图标数据 + [morphicons](https://www.morphicons.com) 渲染，不再依赖在线图标服务。
+
+- 组件：`src/components/Icon.vue`
+- 注册表：`src/icons/lucide.ts`（新增图标需 import 并注册），品牌图标在 `src/icons/brands.ts`
+- 基本用法：`<Icon icon="sun" />`
+- 切换动效：给语义上会“换图标”的位置加 `morph`，例如 `<Icon :icon="isDark ? 'moon-star' : 'sun'" morph />`
+- 加载旋转：`<Icon icon="loader" spin />`
+- 尺寸默认跟随 `font-size`（`1em`），也可用 `class="w-4 h-4"`、`width`/`height` 或 `size` 控制
 
 ## 项目结构
 

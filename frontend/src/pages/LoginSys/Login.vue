@@ -15,8 +15,8 @@
       <!-- 顶部 Logo 与标题 -->
       <div class="mb-10 flex flex-col items-center text-center">
         <div class="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-white/50 shadow-sm backdrop-blur-md dark:bg-white/10">
-          <!-- 使用 Iconify 图标: 这里用指纹图标模拟 ID 概念 -->
-          <Icon icon="ph:fingerprint-simple" class="h-8 w-8 text-gray-900 dark:text-white" />
+          <!-- 使用 Lucide 图标: 这里用指纹图标模拟 ID 概念 -->
+          <Icon icon="fingerprint-pattern" class="h-8 w-8 text-gray-900 dark:text-white" />
         </div>
         <h1 class="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white md:text-3xl">
           登录 iMember
@@ -44,7 +44,7 @@
               @keyup.enter="handleLogin"
           >
             <template #prefix>
-              <Icon icon="ph:student" class="text-gray-400 mr-1" width="20" />
+              <Icon icon="graduation-cap" class="text-gray-400 mr-1" width="20" />
             </template>
           </n-input>
         </n-form-item>
@@ -61,7 +61,7 @@
               @keyup.enter="handleLogin"
           >
             <template #prefix>
-              <Icon icon="ph:lock-key" class="text-gray-400 mr-1" width="20" />
+              <Icon icon="lock-keyhole" class="text-gray-400 mr-1" width="20" />
             </template>
           </n-input>
         </n-form-item>
@@ -84,7 +84,7 @@
 
         <!-- 错误信息提示 (带动画) -->
         <div v-if="errorMsg" class="flex items-center justify-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
-          <Icon icon="ph:warning-circle-fill" />
+          <Icon icon="circle-alert" />
           <span>{{ errorMsg }}</span>
         </div>
 
@@ -94,8 +94,8 @@
             :disabled="loading"
             class="apple-btn relative mt-4 flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-[#0071e3] py-3.5 text-[15px] font-medium text-white shadow-lg shadow-blue-500/20 transition-all hover:bg-[#0077ED] hover:shadow-blue-500/30 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-white dark:text-black dark:shadow-none dark:hover:bg-gray-200"
         >
-          <Icon v-if="loading" icon="eos-icons:loading" class="animate-spin" width="20" />
-          <Icon v-else icon="ph:arrow-right-bold" class="absolute right-4 opacity-0 transition-all group-hover:opacity-100" />
+          <Icon v-if="loading" icon="loader" class="animate-spin" width="20" />
+          <Icon v-else icon="arrow-right" class="absolute right-4 opacity-0 transition-all group-hover:opacity-100" />
           <span>{{ loading ? '正在验证...' : '登 录' }}</span>
         </button>
       </n-form>
@@ -126,7 +126,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { NInput, NCheckbox, NForm, NFormItem } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import { useAuthorizationStore } from "../../stores/Authorization"
 
 const authorizationStore = useAuthorizationStore()

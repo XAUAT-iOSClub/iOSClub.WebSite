@@ -35,7 +35,8 @@
             >
               <!-- Optional: Add generic icon if item doesn't specify one -->
               <Icon
-                  :icon="isActive(item.key) ? 'lucide:file-text' : 'lucide:file'"
+                  :icon="isActive(item.key) ? 'file-text' : 'file'"
+                  morph
                   class="shrink-0 w-4 h-4 transition-colors"
                   :class="isActive(item.key) ? 'text-blue-500 dark:text-blue-400' : 'text-zinc-400 group-hover:text-zinc-600 dark:text-zinc-600 dark:group-hover:text-zinc-400'"
               />
@@ -56,7 +57,7 @@
 import {onMounted, ref} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {NSkeleton} from 'naive-ui'
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import {ArticleService} from '../services/ArticleService'
 import type {ArticleModel} from '../models'
 

@@ -39,7 +39,7 @@
               <div class="flex justify-between items-start mb-3">
                 <!-- 拟物化图标背景 -->
                 <div class="w-11 h-11 rounded-xl flex items-center justify-center bg-blue-50 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 transition-colors">
-                  <Icon icon="fluent:textbox-16-filled" class="w-6 h-6" />
+                  <Icon icon="text-cursor-input" class="w-6 h-6" />
                 </div>
 
                 <n-tag
@@ -61,11 +61,11 @@
 
                 <div class="flex flex-col gap-1 text-[13px] text-gray-500 dark:text-gray-400/80">
                   <div class="flex items-center gap-1.5">
-                    <Icon icon="fluent:folder-20-filled" class="w-3.5 h-3.5 opacity-70" />
+                    <Icon icon="folder" class="w-3.5 h-3.5 opacity-70" />
                     <span class="truncate max-w-[150px]">{{ article.categoryName || '未分类' }}</span>
                   </div>
                   <div class="flex items-center gap-1.5">
-                    <Icon icon="tabler:clock-filled" class="w-3.5 h-3.5 opacity-70" />
+                    <Icon icon="clock" class="w-3.5 h-3.5 opacity-70" />
                     <span>{{ formatDate(article.lastWriteTime) }}</span>
                   </div>
                 </div>
@@ -79,14 +79,14 @@
                     @click.stop="editArticle(article)"
                     title="编辑"
                 >
-                  <Icon icon="lucide:pencil-line" class="w-4 h-4" />
+                  <Icon icon="pencil-line" class="w-4 h-4" />
                 </button>
                 <button
                     class="action-btn-icon hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-500/30 dark:hover:text-red-300"
                     @click.stop="deleteArticle(article)"
                     title="删除"
                 >
-                  <Icon icon="tabler:trash" class="w-4 h-4" />
+                  <Icon icon="trash" class="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -101,7 +101,7 @@
               class="col-span-full min-h-[400px] flex flex-col items-center justify-center rounded-3xl bg-white/50 dark:bg-white/5 border border-dashed border-gray-300 dark:border-white/10 backdrop-blur-sm"
           >
             <div class="w-20 h-20 flex items-center justify-center bg-gray-100 dark:bg-white/10 rounded-full mb-6">
-              <Icon icon="icon-park-twotone:tray" class="text-gray-400 dark:text-white/40 w-10 h-10"/>
+              <Icon icon="inbox" class="text-gray-400 dark:text-white/40 w-10 h-10"/>
             </div>
             <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">在这里存储您的文章</h3>
             <p class="text-sm text-gray-500 dark:text-gray-400 mb-8 max-w-xs text-center">
@@ -114,7 +114,7 @@
                 class="!px-8 !font-medium"
                 @click="openCreateModal">
               <template #icon>
-                <Icon icon="sf:plus" />
+                <Icon icon="plus" />
               </template>
               新建文章
             </n-button>
@@ -129,9 +129,8 @@
 import { ref, onMounted, onBeforeUnmount, defineComponent, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDialog, useMessage, NButton, NTag } from 'naive-ui'
-// 使用 Iconify，这里我假设用了 'sf' (San Francisco Symbols) 集合模拟苹果风格，
-// 如果没有该集合，可以使用 'ph' (Phosphor) 或 'ionicons'
-import { Icon } from '@iconify/vue'
+// 图标统一使用 Lucide
+import Icon from '@/components/Icon.vue'
 import { ArticleService } from '../../services/ArticleService'
 import type { ArticleModel } from '../../models'
 import { useLayoutStore } from '../../stores/LayoutStore'
@@ -251,14 +250,14 @@ onMounted(() => {
 
       return () => h('div', { class: 'flex items-center gap-3' }, [
         // 创建文章
-        renderCircleBtn('lucide:plus', openCreateModal, '新建文章'),
+        renderCircleBtn('plus', openCreateModal, '新建文章'),
 
         // 分类管理 (胶囊按钮风格)
         h('button', {
           class: 'h-9 px-4 rounded-full flex items-center gap-2 text-sm font-medium transition-all duration-200 bg-gray-100/80 hover:bg-gray-200/80 dark:bg-white/10 dark:hover:bg-white/20 backdrop-blur-md text-gray-700 dark:text-white active:scale-95',
           onClick: goToCategoryManager
         }, [
-          h(Icon, { icon: 'fluent:folder-20-filled', class: 'w-4 h-4' }),
+          h(Icon, { icon: 'folder', class: 'w-4 h-4' }),
           h('span', '分类管理')
         ]),
       ])

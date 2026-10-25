@@ -27,7 +27,7 @@
           <div class="w-24 shrink-0 text-[17px] text-gray-900 dark:text-white">ID</div>
           <div class="flex-1 py-3 pr-4 flex justify-end items-center">
             <span class="text-[17px] text-gray-500 dark:text-gray-400 font-mono select-all">{{ category.id }}</span>
-            <Icon icon="ion:lock-closed-outline" class="ml-2 w-4 h-4 text-gray-400"/>
+            <Icon icon="lock" class="ml-2 w-4 h-4 text-gray-400"/>
           </div>
         </div>
       </div>
@@ -86,7 +86,7 @@
               <!-- 拖拽手柄 -->
               <div
                   class="drag-handle p-2 cursor-grab active:cursor-grabbing touch-none text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 transition-colors">
-                <Icon icon="ion:reorder-three-outline" class="w-6 h-6"/>
+                <Icon icon="menu" class="w-6 h-6"/>
               </div>
 
               <!-- 文章内容 -->
@@ -111,7 +111,7 @@
               </n-tag>
 
               <!-- 箭头指示符 (装饰用) -->
-              <Icon icon="ion:chevron-forward" class="ml-3 text-gray-300 dark:text-gray-600 w-4 h-4"/>
+              <Icon icon="chevron-right" class="ml-3 text-gray-300 dark:text-gray-600 w-4 h-4"/>
             </div>
           </template>
         </draggable>
@@ -119,7 +119,7 @@
         <!-- 空状态 -->
         <div v-else class="flex flex-col items-center justify-center py-12 text-center">
           <div class="w-12 h-12 rounded-full bg-gray-100 dark:bg-[#2C2C2E] flex items-center justify-center mb-3">
-            <Icon icon="ion:documents-outline" class="text-gray-400 w-6 h-6"/>
+            <Icon icon="files" class="text-gray-400 w-6 h-6"/>
           </div>
           <p class="text-gray-500 dark:text-gray-400 text-[15px]">此分类下暂无文章</p>
         </div>
@@ -137,7 +137,7 @@
 import {ref, onMounted, h, defineComponent} from 'vue';
 import {useRoute, useRouter} from 'vue-router';
 import {useMessage, NInput, NTag} from 'naive-ui';
-import {Icon} from '@iconify/vue';
+import Icon from '@/components/Icon.vue'
 import draggable from 'vuedraggable';
 import {CategoryService} from '../../services/CategoryService';
 import {ArticleService} from '../../services/ArticleService';
@@ -263,7 +263,7 @@ onMounted(async () => {
       return () => h('button', {
         class: 'p-2.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white transition-transform active:scale-95 flex items-center text-sm font-medium shadow-lg shadow-blue-500/30',
         onClick: () => goBack()
-      }, [h(Icon, {icon: 'mdi:arrow-back', class: ''})])
+      }, [h(Icon, {icon: 'arrow-left', class: ''})])
     }
   })
   layoutStore.setActionsComponent(ActionsComponent);

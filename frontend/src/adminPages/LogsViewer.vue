@@ -12,7 +12,7 @@
           <div class="apple-card relative overflow-hidden group p-6 flex flex-col justify-between h-40">
             <div
                 class="absolute -right-4 -top-4 opacity-10 group-hover:opacity-20 transition-opacity transform rotate-12">
-              <Icon icon="solar:documents-bold" width="120"/>
+              <Icon icon="files" width="120"/>
             </div>
             <div>
               <p class="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">总日志数</p>
@@ -31,7 +31,7 @@
               class="apple-card relative overflow-hidden group p-6 flex flex-col justify-between h-40 bg-red-50/50 dark:bg-red-900/10 border-red-100 dark:border-red-900/30">
             <div
                 class="absolute -right-4 -top-4 opacity-10 text-red-500 group-hover:opacity-20 transition-opacity transform rotate-12">
-              <Icon icon="solar:danger-triangle-bold" width="120"/>
+              <Icon icon="triangle-alert" width="120"/>
             </div>
             <div>
               <p class="text-sm font-medium text-red-600/80 dark:text-red-400 uppercase tracking-wide">错误</p>
@@ -50,7 +50,7 @@
             <div class="flex justify-between items-center mb-2">
                  <span
                      class="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400">
-                    <Icon icon="solar:bell-bing-bold" width="18"/>
+                    <Icon icon="bell" width="18"/>
                  </span>
               <span class="text-xs font-bold bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full">警告</span>
             </div>
@@ -63,7 +63,7 @@
             <div class="flex justify-between items-center mb-2">
                  <span
                      class="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
-                    <Icon icon="solar:info-circle-bold" width="18"/>
+                    <Icon icon="info" width="18"/>
                  </span>
               <span class="text-xs font-bold bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full">信息</span>
             </div>
@@ -75,7 +75,7 @@
         <!-- 右侧：ECharts 趋势图 (占据剩余空间) -->
         <div class="lg:col-span-3 xl:col-span-2 apple-card p-6 min-h-[340px] flex flex-col">
           <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Icon icon="solar:graph-new-up-bold" class="text-blue-500"/>
+            <Icon icon="trending-up" class="text-blue-500"/>
             日志活动趋势
           </h2>
           <div class="flex-1 w-full relative">
@@ -97,7 +97,7 @@
             <div class="flex flex-1 flex-col sm:flex-row gap-3">
               <!-- 搜索框 - iOS 风格 -->
               <div class="relative flex-1 max-w-md group">
-                <Icon icon="solar:magnifer-linear"
+                <Icon icon="search"
                       class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors"
                       width="18"/>
                 <!-- 使用原生 input 配合样式实现更纯粹的 Tailwind 4 控制 -->
@@ -112,7 +112,7 @@
                     v-if="searchKeyword"
                     @click="searchKeyword = ''; applyFilters()"
                     class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                  <Icon icon="solar:close-circle-bold" width="16"/>
+                  <Icon icon="circle-x" width="16"/>
                 </button>
               </div>
 
@@ -148,12 +148,12 @@
               </div>
               <n-button secondary circle class="ml-2" @click="refreshLogs">
                 <template #icon>
-                  <Icon icon="solar:restart-bold"/>
+                  <Icon icon="rotate-ccw"/>
                 </template>
               </n-button>
               <n-button secondary circle type="error" @click="showCleanupDialog = true">
                 <template #icon>
-                  <Icon icon="solar:trash-bin-trash-bold"/>
+                  <Icon icon="trash"/>
                 </template>
               </n-button>
             </div>
@@ -221,7 +221,7 @@
                   <button
                       class="text-slate-400 hover:text-blue-500 p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
                       @click.stop="showLogDetails(log)">
-                    <Icon icon="solar:info-circle-linear" width="20"/>
+                    <Icon icon="info" width="20"/>
                   </button>
                 </td>
               </tr>
@@ -230,7 +230,7 @@
             <tr v-else>
               <td colspan="4" class="px-6 py-20 text-center">
                 <div class="flex flex-col items-center justify-center text-slate-400">
-                  <Icon icon="solar:box-minimalistic-linear" width="64" class="mb-4 opacity-50"/>
+                  <Icon icon="package" width="64" class="mb-4 opacity-50"/>
                   <p class="text-lg">未找到日志</p>
                   <p class="text-sm opacity-70">尝试调整筛选条件</p>
                 </div>
@@ -274,7 +274,7 @@
         <div class="flex items-center gap-3 pt-2 pl-2">
           <div
               class="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500">
-            <Icon icon="solar:document-text-bold-duotone" width="24"/>
+            <Icon icon="file-text" width="24"/>
           </div>
           <div>
             <h3 class="text-lg font-semibold">日志详情</h3>
@@ -299,7 +299,7 @@
 
         <div>
           <h4 class="text-sm font-medium text-slate-500 mb-2 flex items-center gap-2">
-            <Icon icon="solar:chat-square-text-bold" class="text-blue-500" width="16"/>
+            <Icon icon="message-square-text" class="text-blue-500" width="16"/>
             消息
           </h4>
           <div
@@ -310,7 +310,7 @@
 
         <div v-if="selectedLog.exception">
           <h4 class="text-sm font-medium text-red-500 mb-2 flex items-center gap-2">
-            <Icon icon="solar:danger-circle-bold" width="16"/>
+            <Icon icon="circle-alert" width="16"/>
             异常追踪
           </h4>
           <div
@@ -339,7 +339,7 @@
       <div class="pt-4 pb-2">
         <div
             class="flex items-center gap-4 mb-4 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg text-yellow-700 dark:text-yellow-400 text-sm">
-          <Icon icon="solar:alert-circle-bold" width="24" class="shrink-0"/>
+          <Icon icon="circle-alert" width="24" class="shrink-0"/>
           此操作不可撤销。仅保留最近几天的日志。
         </div>
         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
@@ -357,7 +357,7 @@ import {ref, computed, onMounted, onBeforeUnmount, nextTick} from 'vue'
 import {
   NSelect, NButton, NModal, NPagination, NInputNumber, useMessage
 } from 'naive-ui'
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import {LogsService, type LogEntry, type LogDistribution} from '../services/LogsService'
 import {useLayoutStore} from '../stores/LayoutStore'
 import * as echarts from 'echarts'

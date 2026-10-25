@@ -11,13 +11,13 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@iconify/vue": "^5.0.0",
     "@jsonlee_12138/markdown-it-mermaid": "^0.0.6",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.1.17",
     "@types/pako": "^2.0.4",
     "echarts": "^6.0.0",
     "katex": "^0.16.25",
+    "lucide": "^1.61.0",
     "markdown-it": "^14.1.0",
     "markdown-it-anchor": "^9.2.0",
     "markdown-it-attrs": "^4.3.1",
@@ -31,6 +31,7 @@
     "markdown-it-sub": "^2.0.0",
     "markdown-it-sup": "^2.0.0",
     "markdown-it-task-lists": "^2.1.1",
+    "morphicons": "^2.0.2",
     "pako": "^2.1.0",
     "pinia": "^3.0.4",
     "prism-copy-to-clipboard": "link:prismjs/plugins/copy-to-clipboard/prism-copy-to-clipboard",

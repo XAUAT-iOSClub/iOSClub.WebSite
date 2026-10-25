@@ -7,7 +7,7 @@
         <!-- Search Bar (iOS Spotlight Style) -->
         <div class="relative w-full sm:max-w-lg group">
           <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-10">
-            <Icon icon="ion:search" class="text-gray-400 dark:text-gray-500 w-5 h-5 transition-colors group-focus-within:text-blue-500"/>
+            <Icon icon="search" class="text-gray-400 dark:text-gray-500 w-5 h-5 transition-colors group-focus-within:text-blue-500"/>
           </div>
           <input
               v-model="searchTerm"
@@ -22,7 +22,7 @@
             @click="showAddResourceModal"
             class="apple-button-primary shrink-0 w-full sm:w-auto flex items-center justify-center gap-2"
         >
-          <Icon icon="ion:add-circle-outline" class="w-6 h-6" />
+          <Icon icon="circle-plus" class="w-6 h-6" />
           <span>新建资源</span>
         </button>
       </div>
@@ -37,16 +37,16 @@
           <!-- Icon Header -->
           <div class="flex items-start justify-between mb-4">
             <div class="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-500 dark:text-blue-400">
-              <Icon icon="ion:folder-open" class="w-6 h-6" />
+              <Icon icon="folder-open" class="w-6 h-6" />
             </div>
 
             <!-- Context Menu (Admin) -->
             <div v-if="authorizationStore.isAdmin()" class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
               <button @click.stop="editResource(resource)" class="icon-btn text-blue-500 bg-blue-50 dark:bg-blue-500/20 hover:bg-blue-100 dark:hover:bg-blue-500/30">
-                <Icon icon="ion:create-outline" class="w-4 h-4"/>
+                <Icon icon="square-pen" class="w-4 h-4"/>
               </button>
               <button @click.stop="deleteResource(resource)" class="icon-btn text-red-500 bg-red-50 dark:bg-red-500/20 hover:bg-red-100 dark:hover:bg-red-500/30">
-                <Icon icon="ion:trash-outline" class="w-4 h-4"/>
+                <Icon icon="trash" class="w-4 h-4"/>
               </button>
             </div>
           </div>
@@ -82,7 +82,7 @@
       <!-- Empty State -->
       <div v-else-if="!loading" class="flex flex-col items-center justify-center py-32 text-center">
         <div class="w-24 h-24 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-6 shadow-inner">
-          <Icon icon="ion:file-tray-outline" class="w-10 h-10 text-gray-300 dark:text-gray-600"/>
+          <Icon icon="inbox" class="w-10 h-10 text-gray-300 dark:text-gray-600"/>
         </div>
         <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">暂无内容</h3>
         <p class="text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
@@ -110,7 +110,7 @@
             {{ editingResource.id ? '编辑资源' : '新建资源' }}
           </h3>
           <button @click="showModal = false" class="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center transition-colors">
-            <Icon icon="ion:close" class="w-5 h-5"/>
+            <Icon icon="x" class="w-5 h-5"/>
           </button>
         </div>
 
@@ -147,7 +147,7 @@
                        class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300">
                   {{ tag }}
                   <button @click="removeTag(index)" type="button" class="ml-1.5 hover:text-blue-900 dark:hover:text-blue-100">
-                    <Icon icon="ion:close-circle" class="w-4 h-4"/>
+                    <Icon icon="circle-x" class="w-4 h-4"/>
                   </button>
                 </span>
               </div>
@@ -163,7 +163,7 @@
                     type="button"
                     class="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 hover:bg-blue-500 hover:text-white transition-colors"
                 >
-                  <Icon icon="ion:return-down-back" class="w-4 h-4"/>
+                  <Icon icon="corner-down-left" class="w-4 h-4"/>
                 </button>
               </div>
             </div>
@@ -178,7 +178,7 @@
                   :disabled="saving"
                   class="apple-button-primary px-8 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Icon v-if="saving" icon="ion:sync" class="w-5 h-5 animate-spin mr-2"/>
+                <Icon v-if="saving" icon="refresh-cw" class="w-5 h-5 animate-spin mr-2"/>
                 {{ saving ? '处理中...' : '保存' }}
               </button>
             </div>
@@ -192,7 +192,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, defineComponent, h } from 'vue'
-import { Icon } from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
 import { useAuthorizationStore } from '../stores/Authorization'
 import { ResourceService } from '../services/ResourceService'
@@ -361,7 +361,7 @@ onMounted(() => {
           title: '刷新',
           onClick: fetchResources
         }, [
-          h(Icon, { icon: 'ion:refresh', class: 'w-5 h-5' })
+          h(Icon, { icon: 'refresh-cw', class: 'w-5 h-5' })
         ])
       ])
     }

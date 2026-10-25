@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@iconify/vue':
-        specifier: ^5.0.0
-        version: 5.0.0(vue@3.5.24(typescript@5.7.3))
       '@jsonlee_12138/markdown-it-mermaid':
         specifier: ^0.0.6
         version: 0.0.6(markdown-it@14.1.0)(mermaid@11.12.1)
@@ -29,6 +26,9 @@ importers:
       katex:
         specifier: ^0.16.25
         version: 0.16.25
+      lucide:
+        specifier: ^1.61.0
+        version: 1.61.0
       markdown-it:
         specifier: ^14.1.0
         version: 14.1.0
@@ -68,6 +68,9 @@ importers:
       markdown-it-task-lists:
         specifier: ^2.1.1
         version: 2.1.1
+      morphicons:
+        specifier: ^2.0.2
+        version: 2.0.2(vue@3.5.24(typescript@5.7.3))
       pako:
         specifier: ^2.1.0
         version: 2.1.0
@@ -353,11 +356,6 @@ packages:
 
   '@iconify/utils@3.0.2':
     resolution: {integrity: sha512-EfJS0rLfVuRuJRn4psJHtK2A9TqVnkxPpHY6lYHiB9+8eSuudsxbwMiavocG45ujOo6FJ+CIRlRnlOGinzkaGQ==}
-
-  '@iconify/vue@5.0.0':
-    resolution: {integrity: sha512-C+KuEWIF5nSBrobFJhT//JS87OZ++QDORB6f2q2Wm6fl2mueSTpFBeBsveK0KW9hWiZ4mNiPjsh6Zs4jjdROSg==}
-    peerDependencies:
-      vue: '>=3'
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -1302,6 +1300,9 @@ packages:
   lodash@4.17.21:
     resolution: {integrity: sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==}
 
+  lucide@1.61.0:
+    resolution: {integrity: sha512-RPNMBgej6WjPKuCNEODg83CF8lnraCeDOsZ3HZ7KvUYf0O5hdJBzer/Ax/meBHl3xvrp5NmKX0IDA5myyzlvGw==}
+
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
 
@@ -1370,6 +1371,26 @@ packages:
 
   mlly@1.8.0:
     resolution: {integrity: sha512-l8D9ODSRWLe2KHJSifWGwBqpTZXIXTeo8mlKjY+E2HAakaTeNpqAyBZ8GSqLzHgw4XmHmC8whvpjJNMbFZN7/g==}
+
+  morphicons@2.0.2:
+    resolution: {integrity: sha512-/GFSrsZDuyZ3a2QK8wXnVpsHzrVIZ8eLhg0QbGxeeOPyOZmtKUC8i0z3QQ3bbIX5DV/LOLYpp/8unJMWQU0Qgw==}
+    peerDependencies:
+      react: '>=18'
+      react-native: '>=0.71'
+      react-native-svg: '>=14'
+      svelte: '>=5'
+      vue: '>=3.3'
+    peerDependenciesMeta:
+      react:
+        optional: true
+      react-native:
+        optional: true
+      react-native-svg:
+        optional: true
+      svelte:
+        optional: true
+      vue:
+        optional: true
 
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
@@ -1883,11 +1904,6 @@ snapshots:
       mlly: 1.8.0
     transitivePeerDependencies:
       - supports-color
-
-  '@iconify/vue@5.0.0(vue@3.5.24(typescript@5.7.3))':
-    dependencies:
-      '@iconify/types': 2.0.0
-      vue: 3.5.24(typescript@5.7.3)
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
@@ -2805,6 +2821,8 @@ snapshots:
 
   lodash@4.17.21: {}
 
+  lucide@1.61.0: {}
+
   magic-string@0.30.21:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
@@ -2890,6 +2908,10 @@ snapshots:
       pathe: 2.0.3
       pkg-types: 1.3.1
       ufo: 1.6.1
+
+  morphicons@2.0.2(vue@3.5.24(typescript@5.7.3)):
+    optionalDependencies:
+      vue: 3.5.24(typescript@5.7.3)
 
   ms@2.1.3: {}
 

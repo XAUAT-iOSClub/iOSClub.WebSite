@@ -14,7 +14,7 @@ import {
   NNumberAnimation,
   NTag
 } from 'naive-ui'
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import {MemberQueryService} from '../services/MemberQueryService'
 import {MemberManagementService} from '../services/MemberManagementService'
 import {InfoService} from '../services/InfoService'
@@ -84,12 +84,12 @@ const searchItems = [
 ]
 
 const tabs = [
-  {label: '成员列表', value: 'memberData', icon: 'ion:list'},
-  {label: '历年趋势', value: 'yearData', icon: 'ion:trending-up'},
-  {label: '学院分布', value: 'collegeData', icon: 'ion:school'},
-  {label: '年级构成', value: 'gradeData', icon: 'ion:stats-bars'},
-  {label: '性别比例', value: 'genderData', icon: 'ion:male-female'},
-  {label: '政治面貌', value: 'politicalData', icon: 'ion:flag'},
+  {label: '成员列表', value: 'memberData', icon: 'list'},
+  {label: '历年趋势', value: 'yearData', icon: 'trending-up'},
+  {label: '学院分布', value: 'collegeData', icon: 'school'},
+  {label: '年级构成', value: 'gradeData', icon: 'chart-column'},
+  {label: '性别比例', value: 'genderData', icon: 'venus-and-mars'},
+  {label: '政治面貌', value: 'politicalData', icon: 'flag'},
 ]
 
 // 学院列表由后端 /Info/academies 提供，避免与 SignRecord.Academies 校验漂移
@@ -622,7 +622,7 @@ onMounted(() => {
           class: 'bg-white dark:bg-[#2C2C2E] text-[#1d1d1f] dark:text-white font-medium rounded-full border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-[#3A3A3C] transition-all duration-200 active:scale-95 flex items-center justify-center h-9 px-4 text-[14px]',
           onClick: () => dropdownOpen.value = !dropdownOpen.value
         }, [
-          h(Icon, {icon: 'ion:download-outline', class: 'w-5 h-5 mr-1'}),
+          h(Icon, {icon: 'download', class: 'w-5 h-5 mr-1'}),
           '导出'
         ]),
 
@@ -663,7 +663,7 @@ onMounted(() => {
           class: 'bg-white dark:bg-[#2C2C2E] text-[#1d1d1f] dark:text-white font-medium rounded-full border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-[#3A3A3C] transition-all duration-200 active:scale-95 flex items-center justify-center h-9 px-4 text-[14px]',
           onClick: triggerFileInput
         }, [
-          h(Icon, {icon: 'ion:cloud-upload-outline', class: 'w-5 h-5 mr-1'}),
+          h(Icon, {icon: 'cloud-upload', class: 'w-5 h-5 mr-1'}),
           '导入'
         ]),
 
@@ -671,7 +671,7 @@ onMounted(() => {
           class: 'bg-[#007AFF] hover:bg-[#0062CC] text-white font-medium rounded-full transition-all duration-200 shadow-sm active:scale-95 flex items-center justify-center h-9 px-4 text-[14px]',
           onClick: showAddMemberModal
         }, [
-          h(Icon, {icon: 'ion:add', class: 'w-5 h-5 mr-1'}),
+          h(Icon, {icon: 'plus', class: 'w-5 h-5 mr-1'}),
           '添加成员'
         ])
       ])
@@ -728,7 +728,7 @@ onBeforeUnmount(() => {
 
           <div class="flex-1 w-full relative group">
             <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none text-gray-400">
-              <Icon icon="ion:search" class="w-5 h-5"/>
+              <Icon icon="search" class="w-5 h-5"/>
             </div>
             <n-input
                 v-model:value="searchTerm"
@@ -781,14 +781,14 @@ onBeforeUnmount(() => {
               {{ tabs.find(t => t.value === activeTab)?.label }}
             </h3>
             <div class="p-2 bg-gray-100 dark:bg-gray-800 rounded-full">
-              <Icon :icon="tabs.find(t => t.value === activeTab)?.icon || ''" class="w-6 h-6 text-gray-500"/>
+              <Icon :icon="tabs.find(t => t.value === activeTab)?.icon || ''" morph class="w-6 h-6 text-gray-500"/>
             </div>
           </div>
 
           <!-- Chart Containers -->
           <div class="h-[400px] w-full relative">
             <div v-if="loading" class="absolute inset-0 flex items-center justify-center backdrop-blur-sm z-10">
-              <Icon icon="svg-spinners:90-ring-with-bg" class="w-10 h-10 text-blue-500"/>
+              <Icon icon="loader" spin class="w-10 h-10 text-blue-500"/>
             </div>
 
             <div v-show="activeTab === 'yearData'" ref="yearChartRef" class="h-full w-full"/>

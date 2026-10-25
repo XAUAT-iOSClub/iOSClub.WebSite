@@ -63,7 +63,7 @@
           <div class="flex items-start justify-between mb-4">
             <div class="flex items-center gap-2">
               <div class="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
-                <Icon icon="ion:server" class="w-5 h-5 text-blue-600 dark:text-blue-400"/>
+                <Icon icon="server" class="w-5 h-5 text-blue-600 dark:text-blue-400"/>
               </div>
               <h3 class="text-lg font-semibold text-gray-900 dark:text-white">请求指标</h3>
             </div>
@@ -109,7 +109,7 @@
 <script setup lang="ts">
 import {ref, computed, onMounted, onBeforeUnmount, defineComponent, h} from 'vue'
 import {useMessage, useDialog} from 'naive-ui'
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import {DataCentreService} from '../services/DataCentreService'
 import {MonitoringService} from '../services/MonitoringService'
 import {useAuthorizationStore} from '../stores/Authorization'
@@ -176,28 +176,28 @@ const statItems = computed<StatItemConfig[]>(() => [
   {
     key: 'members',
     label: '社员总数',
-    icon: 'ion:people',
+    icon: 'users',
     bgClass: 'bg-blue-100 dark:bg-blue-900/40',
     textClass: 'text-blue-600 dark:text-blue-400'
   },
   {
     key: 'staffs',
     label: '部员人数',
-    icon: 'material-symbols:badge',
+    icon: 'badge',
     bgClass: 'bg-green-100 dark:bg-green-900/40',
     textClass: 'text-green-600 dark:text-green-400'
   },
   {
     key: 'resources',
     label: '资源池',
-    icon: 'material-symbols:folder-open',
+    icon: 'folder-open',
     bgClass: 'bg-pink-100 dark:bg-pink-900/40',
     textClass: 'text-pink-600 dark:text-pink-400'
   },
   {
     key: 'departments',
     label: '部门架构',
-    icon: 'material-symbols:groups',
+    icon: 'users-round',
     bgClass: 'bg-indigo-100 dark:bg-indigo-900/40',
     textClass: 'text-indigo-600 dark:text-indigo-400'
   }
@@ -348,7 +348,7 @@ const ActionsComponent = defineComponent({
         class: 'flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors shadow-sm active:scale-95 duration-200',
         onClick: triggerFileInput
       }, [
-        h(Icon, {icon: 'ion:cloud-upload', class: 'w-4 h-4'}),
+        h(Icon, {icon: 'cloud-upload', class: 'w-4 h-4'}),
         h('span', '导入数据')
       ]),
 
@@ -360,7 +360,7 @@ const ActionsComponent = defineComponent({
           },
           class: `w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-200 ${isOpen.value ? 'bg-gray-200 dark:bg-gray-700' : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'}`
         }, [
-          h(Icon, {icon: 'ion:ellipsis-horizontal', class: 'text-gray-600 dark:text-gray-300'})
+          h(Icon, {icon: 'ellipsis', class: 'text-gray-600 dark:text-gray-300'})
         ]),
 
         h('div', {
@@ -374,7 +374,7 @@ const ActionsComponent = defineComponent({
               },
               class: 'w-full text-left px-3 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 transition-colors flex items-center gap-2'
             }, [
-              h(Icon, {icon: 'ion:download-outline', class: 'w-4 h-4'}),
+              h(Icon, {icon: 'download', class: 'w-4 h-4'}),
               h('span', '导出备份')
             ]),
             h('div', {class: 'h-px bg-gray-100 dark:bg-gray-700 my-1 mx-2'}),
@@ -385,7 +385,7 @@ const ActionsComponent = defineComponent({
               },
               class: 'w-full text-left px-3 py-2 text-sm rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2'
             }, [
-              h(Icon, {icon: 'ion:trash-outline', class: 'w-4 h-4'}),
+              h(Icon, {icon: 'trash', class: 'w-4 h-4'}),
               h('span', '清空数据')
             ])
           ])

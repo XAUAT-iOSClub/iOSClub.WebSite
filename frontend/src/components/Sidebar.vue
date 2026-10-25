@@ -37,28 +37,27 @@
         </span>
       </router-link>
 
-      <!-- 桌面端折叠按钮 -->
+      <!-- 桌面端折叠/展开按钮：始终使用同一个元素，折叠时形变并移动位置 -->
       <button
-          v-if="!layoutStore.isMobile && !layoutStore.isSidebarCollapsed"
+          v-if="!layoutStore.isMobile"
           @click="layoutStore.toggleSidebarCollapse()"
-          class="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-200/50 dark:hover:bg-white/10 transition-all"
+          :aria-label="layoutStore.isSidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'"
+          class="absolute z-10 p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-200/50 dark:hover:bg-white/10 transition-all duration-500"
+          :class="layoutStore.isSidebarCollapsed ? 'top-20 left-1/2 -translate-x-1/2' : 'top-4 right-4'"
       >
-        <Icon icon="ph:sidebar-simple" width="20" />
+        <Icon
+            :icon="layoutStore.isSidebarCollapsed ? 'panel-left-open' : 'panel-left-close'"
+            morph
+            width="20"
+        />
       </button>
     </div>
 
     <!-- 导航菜单 -->
-    <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-1 custom-scrollbar">
-      <!-- 展开折叠按钮 (仅在折叠状态显示在顶部) -->
-      <div v-if="!layoutStore.isMobile && layoutStore.isSidebarCollapsed" class="flex justify-center mb-4">
-        <button
-            @click="layoutStore.toggleSidebarCollapse()"
-            class="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 transition-colors"
-        >
-          <Icon icon="ph:list" width="24" />
-        </button>
-      </div>
-
+    <nav
+        class="flex-1 overflow-y-auto px-3 space-y-1 custom-scrollbar"
+        :class="layoutStore.isSidebarCollapsed ? 'pt-16 pb-4' : 'py-4'"
+    >
       <template v-for="item in filteredMenuItems" :key="item.name">
         <router-link
             :to="item.path"
@@ -100,7 +99,7 @@
           :class="layoutStore.isSidebarCollapsed ? 'justify-center px-0' : 'px-3'"
           @click="logout"
       >
-        <Icon icon="ph:sign-out" class="shrink-0 w-5 h-5" :class="{'mr-3': !layoutStore.isSidebarCollapsed}" />
+        <Icon icon="log-out" class="shrink-0 w-5 h-5" :class="{'mr-3': !layoutStore.isSidebarCollapsed}" />
         <span v-if="!layoutStore.isSidebarCollapsed" class="text-[15px] font-medium">退出登录</span>
       </button>
     </div>
@@ -118,7 +117,7 @@ import { computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthorizationStore } from '../stores/Authorization'
 import { useLayoutStore } from '../stores/LayoutStore'
-import { Icon } from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 
 const router = useRouter()
 const authorizationStore = useAuthorizationStore()
@@ -143,20 +142,20 @@ const closeSidebar = () => {
   }
 }
 
-// 更换了一组更现代的 Iconify 图标 (Phosphor Icons 系列，更贴近 Apple 风格)
+// 导航图标统一使用 Lucide
 const menuItems = [
-  {name: '概览', path: '/Centre', icon: 'ph:house'},
-  {name: '个人档案', path: '/Centre/PersonalData', icon: 'ph:user'},
-  {name: '社团部门', path: '/Centre/Department', icon: 'ph:buildings', requiresRole: 'Minister'},
-  {name: '社团资源', path: '/Centre/Resources', icon: 'ph:books', requiresRole: 'Minister'},
-  {name: '公告文章', path: '/Centre/Article', icon: 'ph:article', requiresRole: 'Minister'},
-  {name: '活动记录', path: '/Centre/Activity', icon: 'ph:calendar-blank', requiresRole: 'Minister'},
-  {name: '成员管理', path: '/Centre/MemberData', icon: 'ph:users', requiresRole: 'Minister'},
-  {name: '权限管理', path: '/Centre/FounderPermission', icon: 'ph:shield-check', requiresRole: 'Founder'},
-  {name: '数据分析', path: '/Centre/Admin', icon: 'ph:gear', requiresRole: 'Minister'},
-  {name: 'IP黑名单', path: '/Centre/IpBlacklist', icon: 'ph:lock-key', requiresRole: 'Minister'},
-  {name: 'OAuth2 接入', path: '/Centre/Client', icon: 'ph:key', requiresRole: 'Minister'},
-  {name: '系统日志', path: '/Centre/Logs', icon: 'ph:scroll', requiresRole: 'Minister'},
+  {name: '概览', path: '/Centre', icon: 'house'},
+  {name: '个人档案', path: '/Centre/PersonalData', icon: 'user'},
+  {name: '社团部门', path: '/Centre/Department', icon: 'building-complex', requiresRole: 'Minister'},
+  {name: '社团资源', path: '/Centre/Resources', icon: 'library', requiresRole: 'Minister'},
+  {name: '公告文章', path: '/Centre/Article', icon: 'newspaper', requiresRole: 'Minister'},
+  {name: '活动记录', path: '/Centre/Activity', icon: 'calendar', requiresRole: 'Minister'},
+  {name: '成员管理', path: '/Centre/MemberData', icon: 'users', requiresRole: 'Minister'},
+  {name: '权限管理', path: '/Centre/FounderPermission', icon: 'shield-check', requiresRole: 'Founder'},
+  {name: '数据分析', path: '/Centre/Admin', icon: 'settings', requiresRole: 'Minister'},
+  {name: 'IP黑名单', path: '/Centre/IpBlacklist', icon: 'lock-keyhole', requiresRole: 'Minister'},
+  {name: 'OAuth2 接入', path: '/Centre/Client', icon: 'key', requiresRole: 'Minister'},
+  {name: '系统日志', path: '/Centre/Logs', icon: 'scroll-text', requiresRole: 'Minister'},
 ]
 
 const filteredMenuItems = computed(() => {

@@ -47,7 +47,7 @@
             <!-- 外部链接箭头的隐喻 -->
             <div
                 class="w-8 h-8 rounded-full bg-transparent flex items-center justify-center text-gray-400 group-hover:text-blue-500 group-hover:bg-blue-50/50 dark:group-hover:bg-blue-500/20 transition-all">
-              <Icon icon="lucide:arrow-up-right"
+              <Icon icon="arrow-up-right"
                     class="text-xl transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform"/>
             </div>
           </div>
@@ -78,7 +78,7 @@
 
 <script setup lang="ts">
 import {onMounted} from 'vue';
-import {Icon} from '@iconify/vue';
+import Icon from '@/components/Icon.vue'
 import appleLogo from '/assets/Centre/AppleLogo.png'; // 保持原有资源引用
 
 // 定义项目接口
@@ -86,7 +86,7 @@ interface ProjectItem {
   title: string;
   content: string;
   url: string;
-  icon: string; // Iconify 图标标识符
+  icon: string; // Lucide 图标名称
   tag: string;  // 主要技术栈标签
 }
 
@@ -96,42 +96,42 @@ const projects: ProjectItem[] = [
     title: "建大百科小程序",
     content: "可以在微信小程序等平台浏览建大百科",
     url: "https://gitee.com/XAUATiOSClub/uniapp-ioswiki",
-    icon: "mdi:code-braces-box", 
+    icon: "square-code",
     tag: "UniApp + 微信小程序"
   },
   {
     title: "iOS Club 官网",
     content: "社团的官方门户，展示社团风采与最新动态，基于 Vue 3 + ASP.NET Core 框架构建的现代化 Web 应用。",
     url: "https://gitee.com/XAUATiOSClub/iOSClub.WebSite",
-    icon: "mdi:web",
+    icon: "globe",
     tag: "Vue 3 + ASP.NET Core"
   },
   {
     title: "LetCoding 平台",
     content: "集成了在线编辑器、编译器与 OJ 系统的全能代码平台。FastApi + Vue 的完美结合。",
     url: "https://gitee.com/XAUATiOSClub/LetCoding",
-    icon: "icon-park-outline:source-code",
+    icon: "code",
     tag: "Vue + FastAPI"
   },
   {
     title: "文档生成中心",
     content: "自动化文档生成解决方案。利用 WPF 和 ASP.NET WebAPI 强大的后端处理能力。",
     url: "https://gitee.com/XAUATiOSClub/DocumentMaking",
-    icon: "mdi:file-document-multiple-outline",
+    icon: "files",
     tag: ".NET / Avalonia"
   },
   {
     title: "滑稽账本",
     content: "基于 .NET MAUI 开发的跨平台记账应用，让财务管理变得轻松有趣。",
     url: "https://gitee.com/XAUATiOSClub/huaji-ledger",
-    icon: "mdi:wallet-bifold-outline",
+    icon: "wallet",
     tag: ".NET MAUI"
   },
   {
     title: "建大导航",
     content: "专为西建大学子设计的校园导航页服务",
     url: "https://gitee.com/luckyfishisdashen/university_link_search",
-    icon: "mdi:map-search-outline",
+    icon: "map-pin-search",
     tag: "Vue 3 + ASP.NET Core"
   }
 ];

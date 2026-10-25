@@ -63,7 +63,7 @@
               <!-- 姓名 -->
               <div class="group-row">
                 <div class="row-label">
-                  <Icon icon="lucide:user" class="text-blue-500 mr-2"/>
+                  <Icon icon="user" class="text-blue-500 mr-2"/>
                   姓名
                 </div>
                 <div class="row-content">
@@ -82,7 +82,7 @@
               <!-- 性别 -->
               <div class="group-row">
                 <div class="row-label">
-                  <Icon icon="lucide:users" class="text-blue-500 mr-2"/>
+                  <Icon icon="users" class="text-blue-500 mr-2"/>
                   性别
                 </div>
                 <div class="row-content justify-end">
@@ -109,7 +109,7 @@
               <!-- 政治面貌 -->
               <div class="group-row">
                 <div class="row-label">
-                  <Icon icon="lucide:flag" class="text-blue-500 mr-2"/>
+                  <Icon icon="flag" class="text-blue-500 mr-2"/>
                   政治面貌
                 </div>
                 <div class="row-content">
@@ -139,7 +139,7 @@
               <!-- 学号 -->
               <div class="group-row">
                 <div class="row-label">
-                  <Icon icon="iconoir:hashtag" class="text-orange-500 mr-2"/>
+                  <Icon icon="hash" class="text-orange-500 mr-2"/>
                   学号
                 </div>
                 <div class="row-content">
@@ -152,7 +152,7 @@
                         :disabled="true"
                     />
                   </n-form-item>
-                  <Icon icon="lucide:lock" class="text-gray-400 ml-2 w-4 h-4"/>
+                  <Icon icon="lock" class="text-gray-400 ml-2 w-4 h-4"/>
                 </div>
               </div>
               <div class="separator"></div>
@@ -160,7 +160,7 @@
               <!-- 学院 -->
               <div class="group-row">
                 <div class="row-label">
-                  <Icon icon="iconoir:graduation-cap" class="text-orange-500 mr-2"/>
+                  <Icon icon="graduation-cap" class="text-orange-500 mr-2"/>
                   学院
                 </div>
                 <div class="row-content">
@@ -181,7 +181,7 @@
               <!-- 班级 -->
               <div class="group-row">
                 <div class="row-label">
-                  <Icon icon="lucide:book-open" class="text-orange-500 mr-2"/>
+                  <Icon icon="book-open" class="text-orange-500 mr-2"/>
                   班级
                 </div>
                 <div class="row-content">
@@ -210,7 +210,7 @@
               <!-- 手机 -->
               <div class="group-row">
                 <div class="row-label">
-                  <Icon icon="lucide:phone" class="text-green-500 mr-2"/>
+                  <Icon icon="phone" class="text-green-500 mr-2"/>
                   手机
                 </div>
                 <div class="row-content">
@@ -229,7 +229,7 @@
               <!-- 邮箱 -->
               <div class="group-row">
                 <div class="row-label">
-                  <Icon icon="lucide:mail" class="text-green-500 mr-2"/>
+                  <Icon icon="mail" class="text-green-500 mr-2"/>
                   邮箱
                 </div>
                 <div class="row-content">
@@ -331,7 +331,7 @@
 <script setup lang="ts">
 import {ref, reactive, onMounted, onBeforeUnmount} from 'vue';
 import {useMessage, NForm, NFormItem, NInput, NSelect, NModal} from 'naive-ui';
-import {Icon} from '@iconify/vue';
+import Icon from '@/components/Icon.vue'
 import {useAuthorizationStore} from '../stores/Authorization';
 import {UserService} from '../services/UserService';
 import {AuthService} from '../services/AuthService';

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import {NButton} from 'naive-ui'
 import {useRouter} from "vue-router";
 
@@ -20,7 +20,7 @@ const sections: PolicySection[] = [
   {
     id: 'collection',
     title: '信息收集',
-    icon: 'ion:file-tray-full',
+    icon: 'inbox',
     iconColor: 'bg-blue-500',
     content: [
       '我们收集的信息仅限于为您提供服务所必需的内容。这包括您的账户基本信息（如电子邮件地址、用户名）以及您在使用服务过程中产生的数据。'
@@ -29,7 +29,7 @@ const sections: PolicySection[] = [
   {
     id: 'usage',
     title: '信息使用',
-    icon: 'ion:prism',
+    icon: 'split',
     iconColor: 'bg-purple-500',
     content: [
       '我们使用收集的信息来运营、维护和改进我们的服务。您的数据帮助我们个性化您的体验，并在出现问题时提供客户支持。',
@@ -39,21 +39,21 @@ const sections: PolicySection[] = [
   {
     id: 'cookies',
     title: 'Jwt 与追踪',
-    icon: 'ion:radio-button-on',
+    icon: 'circle-dot',
     iconColor: 'bg-orange-500',
     content: '我们使用 Jwt 和类似技术，以在各个会话中保持您的登录状态。'
   },
   {
     id: 'security',
     title: '数据安全',
-    icon: 'ion:shield-checkmark',
+    icon: 'shield-check',
     iconColor: 'bg-green-500',
     content: '我们采用行业标准的安全措施（如 SSL 加密）来保护您的数据免受未经授权的访问、披露、修改或销毁。'
   },
   {
     id: 'contact',
     title: '联系我们',
-    icon: 'ion:paper-plane',
+    icon: 'send',
     iconColor: 'bg-gray-500',
     content: '如果您对本隐私政策有任何疑问，或希望行使您的数据权利，请通过 iosclubxauat@163.com 与我们联系。'
   }

@@ -5,7 +5,7 @@
       <!-- 顶部控制栏：搜索与统计 -->
       <div class="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
         <div class="search-wrapper relative w-full sm:w-96 group">
-          <Icon icon="ion:search" class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" width="20" height="20"/>
+          <Icon icon="search" class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" width="20" height="20"/>
           <input
               v-model="searchQuery"
               type="text"
@@ -57,7 +57,7 @@
                        class="h-12 w-12 rounded-2xl object-cover shadow-sm border border-gray-100 dark:border-gray-700"/>
                   <div v-else
                        class="h-12 w-12 rounded-2xl bg-linear-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 flex items-center justify-center shadow-inner">
-                    <Icon icon="lucide:app-window-mac" width="24" height="24"
+                    <Icon icon="app-window-mac" width="24" height="24"
                           class="text-gray-500 dark:text-gray-400"/>
                   </div>
                 </div>
@@ -73,7 +73,7 @@
                   {{ app.clientId }}
                 </code>
                 <button @click="copyToClipboard(app.clientId)" class="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-blue-500">
-                  <Icon icon="ion:copy-outline" width="16"/>
+                  <Icon icon="copy" width="16"/>
                 </button>
               </div>
 
@@ -98,13 +98,13 @@
               <!-- 操作按钮 -->
               <div class="col-span-1 mt-3 md:mt-0 flex justify-end items-center gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
                 <button @click="openDetailsModal(app)" class="action-btn" title="详情">
-                  <Icon icon="lucide:info" width="22" height="22"/>
+                  <Icon icon="info" width="22" height="22"/>
                 </button>
                 <button @click="openEditModal(app)" class="action-btn" title="编辑">
-                  <Icon icon="tabler:edit" width="22" height="22"/>
+                  <Icon icon="pencil" width="22" height="22"/>
                 </button>
                 <button @click="confirmDelete(app)" class="action-btn text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" title="删除">
-                  <Icon icon="prime:trash" width="22" height="22"/>
+                  <Icon icon="trash" width="22" height="22"/>
                 </button>
               </div>
             </div>
@@ -113,7 +113,7 @@
           <!-- 空状态 -->
           <div v-else class="py-20 text-center">
             <div class="bg-gray-50 dark:bg-gray-800 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Icon icon="ion:search" width="32" class="text-gray-400"/>
+              <Icon icon="search" width="32" class="text-gray-400"/>
             </div>
             <h3 class="text-lg font-medium text-gray-900 dark:text-white">未找到应用</h3>
             <p class="text-gray-500 dark:text-gray-400 mt-1">尝试调整搜索关键词或创建一个新应用</p>
@@ -205,11 +205,11 @@
         <div class="flex flex-col items-center mb-8">
           <img alt="" v-if="selectedApp?.logoUrl" :src="selectedApp.logoUrl" class="w-24 h-24 rounded-3xl shadow-lg mb-4 object-cover bg-white" />
           <div v-else class="w-24 h-24 rounded-3xl bg-linear-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg mb-4 text-white">
-            <Icon icon="lucide:app-window-mac" width="48" height="48" />
+            <Icon icon="app-window-mac" width="48" height="48" />
           </div>
           <h2 class="text-2xl font-bold text-gray-900 dark:text-white">{{ selectedApp?.applicationName }}</h2>
           <a v-if="selectedApp?.homepageUrl" :href="selectedApp.homepageUrl" target="_blank" class="text-blue-500 text-sm hover:underline mt-1 flex items-center">
-            {{ selectedApp.homepageUrl }} <Icon icon="ion:ios-arrow-forward" width="12" class="ml-1"/>
+            {{ selectedApp.homepageUrl }} <Icon icon="chevron-right" width="12" class="ml-1"/>
           </a>
         </div>
 
@@ -222,7 +222,7 @@
                   <span class="text-[10px] uppercase text-gray-400 font-bold tracking-wider">Client ID</span>
                   <code class="text-sm font-mono text-gray-800 dark:text-gray-200">{{ selectedApp?.clientId }}</code>
                 </div>
-                <button @click="copyToClipboard(selectedApp?.clientId)" class="text-blue-500 hover:bg-blue-500/10 p-1.5 rounded-lg transition-colors"><Icon icon="ion:copy-outline"/></button>
+                <button @click="copyToClipboard(selectedApp?.clientId)" class="text-blue-500 hover:bg-blue-500/10 p-1.5 rounded-lg transition-colors"><Icon icon="copy"/></button>
               </div>
               <div class="p-3 flex justify-between items-center">
                 <div class="flex flex-col w-full mr-2">
@@ -233,9 +233,9 @@
                 </div>
                 <div class="flex gap-1">
                   <button @click="showSecret = !showSecret" class="text-gray-500 hover:bg-gray-200/50 dark:hover:bg-white/10 p-1.5 rounded-lg transition-colors">
-                    <Icon :icon="showSecret ? 'ion:eye-off-outline' : 'ion:eye-outline'" />
+                    <Icon :icon="showSecret ? 'eye-off' : 'eye'" morph />
                   </button>
-                  <button @click="copyToClipboard(selectedApp?.clientSecret)" class="text-blue-500 hover:bg-blue-500/10 p-1.5 rounded-lg transition-colors"><Icon icon="ion:copy-outline"/></button>
+                  <button @click="copyToClipboard(selectedApp?.clientSecret)" class="text-blue-500 hover:bg-blue-500/10 p-1.5 rounded-lg transition-colors"><Icon icon="copy"/></button>
                 </div>
               </div>
             </div>
@@ -245,11 +245,11 @@
             <label class="detail-label">配置</label>
             <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 space-y-3">
               <div v-for="(uri, idx) in toUriList(selectedApp?.redirectUris)" :key="idx" class="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-300 break-all">
-                <Icon icon="ion:link-outline" class="mt-0.5 text-gray-400 shrink-0" />
+                <Icon icon="link" class="mt-0.5 text-gray-400 shrink-0" />
                 <span>{{ uri }}</span>
               </div>
               <div v-if="selectedApp?.supportsPkce" class="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-400 p-2 rounded-lg w-fit px-3">
-                <Icon icon="ion:shield-checkmark-outline" /> PKCE Enabled
+                <Icon icon="shield-check" /> PKCE Enabled
               </div>
             </div>
           </div>
@@ -281,7 +281,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, defineComponent, h } from 'vue';
 import { useMessage, useDialog, NModal, NSwitch } from 'naive-ui';
-import { Icon } from '@iconify/vue';
+import Icon from '@/components/Icon.vue'
 import HelpGuide from '../components/HelpGuide.vue';
 import { ClientAppService } from '../services/ClientAppService';
 import type { ClientApplication, CreateClientAppModel, UpdateClientAppModel } from '../models';
@@ -486,12 +486,12 @@ onMounted(() => {
         h('button', {
           class: 'hidden sm:flex items-center px-4 py-2 rounded-full text-sm font-medium bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 text-gray-700 dark:text-gray-200 transition-colors',
           onClick: () => showHelpGuide.value = true
-        }, [h(Icon, { icon: 'ion:ios-help-circle-outline', class: 'mr-1.5', width: 18 }), '帮助']),
+        }, [h(Icon, { icon: 'circle-question-mark', class: 'mr-1.5', width: 18 }), '帮助']),
 
         h('button', {
           class: 'hidden sm:flex items-center px-4 py-2 rounded-full text-sm font-medium bg-[#0071e3] hover:bg-[#0077ed] text-white shadow-sm transition-all',
           onClick: openCreateModal
-        }, [h(Icon, { icon: 'ion:plus', class: 'mr-1', width: 18 }), '新建应用'])
+        }, [h(Icon, { icon: 'plus', class: 'mr-1', width: 18 }), '新建应用'])
       ]);
     }
   });
