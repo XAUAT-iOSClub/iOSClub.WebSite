@@ -9,9 +9,12 @@ namespace iOSClub.WebAPI.Controllers;
 /// <summary>
 /// 日志控制器，提供日志查询和过滤功能
 /// 可以获取最近的日志条目或按级别过滤日志
+/// <para>
+/// 权限：读取仅 Founder / President / Minister；清理（POST cleanup）仅 Founder / President。
+/// </para>
 /// </summary>
 [ApiController]
-[Authorize]
+[Authorize(Roles = "Founder, President, Minister")]
 [Route("[controller]")]
 public class LogsController
     : ControllerBase
@@ -263,6 +266,12 @@ public class LogsController
     /// </summary>
     /// <param name="days">要保留的日志天数，默认为7天</param>
     /// <returns>清理结果</returns>
+    /// <remarks>
+    /// 清理属于破坏性写操作，仅 Founder / President 可用。
+    /// 与方法所在类上的 [Authorize(Roles = "Founder, President, Minister")] 取交集，
+    /// 实际生效角色为 Founder / President。
+    /// </remarks>
+    [Authorize(Roles = "Founder, President")]
     [HttpPost("cleanup")]
     public async Task<ActionResult<ApiResponse<object>>> CleanupOldLogs([FromQuery] int days = 7)
     {

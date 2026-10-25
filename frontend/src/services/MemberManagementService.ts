@@ -1,9 +1,9 @@
 import {url} from './Url';
 import {apiRequest} from './ApiService';
-import {StudentUpdateDTO} from "../models";
+import {StudentCreateDTO, StudentUpdateDTO, StudentVO} from "../models";
 
 /**
- * 成员管理服务类 - 处理成员的删除、更新等管理功能
+ * 成员管理服务类 - 处理成员的删除、新增、更新等管理功能
  */
 export class MemberManagementService {
     /**
@@ -15,6 +15,20 @@ export class MemberManagementService {
         await apiRequest<void>({
             url: `${url}/MemberManagement/delete/${id}`,
             method: 'POST'
+        });
+    }
+
+    /**
+     * 新增学生成员
+     * 与 update 分开：update 以学号为定位键，学号不存在时必然失败。
+     * @param model 学生创建请求（含管理员设置的初始密码）
+     * @returns Promise<StudentVO> 新建的学生信息（不含密码字段）
+     */
+    static async createMember(model: StudentCreateDTO): Promise<StudentVO> {
+        return await apiRequest<StudentVO>({
+            url: `${url}/MemberManagement/create`,
+            method: 'POST',
+            body: model
         });
     }
 

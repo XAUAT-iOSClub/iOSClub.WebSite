@@ -2,6 +2,7 @@ using Mapster;
 using iOSClub.Data;
 using iOSClub.Data.DataObjects;
 using iOSClub.Data.DTOs;
+using iOSClub.Data.VOs;
 using iOSClub.DataApi.Repositories;
 using iOSClub.WebAPI.Common;
 using Microsoft.AspNetCore.Authorization;
@@ -74,6 +75,56 @@ public class MemberManagementController(
 
             return Ok(ApiResponse<bool>.Fail(ErrorCode.OperationFailed, "批量更新学生失败"));
         }
+    }
+
+    /// <summary>
+    /// 新增学生成员（管理角色专用）
+    /// <para>
+    /// 与 <see cref="Update"/> 分开：update 以学号为定位键，学号不存在时必然失败，
+    /// 因此不能复用为创建。初始密码由管理员在此提交，仓库层负责 BCrypt 哈希；
+    /// 响应只返回不含密码字段的 <see cref="StudentVO"/>。
+    /// </para>
+    /// <para>
+    /// 只创建学生档案，不自动创建 Staff 档案，身份按现有规则回落为 Member。
+    /// </para>
+    /// </summary>
+    /// <param name="model">学生创建模型，包含管理员设置的初始密码</param>
+    /// <returns>新建的学生信息</returns>
+    [HttpPost("create")]
+    public async Task<ActionResult<ApiResponse<StudentVO>>> Create([FromBody] StudentCreateDTO model)
+    {
+        // 先查重再创建，避免把"学号已存在"和"参数不合法"混成同一个失败提示。
+        var existing = await studentRepository.GetByIdAsync(model.UserId);
+        if (existing != null)
+        {
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("新增学生失败，学号已存在，ID: {Id}", model.UserId);
+            }
+
+            return Ok(ApiResponse<StudentVO>.Fail(ErrorCode.ResourceAlreadyExists, "学号已存在，不能重复创建"));
+        }
+
+        // Mapster 全局配置负责把 StudentCreateDTO.Password 映射为 BCrypt PasswordHash。
+        var created = await studentRepository.Create(model.Adapt<StudentDO>());
+        if (created == null)
+        {
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("新增学生失败，ID: {Id}", model.UserId);
+            }
+
+            return Ok(ApiResponse<StudentVO>.Fail(ErrorCode.OperationFailed, "新增学生失败"));
+        }
+
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("新增学生成功，ID: {Id}", created.UserId);
+        }
+
+        return Ok(ApiResponse<StudentVO>.Success(
+            created.Adapt<StudentVO>(),
+            "成员创建成功，初始密码由管理员设置，请告知本人"));
     }
 
     /// <summary>

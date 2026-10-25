@@ -1,5 +1,6 @@
 using iOSClub.DataApi.Services;
 using iOSClub.WebAPI.Common;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Prometheus;
 
@@ -113,8 +114,13 @@ public class MonitoringController(IDataAccessStatisticsService statisticsService
     /// <summary>
     /// 重置数据统计
     /// </summary>
+    /// <remarks>
+    /// 重置会清空统计存储，属于破坏性写操作，仅 Founder / President 可用。
+    /// 其余只读接口的匿名访问属于产品决策，本次不做限制。
+    /// </remarks>
     /// <param name="entityType">实体类型（可选）</param>
     /// <returns>操作结果</returns>
+    [Authorize(Roles = "Founder, President")]
     [HttpPost("reset-data-stats")]
     public async Task<ActionResult<ApiResponse<bool>>> ResetDataStats(string? entityType = null)
     {

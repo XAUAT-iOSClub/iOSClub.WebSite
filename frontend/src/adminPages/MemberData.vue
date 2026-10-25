@@ -21,7 +21,7 @@ import {InfoService} from '../services/InfoService'
 import {
   DataCentreService
 } from '../services/DataCentreService'
-import type {MemberVO, StudentUpdateDTO, PaginatedMemberResponse} from '../models'
+import type {MemberVO, StudentCreateDTO, StudentUpdateDTO, PaginatedMemberResponse} from '../models'
 import type {
   AcademyCount,
   GenderCount,
@@ -49,6 +49,15 @@ const formRef = ref<any>(null)
 const passwordFormRef = ref<any>(null)
 const loading = ref(false)
 const activeTab = ref('memberData')
+
+// 新增 / 编辑模式：以前用 identity 是否为空判断，但列表数据的 identity 恒为非空
+// （无 Staff 档案时后端回落为 Member），导致"新增"永远走 update 分支。
+// 现在显式记录正在编辑的学号：null 表示新增。
+const editingUserId = ref<string | null>(null)
+// 新增成员时的初始密码由管理员设置（后端要求 >=8 位且含大写字母和数字）
+const createPassword = ref('')
+const createPasswordConfirm = ref('')
+const createPasswordPattern = /^(?=.*[A-Z])(?=.*\d).{8,256}$/
 
 const fileInput = ref<HTMLInputElement>()
 
@@ -450,6 +459,9 @@ const handleTabChange = (val: string) => {
 
 // --- CRUD Operations ---
 const showAddMemberModal = () => {
+  editingUserId.value = null
+  createPassword.value = ''
+  createPasswordConfirm.value = ''
   currentMember.value = {
     identity: '', userName: '', userId: '', academy: '', className: '',
     phoneNum: '', politicalLandscape: '', gender: '',
@@ -459,6 +471,9 @@ const showAddMemberModal = () => {
 }
 
 const editMember = (member: MemberVO) => {
+  editingUserId.value = member.userId
+  createPassword.value = ''
+  createPasswordConfirm.value = ''
   currentMember.value = {...member}
   showModal.value = true
 }
@@ -489,9 +504,9 @@ const saveMember = async () => {
   formRef.value?.validate(async (errors: any) => {
     if (!errors) {
       try {
-        // 只提交后端 StudentUpdateDTO 接受的字段；
-        // identity / joinTime 不在该 DTO 里，发过去会被静默忽略。
-        const payload: StudentUpdateDTO = {
+        // 只提交后端 StudentUpdateDTO / StudentCreateDTO 接受的字段；
+        // identity / joinTime 不在这些 DTO 里，发过去会被静默忽略。
+        const basePayload = {
           userId: currentMember.value.userId,
           userName: currentMember.value.userName,
           academy: currentMember.value.academy,
@@ -501,15 +516,27 @@ const saveMember = async () => {
           phoneNum: currentMember.value.phoneNum,
           eMail: currentMember.value.eMail
         }
-        if (currentMember.value.identity) {
+        if (editingUserId.value) {
+          // 编辑：以学号为定位键（不能用 identity——同角色成员不止一个）。
+          const payload: StudentUpdateDTO = {...basePayload}
           await MemberManagementService.updateMember(payload)
-          const index = members.value.findIndex(m => m.identity === currentMember.value.identity)
+          const index = members.value.findIndex(m => m.userId === payload.userId)
           if (index !== -1) members.value[index] = {...currentMember.value}
           message.success('已更新')
         } else {
-          await MemberManagementService.updateMember(payload)
-          message.success('已添加')
-          await fetchMembers() // Refresh for ID generation if real backend
+          // 新增：走独立创建接口，初始密码由管理员设置。
+          if (!createPasswordPattern.test(createPassword.value)) {
+            message.error('初始密码至少8个字符，且包含大写字母和数字')
+            return
+          }
+          if (createPassword.value !== createPasswordConfirm.value) {
+            message.error('两次输入的初始密码不一致')
+            return
+          }
+          const payload: StudentCreateDTO = {...basePayload, password: createPassword.value}
+          const created = await MemberManagementService.createMember(payload)
+          message.success(`已创建成员 ${created.userName}（${created.userId}），请将初始密码告知本人`)
+          await fetchMembers()
         }
         showModal.value = false
       } catch (error: any) {
@@ -804,7 +831,7 @@ onBeforeUnmount(() => {
 
     <!-- Modals (Customized Presets) -->
     <n-modal v-model:show="showModal" preset="card" class="custom-modal w-full max-w-lg"
-             :title="currentMember.identity ? '编辑成员' : '添加成员'">
+             :title="editingUserId ? '编辑成员' : '添加成员'">
       <n-form :model="currentMember" :rules="rules" ref="formRef" label-placement="left" label-width="auto"
               require-mark-placement="right-hanging">
         <div class="grid grid-cols-1 gap-4 py-2">
@@ -812,8 +839,22 @@ onBeforeUnmount(() => {
             <n-input v-model:value="currentMember.userName" class="custom-input" placeholder="姓名"/>
           </n-form-item>
           <n-form-item label="学号" path="userId">
-            <n-input v-model:value="currentMember.userId" class="custom-input" placeholder="10位学号"/>
+            <n-input v-model:value="currentMember.userId" class="custom-input" placeholder="10位学号"
+                     :disabled="!!editingUserId"/>
           </n-form-item>
+          <template v-if="!editingUserId">
+            <n-form-item label="初始密码">
+              <n-input v-model:value="createPassword" type="password" show-password-on="click"
+                       class="custom-input" placeholder="至少8位，含大写字母和数字"/>
+            </n-form-item>
+            <n-form-item label="确认密码">
+              <n-input v-model:value="createPasswordConfirm" type="password" show-password-on="click"
+                       class="custom-input" placeholder="再次输入初始密码"/>
+            </n-form-item>
+            <p class="text-xs text-gray-500 dark:text-gray-400 -mt-2">
+              新增成功后请把学号和初始密码告知本人；初始密码不会在响应中回传。
+            </p>
+          </template>
           <n-form-item label="学院" path="academy">
             <n-select v-model:value="currentMember.academy" :options="academyOptions" filterable class="custom-select"/>
           </n-form-item>

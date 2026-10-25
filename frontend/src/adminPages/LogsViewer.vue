@@ -151,7 +151,8 @@
                   <Icon icon="rotate-ccw"/>
                 </template>
               </n-button>
-              <n-button secondary circle type="error" @click="showCleanupDialog = true">
+              <!-- 清理是破坏性操作：后端仅允许 Founder / President，界面保持一致，无权限角色隐藏入口 -->
+              <n-button v-if="canCleanupLogs" secondary circle type="error" @click="showCleanupDialog = true">
                 <template #icon>
                   <Icon icon="trash"/>
                 </template>
@@ -360,6 +361,7 @@ import {
 import Icon from '@/components/Icon.vue'
 import {LogsService, type LogEntry, type LogDistribution} from '../services/LogsService'
 import {useLayoutStore} from '../stores/LayoutStore'
+import {useAuthorizationStore} from '../stores/Authorization'
 import * as echarts from 'echarts'
 
 // ---------------------------------------------------------
@@ -401,6 +403,13 @@ const chartLoading = ref<boolean>(false)
 // Store & Hooks
 const message = useMessage()
 const layoutStore = useLayoutStore()
+const authorizationStore = useAuthorizationStore()
+
+// 与后端 LogsController.CleanupOldLogs 的 [Authorize(Roles = "Founder, President")] 保持一致
+const canCleanupLogs = computed(() => {
+  const role = authorizationStore.getRole
+  return role === 'Founder' || role === 'President'
+})
 
 // ---------------------------------------------------------
 // Constants & Options

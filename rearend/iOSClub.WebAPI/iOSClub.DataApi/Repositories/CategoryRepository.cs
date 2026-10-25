@@ -19,8 +19,9 @@ public interface ICategoryRepository
     /// 根据名称获取分类
     /// </summary>
     /// <param name="name">分类名称</param>
+    /// <param name="accessScope">访问者身份和部门；为空时用于后台操作，不进行可见性过滤</param>
     /// <returns>分类模型，如果找不到则返回null</returns>
-    public Task<CategoryDO?> GetByName(string name);
+    public Task<CategoryDO?> GetByName(string name, ArticleAccessScope? accessScope = null);
     
     /// <summary>
     /// 创建或更新分类
@@ -62,8 +63,9 @@ public interface ICategoryRepository
     /// 根据分类ID获取文章列表
     /// </summary>
     /// <param name="id">分类ID</param>
+    /// <param name="accessScope">访问者身份和部门；为空时用于后台操作，不进行可见性过滤</param>
     /// <returns>文章数组</returns>
-    public Task<ArticleDO[]> GetArticlesById(string id);
+    public Task<ArticleDO[]> GetArticlesById(string id, ArticleAccessScope? accessScope = null);
 }
 
 public class CategoryRepository(IDbContextFactory<ClubContext> factory) : ICategoryRepository
@@ -76,11 +78,21 @@ public class CategoryRepository(IDbContextFactory<ClubContext> factory) : ICateg
             .ToListAsync();
     }
 
-    public async Task<CategoryDO?> GetByName(string name)
+    public async Task<CategoryDO?> GetByName(string name, ArticleAccessScope? accessScope = null)
     {
         await using var context = await factory.CreateDbContextAsync();
-        return await context.Categories.Include(x => x.Articles)
+        var category = await context.Categories.Include(x => x.Articles)
             .FirstOrDefaultAsync(c => c.Name == name);
+
+        if (category == null || accessScope == null)
+            return category;
+
+        // 分类 VO 里带文章列表，必须与文章详情接口使用同一套可见性规则，
+        // 否则分类接口会泄露"部长仅见""其他部门限定"文章的标题/路径。
+        category.Articles = category.Articles
+            .Where(article => ArticleAccessPolicy.CanAccess(accessScope, article))
+            .ToList();
+        return category;
     }
 
     public async Task<bool> CreateOrUpdate(CategoryDO model)
@@ -196,15 +208,41 @@ public class CategoryRepository(IDbContextFactory<ClubContext> factory) : ICateg
         return await context.Categories.FirstOrDefaultAsync(c => c.Id == id);
     }
 
-    public async Task<ArticleDO[]> GetArticlesById(string id)
+    public async Task<ArticleDO[]> GetArticlesById(string id, ArticleAccessScope? accessScope = null)
     {
         await using var context = await factory.CreateDbContextAsync();
-        return await context.Articles.Where(x => x.CategoryId == id).Select(x => new ArticleDO()
+
+        // 后台调用（accessScope == null）保持既有契约：只回填排序用的最小字段。
+        if (accessScope == null)
+        {
+            return await context.Articles.Where(x => x.CategoryId == id).Select(x => new ArticleDO()
+                {
+                    Path = x.Path,
+                    Title = x.Title,
+                    ArticleOrder = x.ArticleOrder
+                })
+                .ToArrayAsync();
+        }
+
+        // 前台调用需要文章自身的职级/部门字段才能复用 ArticleAccessPolicy。
+        var articles = await context.Articles.Where(x => x.CategoryId == id).Select(x => new ArticleDO()
             {
                 Path = x.Path,
                 Title = x.Title,
-                ArticleOrder = x.ArticleOrder
+                ArticleOrder = x.ArticleOrder,
+                Identity = x.Identity,
+                VisibleToDepartment = x.VisibleToDepartment
             })
             .ToArrayAsync();
+
+        return articles
+            .Where(article => ArticleAccessPolicy.CanAccess(accessScope, article))
+            .Select(article => new ArticleDO()
+            {
+                Path = article.Path,
+                Title = article.Title,
+                ArticleOrder = article.ArticleOrder
+            })
+            .ToArray();
     }
 }
