@@ -89,6 +89,19 @@ public class RateLimitConfig
             Enabled = true,
             Priority = 100
         },
+        // 注册学号可用性校验：匿名接口会暴露"某学号是否已注册"，
+        // 用比 /Auth/* 更严格的桶限制批量枚举，同时给校园网 NAT 下的整班注册留出余量。
+        new()
+        {
+            Name = "register-check",
+            PathPattern = "/Auth/student-id-available|/api/auth/student-id-available",
+            TokenLimit = 20,
+            ReplenishmentPeriod = TimeSpan.FromMinutes(1),
+            TokensPerPeriod = 20,
+            AutoReplenishment = true,
+            Enabled = true,
+            Priority = 5
+        },
         // 密码重置策略：发信与校验都按 IP 限速，配合 LoginService 的
         // 单验证码 5 次尝试上限，阻止 6 位数字被穷举和邮件轰炸。
         new()

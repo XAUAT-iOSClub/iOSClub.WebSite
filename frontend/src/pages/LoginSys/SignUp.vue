@@ -234,7 +234,7 @@ import {useRouter} from 'vue-router'
 import {NInput, NForm, NFormItem, NSelect} from 'naive-ui'
 import Icon from '@/components/Icon.vue'
 import {useAuthorizationStore} from '../../stores/Authorization'
-import {ios} from '../../services/AuthService'
+import {ios, AuthService} from '../../services/AuthService'
 import {InfoService} from '../../services/InfoService'
 import {isWeiXin, NavigateTo} from "../../lib/site"
 
@@ -365,11 +365,43 @@ const validateCurrentStep = async (): Promise<boolean> => {
   }
 }
 
+// 学号占用校验结果缓存：同一个学号只查一次，用户改了学号后 key 不再匹配会自动重查。
+const checkedStudentId = ref('')
+const checkedStudentIdAvailable = ref<boolean | null>(null)
+
+const isStudentIdAvailable = async (): Promise<boolean> => {
+  if (checkedStudentId.value === form.studentId && checkedStudentIdAvailable.value !== null) {
+    return checkedStudentIdAvailable.value
+  }
+
+  const available = await AuthService.checkStudentIdAvailable(form.studentId)
+  checkedStudentId.value = form.studentId
+  checkedStudentIdAvailable.value = available
+  return available
+}
+
 const nextStep = async () => {
   if (loading.value) return;
 
   const isValid = await validateCurrentStep()
   if (!isValid) return
+
+  // 第一步先把"学号已注册"挡在流程前，避免用户填完三步才在提交时失败。
+  if (currentStep.value === 1) {
+    loading.value = true
+    try {
+      if (!await isStudentIdAvailable()) {
+        errorMsg.value = '该学号已注册，请直接登录；如有疑问请联系管理员'
+        return
+      }
+    } catch (e: any) {
+      // 校验失败不等于学号可用：网络异常或触发限流时提示重试，而不是放行。
+      errorMsg.value = e?.message || '学号校验失败，请稍后重试'
+      return
+    } finally {
+      loading.value = false
+    }
+  }
 
   if (currentStep.value === 3) {
     await submitRegistration()

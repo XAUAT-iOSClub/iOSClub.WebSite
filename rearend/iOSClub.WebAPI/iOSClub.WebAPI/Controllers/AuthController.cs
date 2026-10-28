@@ -8,6 +8,7 @@ using iOSClub.WebAPI.IdentityModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Mapster;
+using System.Text.RegularExpressions;
 
 namespace iOSClub.WebAPI.Controllers;
 
@@ -20,6 +21,34 @@ public class AuthController(
     ITokenGenerator tokenGenerator)
     : ControllerBase
 {
+    // 与 StudentCreateDTO.UserId 的 [RegularExpression] 保持一致
+    private static readonly Regex StudentIdPattern = new(@"^\d{10}$", RegexOptions.Compiled);
+
+    /// <summary>
+    /// 注册第一步：检查学号是否可注册
+    /// </summary>
+    /// <param name="studentId">10 位数字学号</param>
+    /// <returns>true 表示该学号尚未被学生或员工占用</returns>
+    [HttpGet("student-id-available")]
+    public async Task<ActionResult<ApiResponse<bool>>> CheckStudentIdAvailable(string studentId)
+    {
+        var userId = studentId ?? string.Empty;
+
+        // 与 StudentCreateDTO.UserId 的规则保持一致，格式不合法时不必查库。
+        if (!StudentIdPattern.IsMatch(userId))
+        {
+            return Ok(ApiResponse<bool>.Fail(ErrorCode.ParameterFormatError, "学号必须为10位数字"));
+        }
+
+        // 与 SignUp 的拒绝规则保持一致：学号被学生或员工占用都不可注册。
+        // 该接口必然暴露"某学号是否已注册"，但注册接口本身就会返回同样的信息，
+        // 所以不构成新的泄露面；枚举速率由 register-check 限流策略约束。
+        var available = !await studentRepository.StudentExistsAsync(userId) &&
+                        !await staffRepository.StaffExistsAsync(userId);
+
+        return Ok(ApiResponse<bool>.Success(available, available ? "学号可注册" : "该学号已被占用"));
+    }
+
     /// <summary>
     /// 学生注册接口
     /// </summary>

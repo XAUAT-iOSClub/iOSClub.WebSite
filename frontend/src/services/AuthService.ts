@@ -87,6 +87,21 @@ export class AuthService {
         return { accessToken, refreshToken };
     }
 
+    /**
+     * 注册第一步：检查学号是否已被注册（学生或员工占用）。
+     * 仅用于提前提示，最终以 signup 的重复校验为准——两次请求之间仍可能被他人抢先注册。
+     * @param studentId 10 位数字学号
+     * @returns Promise<boolean> true 表示该学号尚未被占用
+     */
+    static async checkStudentIdAvailable(studentId: string): Promise<boolean> {
+        // 注册页面没有登录态，必须显式声明匿名请求，避免 apiRequest 附带失效令牌。
+        return await apiRequest<boolean>({
+            url: `${url}/Auth/student-id-available?studentId=${encodeURIComponent(studentId)}`,
+            method: 'GET',
+            requiresAuth: false
+        });
+    }
+
     static async logout(userId: string, clientId: string | null | undefined = ''): Promise<boolean> {
         try {
             await apiRequest<boolean>({

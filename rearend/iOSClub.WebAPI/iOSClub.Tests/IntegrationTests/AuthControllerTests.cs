@@ -509,4 +509,80 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(ErrorCode.ParameterValidationFailed, result.ErrorCode);
         Assert.Contains("userId", result.Detail ?? "");
     }
+
+    [Fact]
+    public async Task CheckStudentIdAvailable_UnusedStudentId_ReturnsTrue()
+    {
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var response = await _client.GetAsync("/Auth/student-id-available?studentId=2021000001");
+
+        response.EnsureSuccessStatusCode();
+        var result = JsonConvert.DeserializeObject<ApiResponse<bool>>(
+            await response.Content.ReadAsStringAsync());
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCode.Success, result.ErrorCode);
+        Assert.True(result.Data);
+    }
+
+    [Fact]
+    public async Task CheckStudentIdAvailable_RegisteredStudent_ReturnsFalse()
+    {
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        context.Students.Add(new StudentDO
+        {
+            UserId = "2021000001",
+            UserName = "测试学生",
+            PasswordHash = DataTool.StringToHash("Password123")
+        });
+        await context.SaveChangesAsync();
+
+        var response = await _client.GetAsync("/Auth/student-id-available?studentId=2021000001");
+
+        response.EnsureSuccessStatusCode();
+        var result = JsonConvert.DeserializeObject<ApiResponse<bool>>(
+            await response.Content.ReadAsStringAsync());
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCode.Success, result.ErrorCode);
+        Assert.False(result.Data);
+    }
+
+    [Fact]
+    public async Task CheckStudentIdAvailable_StaffOnlyId_ReturnsFalse()
+    {
+        // 与 SignUp 的拒绝规则一致：只有 Staffs 行、没有 Students 行的学号同样不能注册。
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        context.Staffs.Add(new StaffDO { UserId = "2021000001", Name = "测试干部", Identity = "Founder" });
+        await context.SaveChangesAsync();
+
+        var response = await _client.GetAsync("/Auth/student-id-available?studentId=2021000001");
+
+        response.EnsureSuccessStatusCode();
+        var result = JsonConvert.DeserializeObject<ApiResponse<bool>>(
+            await response.Content.ReadAsStringAsync());
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCode.Success, result.ErrorCode);
+        Assert.False(result.Data);
+    }
+
+    [Theory]
+    [InlineData("LIJIAJUN")]
+    [InlineData("20210001")]
+    public async Task CheckStudentIdAvailable_InvalidFormat_ReturnsParameterError(string studentId)
+    {
+        var response = await _client.GetAsync($"/Auth/student-id-available?studentId={studentId}");
+
+        var result = JsonConvert.DeserializeObject<ApiResponse<bool>>(
+            await response.Content.ReadAsStringAsync());
+        Assert.NotNull(result);
+        Assert.Equal((int)HttpStatusCode.BadRequest, result.Code);
+        Assert.Equal((int)response.StatusCode, result.Code);
+        Assert.Equal(ErrorCode.ParameterFormatError, result.ErrorCode);
+    }
 }
