@@ -157,16 +157,11 @@ public class AuthController(
     [HttpPost("request-password-reset")]
     public async Task<ActionResult<ApiResponse<bool>>> RequestPasswordReset(string userId)
     {
-        var result = await loginService.RequestPasswordResetCode(userId);
+        // 无论用户是否存在、是否绑定邮箱、邮件是否发送成功，都返回同一句话。
+        // 之前按"用户不存在 / 请联系管理员"区分响应，等于把学号枚举接口送给了攻击者。
+        await loginService.RequestPasswordResetCode(userId);
 
-        if (result) return Ok(ApiResponse<bool>.Success(true, "请求重置密码验证码成功"));
-        // 检查用户是否存在
-        var student = await studentRepository.GetByIdAsync(userId);
-        return Ok(student == null
-            ? ApiResponse<bool>.Fail(ErrorCode.UserNotFound, "用户不存在")
-            : ApiResponse<bool>.Fail(ErrorCode.OperationFailed, "请联系管理员进行密码更改"));
-
-        // 用户存在但没有邮箱
+        return Ok(ApiResponse<bool>.Success(true, "如果该账号已绑定邮箱，验证码已发送"));
     }
 
     /// <summary>

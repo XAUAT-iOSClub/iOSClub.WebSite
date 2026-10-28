@@ -52,6 +52,9 @@ public static class ServiceCollectionExtensions
 
             // 注册IP黑名单缓存服务
             services.AddSingleton<IIpBlacklistCacheService, IpBlacklistCacheService>();
+
+            // OAuth 客户端密钥的可恢复加密存储（查看密钥用）
+            services.AddSingleton<IClientSecretProtector, ClientSecretProtector>();
         }
     }
 }

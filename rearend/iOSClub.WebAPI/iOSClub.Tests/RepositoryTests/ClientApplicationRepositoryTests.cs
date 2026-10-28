@@ -156,7 +156,8 @@ public class ClientApplicationRepositoryTests
         // 不固定的话这个测试会随机失败。
         clientApp.IsActive = true;
         var originalSecret = clientApp.ClientSecret;
-        // 保存原始密钥到数据库，不进行哈希处理
+        // 与生产写入路径一致：数据库只保存 BCrypt 哈希，校验时拿原始密钥比对。
+        clientApp.ClientSecret = BCrypt.Net.BCrypt.HashPassword(originalSecret);
         await context.ClientApplications.AddAsync(clientApp);
         await context.SaveChangesAsync();
 
@@ -166,6 +167,26 @@ public class ClientApplicationRepositoryTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(clientApp.ClientId, result.ClientId);
+    }
+
+    [Fact]
+    public async Task ValidateCredentialsAsync_RejectsStoredHashAsSecret()
+    {
+        // 回归：以前 ValidateCredentialsAsync 有明文相等分支，配合 ClientAppVO 回显哈希，
+        // 任何能读取应用列表的人都能拿哈希当 client_secret 冒充客户端。
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var clientApp = BogusDataGenerator.ClientApplicationFaker.Generate();
+        clientApp.IsActive = true;
+        clientApp.ClientSecret = BCrypt.Net.BCrypt.HashPassword("real-secret");
+        await context.ClientApplications.AddAsync(clientApp);
+        await context.SaveChangesAsync();
+
+        var result = await _clientAppRepository.ValidateCredentialsAsync(clientApp.ClientId, clientApp.ClientSecret);
+
+        Assert.Null(result);
     }
 
     [Fact]

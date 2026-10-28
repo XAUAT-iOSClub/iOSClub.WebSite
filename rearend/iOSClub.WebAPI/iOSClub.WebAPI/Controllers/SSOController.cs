@@ -635,19 +635,14 @@ public class SSOController(
 
         if (string.IsNullOrEmpty(request.ClientId))
         {
-            if (string.IsNullOrEmpty(request.RedirectUri))
+            if (logger.IsEnabled(LogLevel.Warning))
             {
-                if (logger.IsEnabled(LogLevel.Warning))
-                {
-                    logger.LogWarning("Token exchange failed: missing client_id parameter");
-                }
-
-                return BadRequest(new { error = "invalid_request", error_description = "缺少必需参数: client_id" });
+                logger.LogWarning("Token exchange failed: missing client_id parameter");
             }
 
-            var app = await clientAppRepository.GetByRedirectUriAsync(request.RedirectUri);
-            request.ClientId = app?.ClientId ?? "";
-            request.ClientSecret = app?.ClientSecret ?? "";
+            // 不再允许用 redirect_uri 反查客户端并回填 client_secret：
+            // 那等于把数据库里的密钥直接当成请求参数，客户端认证形同虚设。
+            return BadRequest(new { error = "invalid_request", error_description = "缺少必需参数: client_id" });
         }
 
         if (string.IsNullOrEmpty(request.ClientSecret))
@@ -936,23 +931,16 @@ public class SSOController(
             return BadRequest(new { error = "invalid_request", error_description = "缺少必需参数: refresh_token" });
         }
 
-        // 客户端校验与 authorization_code 分支保持一致：
-        // client_id 缺失时允许用 redirect_uri 反查客户端凭据。
+        // 客户端校验与 authorization_code 分支保持一致：必须显式携带 client_id，
+        // 不能用 redirect_uri 反查并回填密钥。
         if (string.IsNullOrEmpty(request.ClientId))
         {
-            if (string.IsNullOrEmpty(request.RedirectUri))
+            if (logger.IsEnabled(LogLevel.Warning))
             {
-                if (logger.IsEnabled(LogLevel.Warning))
-                {
-                    logger.LogWarning("Token refresh failed: missing client_id parameter");
-                }
-
-                return BadRequest(new { error = "invalid_request", error_description = "缺少必需参数: client_id" });
+                logger.LogWarning("Token refresh failed: missing client_id parameter");
             }
 
-            var app = await clientAppRepository.GetByRedirectUriAsync(request.RedirectUri);
-            request.ClientId = app?.ClientId ?? "";
-            request.ClientSecret = app?.ClientSecret ?? "";
+            return BadRequest(new { error = "invalid_request", error_description = "缺少必需参数: client_id" });
         }
 
         if (string.IsNullOrEmpty(request.ClientSecret))

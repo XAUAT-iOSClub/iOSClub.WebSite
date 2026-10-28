@@ -72,8 +72,17 @@ public class ClientApplicationRepository(IDbContextFactory<ClubContext> contextF
 
     public async Task<ClientApplicationDO?> GetByRedirectUriAsync(string redirectUri)
     {
+        if (string.IsNullOrWhiteSpace(redirectUri)) return null;
+
         await using var context = await contextFactory.CreateDbContextAsync();
-        return await context.ClientApplications.FirstOrDefaultAsync(c => c.RedirectUris.Contains(redirectUri));
+        var applications = await context.ClientApplications.ToListAsync();
+
+        // 与 IsRedirectUriValid 保持一致：按分号拆开后精确比较，
+        // 不能用字符串 Contains —— 那会允许 https://evil.example 命中
+        // 已注册的 https://app.example/callback 片段。
+        return applications.FirstOrDefault(c =>
+            c.RedirectUris.Split(';', StringSplitOptions.RemoveEmptyEntries)
+                .Any(uri => string.Equals(uri.Trim(), redirectUri.Trim(), StringComparison.OrdinalIgnoreCase)));
     }
 
     public async Task<bool> CreateAsync(ClientApplicationDO clientApplication)
@@ -120,21 +129,24 @@ public class ClientApplicationRepository(IDbContextFactory<ClubContext> contextF
         if (clientApplication is not { IsActive: true })
             return null;
 
-        // 先检查是否是简单字符串匹配（用于测试）
-        if (clientApplication.ClientSecret == clientSecret)
-            return clientApplication;
+        // 只接受 BCrypt 哈希。以前的 "ClientSecret == clientSecret" 明文相等分支
+        // 会让 ClientAppVO 里返回的哈希本身变成可用的 client_secret —— 任何能读到
+        // 应用列表的人都能冒充该客户端。明文存储的旧数据必须重新生成密钥。
+        if (string.IsNullOrEmpty(clientApplication.ClientSecret) ||
+            !clientApplication.ClientSecret.StartsWith("$2"))
+        {
+            return null;
+        }
 
         try
         {
-            // 使用BCrypt的验证方法
-            if (BCrypt.Net.BCrypt.Verify(clientSecret, clientApplication.ClientSecret))
-                return clientApplication;
+            return BCrypt.Net.BCrypt.Verify(clientSecret, clientApplication.ClientSecret)
+                ? clientApplication
+                : null;
         }
         catch (BCrypt.Net.SaltParseException)
         {
-            // 如果BCrypt验证失败（可能是因为ClientSecret不是BCrypt哈希值），则返回null
+            return null;
         }
-
-        return null;
     }
 }

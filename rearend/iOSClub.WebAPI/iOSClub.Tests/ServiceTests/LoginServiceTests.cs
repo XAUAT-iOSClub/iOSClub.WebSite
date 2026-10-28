@@ -7,6 +7,9 @@ using iOSClub.DataApi.Services;
 using Microsoft.Extensions.Logging;
 using Moq;
 using StackExchange.Redis;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace iOSClub.Tests.ServiceTests;
 
@@ -17,6 +20,7 @@ public class LoginServiceTests
     private readonly Mock<ITokenGenerator> _tokenGeneratorMock;
     private readonly Mock<IConnectionMultiplexer> _redisMock;
     private readonly Mock<IDatabase> _redisDbMock;
+    private readonly Mock<IBatch> _redisBatchMock;
     private readonly Mock<IEmailService> _emailServiceMock;
     private readonly Mock<IClientApplicationRepository> _clientAppRepoMock;
     private readonly Mock<ILogger<LoginService>> _loggerMock;
@@ -30,6 +34,7 @@ public class LoginServiceTests
         _tokenGeneratorMock = new Mock<ITokenGenerator>();
         _redisMock = new Mock<IConnectionMultiplexer>();
         _redisDbMock = new Mock<IDatabase>();
+        _redisBatchMock = new Mock<IBatch>();
         _emailServiceMock = new Mock<IEmailService>();
         _clientAppRepoMock = new Mock<IClientApplicationRepository>();
         _loggerMock = new Mock<ILogger<LoginService>>();
@@ -39,10 +44,10 @@ public class LoginServiceTests
 
         // LoginService 用 _db.CreateBatch() 合并三次写入；不 setup 的话 mock 返回 null，
         // 后续 batch.StringSetAsync 直接 NullReferenceException。
-        var batchMock = new Mock<IBatch>();
+        var batchMock = _redisBatchMock;
         batchMock.Setup(b => b.StringSetAsync(
-                It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<TimeSpan?>(),
-                It.IsAny<When>(), It.IsAny<CommandFlags>()))
+                It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<Expiration>(),
+                It.IsAny<ValueCondition>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync(true);
         _redisDbMock.Setup(r => r.CreateBatch(It.IsAny<object>())).Returns(batchMock.Object);
 
@@ -320,5 +325,129 @@ public class LoginServiceTests
         Assert.False(result);
         // 没有要改的东西，不应该产生写库
         _studentRepoMock.Verify(s => s.SetPasswordAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    // ===== H4：密码重置验证码的强度、尝试上限、冷却与存储 =====
+
+    private static string HashResetCode(string code)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
+
+    [Fact]
+    public async Task RequestPasswordResetCode_StoresHashInsteadOfPlaintext()
+    {
+        const string userId = "2024000001";
+        var codeKey = $"password_reset_code:{userId}";
+
+        _studentRepoMock.Setup(r => r.GetByIdAsync(userId))
+            .ReturnsAsync(new StudentDO { UserId = userId, UserName = "测试", EMail = "a@b.com" });
+        _redisDbMock.Setup(d => d.KeyExistsAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(false);
+
+        string? sentBody = null;
+        _emailServiceMock.Setup(e => e.SendEmailAsync("a@b.com", It.IsAny<string>(), It.IsAny<string>(), true))
+            .Callback<string, string, string, bool>((_, _, body, _) => sentBody = body)
+            .ReturnsAsync(true);
+
+        var storedValues = new Dictionary<string, string>();
+        void Capture(RedisKey key, RedisValue value) => storedValues[key.ToString()] = value.ToString();
+
+        _redisBatchMock.Setup(b => b.StringSetAsync(
+                It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<Expiration>(),
+                It.IsAny<ValueCondition>(), It.IsAny<CommandFlags>()))
+            .Callback<RedisKey, RedisValue, Expiration, ValueCondition, CommandFlags>(
+                (key, value, _, _, _) => Capture(key, value))
+            .ReturnsAsync(true);
+
+        Assert.True(await _loginService.RequestPasswordResetCode(userId));
+
+        var match = Regex.Match(sentBody!, @"\b(\d{6})\b");
+        Assert.True(match.Success, "邮件正文应包含 6 位验证码");
+        var code = match.Groups[1].Value;
+
+        Assert.True(storedValues.TryGetValue(codeKey, out var storedValue), "验证码应写入 Redis");
+        Assert.NotEqual(code, storedValue);
+        Assert.Equal(HashResetCode(code), storedValue);
+    }
+
+    [Fact]
+    public async Task ResetPasswordWithCode_CorrectCode_ResetsAndDeletesKeys()
+    {
+        const string userId = "2024000001";
+        const string code = "123456";
+        var codeKey = $"password_reset_code:{userId}";
+
+        _redisDbMock.Setup(d => d.StringGetAsync(
+                It.Is<RedisKey>(k => k.ToString() == codeKey), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(new RedisValue(HashResetCode(code)));
+        _redisDbMock.Setup(d => d.StringIncrementAsync(
+                It.IsAny<RedisKey>(), It.IsAny<long>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(1L);
+        _redisDbMock.Setup(d => d.KeyExpireAsync(
+                It.IsAny<RedisKey>(), It.IsAny<TimeSpan?>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(true);
+        _redisDbMock.Setup(d => d.KeyDeleteAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(true);
+        _studentRepoMock.Setup(r => r.SetPasswordAsync(userId, "NewPass123")).ReturnsAsync(true);
+
+        Assert.True(await _loginService.ResetPasswordWithCode(userId, code, "NewPass123"));
+
+        _studentRepoMock.Verify(r => r.SetPasswordAsync(userId, "NewPass123"), Times.Once);
+        _redisDbMock.Verify(
+            d => d.KeyDeleteAsync(It.Is<RedisKey>(k => k.ToString() == codeKey), It.IsAny<CommandFlags>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ResetPasswordWithCode_AfterFiveFailures_RejectsEvenCorrectCode()
+    {
+        const string userId = "2024000001";
+        const string correctCode = "123456";
+        var codeKey = $"password_reset_code:{userId}";
+        var attemptsKey = $"password_reset_attempts:{userId}";
+
+        _redisDbMock.Setup(d => d.StringGetAsync(
+                It.Is<RedisKey>(k => k.ToString() == codeKey), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(new RedisValue(HashResetCode(correctCode)));
+
+        var attempts = 0L;
+        _redisDbMock.Setup(d => d.StringIncrementAsync(
+                It.Is<RedisKey>(k => k.ToString() == attemptsKey), It.IsAny<long>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(() => ++attempts);
+        _redisDbMock.Setup(d => d.KeyExpireAsync(
+                It.IsAny<RedisKey>(), It.IsAny<TimeSpan?>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(true);
+        _redisDbMock.Setup(d => d.KeyDeleteAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(true);
+        _studentRepoMock.Setup(r => r.SetPasswordAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(true);
+
+        for (var i = 0; i < 5; i++)
+        {
+            Assert.False(await _loginService.ResetPasswordWithCode(userId, "000000", "NewPass123"));
+        }
+
+        // 第 6 次即使验证码正确也必须被拒绝，并作废验证码。
+        Assert.False(await _loginService.ResetPasswordWithCode(userId, correctCode, "NewPass123"));
+        _studentRepoMock.Verify(r => r.SetPasswordAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        _redisDbMock.Verify(
+            d => d.KeyDeleteAsync(It.Is<RedisKey>(k => k.ToString() == codeKey), It.IsAny<CommandFlags>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task RequestPasswordResetCode_WithinCooldown_DoesNotSendAnotherEmail()
+    {
+        const string userId = "2024000001";
+        _studentRepoMock.Setup(r => r.GetByIdAsync(userId))
+            .ReturnsAsync(new StudentDO { UserId = userId, UserName = "测试", EMail = "a@b.com" });
+        _redisDbMock.Setup(d => d.KeyExistsAsync(
+                It.Is<RedisKey>(k => k.ToString() == $"password_reset_cooldown:{userId}"),
+                It.IsAny<CommandFlags>()))
+            .ReturnsAsync(true);
+
+        Assert.True(await _loginService.RequestPasswordResetCode(userId));
+        _emailServiceMock.Verify(
+            e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()),
+            Times.Never);
     }
 }

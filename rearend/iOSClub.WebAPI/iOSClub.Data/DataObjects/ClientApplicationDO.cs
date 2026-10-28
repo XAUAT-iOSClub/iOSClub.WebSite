@@ -17,10 +17,17 @@ public class ClientApplicationDO
     public string ClientId { get; init; } = "";
 
     /// <summary>
-    /// 客户端密钥
+    /// 客户端密钥的 BCrypt 哈希，仅用于校验，不可还原。
     /// </summary>
     [MaxLength(100)]
     public string ClientSecret { get; set; } = "";
+
+    /// <summary>
+    /// 用 ASP.NET Data Protection 加密后的原始密钥，仅供 Founder/President 在管理页查看。
+    /// 旧数据没有这一列，查看时会提示重置密钥。
+    /// </summary>
+    [MaxLength(1024)]
+    public string? ClientSecretCipher { get; set; }
 
     /// <summary>
     /// 应用名称

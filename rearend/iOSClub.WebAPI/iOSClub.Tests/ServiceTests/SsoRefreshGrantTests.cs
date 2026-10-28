@@ -89,6 +89,39 @@ public class SsoRefreshGrantTests
     };
 
     [Fact]
+    public async Task Token_RefreshGrant_MissingClientId_IsRejectedEvenWithRedirectUri()
+    {
+        // 回归：以前 client_id 缺失时会用 redirect_uri 反查应用并回填 client_secret，
+        // 等于任何人只要知道回调地址就能通过客户端认证。
+        var form = RefreshForm();
+        form.Remove("client_id");
+        form["redirect_uri"] = "https://app.example/cb";
+
+        var result = await PostAsync(FormContext(form));
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("client_id", JsonSerializer.Serialize(bad.Value));
+        _loginService.Verify(
+            s => s.RefreshToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task Token_AuthorizationCode_MissingClientId_IsRejectedEvenWithRedirectUri()
+    {
+        var result = await PostAsync(FormContext(new Dictionary<string, string>
+        {
+            ["grant_type"] = "authorization_code",
+            ["code"] = "any-code",
+            ["redirect_uri"] = "https://app.example/cb",
+            ["client_secret"] = ClientSecret
+        }));
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("client_id", JsonSerializer.Serialize(bad.Value));
+    }
+
+    [Fact]
     public async Task Token_RefreshGrant_ReturnsRotatedTokenPair()
     {
         _loginService.Setup(s => s.GetUserIdByRefreshToken("valid-refresh-token")).ReturnsAsync(UserId);

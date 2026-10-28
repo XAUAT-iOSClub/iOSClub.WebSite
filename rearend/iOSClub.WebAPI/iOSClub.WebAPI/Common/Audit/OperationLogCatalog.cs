@@ -81,6 +81,7 @@ public static class OperationLogCatalog
         ["ClientApp.UpdateClientApplication"] = "编辑 OAuth 应用",
         ["ClientApp.DeleteClientApplication"] = "删除 OAuth 应用",
         ["ClientApp.RegenerateClientSecret"] = "重置 OAuth 应用密钥",
+        ["ClientApp.GetClientSecret"] = "查看 OAuth 应用密钥",
 
         ["IpBlacklist.AddToBlacklist"] = "添加 IP 黑名单",
         ["IpBlacklist.RemoveFromBlacklist"] = "移除 IP 黑名单",
@@ -104,7 +105,9 @@ public static class OperationLogCatalog
     {
         "Category.DeleteCategory",
         "Department.DeleteDepartment",
-        "Staff.DeleteStaff"
+        "Staff.DeleteStaff",
+        // 查看密钥不改变数据，但属于敏感读取，必须留下"谁在何时看过"的记录。
+        "ClientApp.GetClientSecret"
     };
 
     /// <summary>当前目录中出现的所有中文模块名，供筛选下拉使用。</summary>

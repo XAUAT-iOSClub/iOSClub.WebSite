@@ -6,6 +6,7 @@ using iOSClub.Data.DTOs;
 using iOSClub.Data.VOs;
 using iOSClub.DataApi.Repositories;
 using iOSClub.WebAPI.Common;
+using iOSClub.WebAPI.Common.Security;
 using System.Security.Cryptography;
 
 namespace iOSClub.WebAPI.Controllers;
@@ -13,7 +14,10 @@ namespace iOSClub.WebAPI.Controllers;
 [ApiController]
 [Route("[controller]")]
 [Authorize(Roles = "Founder, President, Minister")]
-public class ClientAppController(IClientApplicationRepository clientAppRepository, ILogger<ClientAppController> logger)
+public class ClientAppController(
+    IClientApplicationRepository clientAppRepository,
+    IClientSecretProtector secretProtector,
+    ILogger<ClientAppController> logger)
     : ControllerBase
 {
     /// <summary>
@@ -61,6 +65,43 @@ public class ClientAppController(IClientApplicationRepository clientAppRepositor
     }
 
     /// <summary>
+    /// 查看客户端应用的可恢复密钥。仅 Founder/President 可用；
+    /// 该 GET 会写操作日志（见 OperationLogCatalog 的 MutatingGetActions）。
+    /// </summary>
+    [Authorize(Roles = "Founder, President")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [HttpGet("{clientId}/secret")]
+    public async Task<ActionResult<ApiResponse<ClientSecretVO>>> GetClientSecret(string clientId)
+    {
+        var clientApp = await clientAppRepository.GetByClientIdAsync(clientId);
+        if (clientApp == null)
+        {
+            return Ok(ApiResponse<ClientSecretVO>.Fail(ErrorCode.ResourceNotFound, "客户端应用不存在"));
+        }
+
+        var secret = secretProtector.Unprotect(clientApp.ClientSecretCipher);
+        if (string.IsNullOrEmpty(secret))
+        {
+            // 旧数据只有 BCrypt 哈希，无法还原；让管理员重置一次即可。
+            return Ok(ApiResponse<ClientSecretVO>.Fail(
+                ErrorCode.InvalidStatusForOperation,
+                "该应用密钥不可恢复（创建于旧版本），请重置密钥后查看"));
+        }
+
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("查看客户端应用密钥，ID: {ClientId}, 操作者: {Operator}",
+                clientId, User.Identity?.Name);
+        }
+
+        return Ok(ApiResponse<ClientSecretVO>.Success(new ClientSecretVO
+        {
+            ClientId = clientApp.ClientId,
+            ClientSecret = secret
+        }));
+    }
+
+    /// <summary>
     /// 创建新的客户端应用
     /// </summary>
     /// <param name="dto">客户端应用信息</param>
@@ -77,6 +118,8 @@ public class ClientAppController(IClientApplicationRepository clientAppRepositor
         {
             ClientId = clientId,
             ClientSecret = clientSecret,
+            // 哈希用于校验，密文用于 Founder/President 后续查看。
+            ClientSecretCipher = secretProtector.Protect(clientSecret),
             ApplicationName = dto.ApplicationName,
             Description = dto.Description,
             HomepageUrl = dto.HomepageUrl,
@@ -224,8 +267,10 @@ public class ClientAppController(IClientApplicationRepository clientAppRepositor
         }
 
         var newSecret = GenerateClientSecret();
-        // 保存原始密钥用于返回给客户端，但存储到数据库的是哈希值
+        // 保存原始密钥用于返回给客户端，但存储到数据库的是哈希值；
+        // 另存一份可恢复密文，供 Founder/President 在管理页查看。
         existingClientApp.ClientSecret = newSecret;
+        existingClientApp.ClientSecretCipher = secretProtector.Protect(newSecret);
         existingClientApp.UpdatedAt = DateTime.UtcNow;
 
         var result = await clientAppRepository.UpdateAsync(existingClientApp);

@@ -236,7 +236,9 @@ const handleSubmit = () => {
         loading.value = true
         try {
           await AuthService.requestPasswordReset(formStep1.studentId);
-          successMsg.value = '验证码已发送至您的邮箱'
+          // 后端不再区分"用户不存在/没有邮箱"，前端也保持同样的模糊提示，
+          // 避免通过界面反馈枚举学号。
+          successMsg.value = '如果该账号已绑定邮箱，验证码已发送，请查收'
 
           // 迁移数据并切换步骤
           formStep2.studentId = formStep1.studentId
@@ -247,7 +249,7 @@ const handleSubmit = () => {
             successMsg.value = ''
           }, 1500)
         } catch (err: any) {
-          errorMsg.value = err.message || '请求失败，请检查学号是否正确'
+          errorMsg.value = err.message || '请求失败，请稍后重试'
         } finally {
           loading.value = false
         }

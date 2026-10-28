@@ -6,12 +6,18 @@ export interface ClientApplication {
      * 客户端ID（主键）
      */
     clientId: string;
-    
+
     /**
-     * 客户端密钥
+     * 注意：列表/详情接口不再返回 ClientSecret。
+     * 原始密钥只在创建或重置时通过 ClientAppResultModel 返回一次；
+     * 之后 Founder/President 可通过 "查看密钥" 接口读取。
      */
-    clientSecret: string;
-    
+
+    /**
+     * 是否保存了可恢复的加密密钥。旧应用为 false，需要先重置密钥。
+     */
+    hasRecoverableSecret: boolean;
+
     /**
      * 应用名称
      */
@@ -215,5 +221,13 @@ export interface RegenerateSecretResult {
     /**
      * 新的客户端密钥（后端字段名为 clientSecret，不是 newSecret）
      */
+    clientSecret: string;
+}
+
+/**
+ * 查看 OAuth 客户端密钥的结果
+ */
+export interface ClientSecretResult {
+    clientId: string;
     clientSecret: string;
 }

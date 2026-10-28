@@ -16,6 +16,7 @@ import markdownItAnchor from 'markdown-it-anchor'
 import markdownItContainer from 'markdown-it-container'
 import markdownItMermaid from '@jsonlee_12138/markdown-it-mermaid';
 import markdownItKatex from 'markdown-it-katex';
+import DOMPurify from 'dompurify';
 
 // KaTeX CSS
 import 'katex/dist/katex.min.css';
@@ -280,7 +281,13 @@ watch(() => props.content, async (newVal) => {
   // This ensures that when we click a hash link, it doesn't go under the header
   rendered = rendered.replace(/<(h[1-6])/g, '<$1 class="scroll-mt-20 group relative"')
 
-  html.value = rendered
+  // 文章正文是 Markdown + 原始 HTML；markdown-it 的 html:true 会原样保留
+  // <script>/<img onerror> 等内容。必须在写入 v-html 前统一净化：
+  // 否则任何能发文章的人都能在 Founder 的浏览器里执行脚本，
+  // 再读走 localStorage 里的 JWT。
+  html.value = DOMPurify.sanitize(rendered, {
+    USE_PROFILES: { html: true, svg: true, svgFilters: true, mathMl: true },
+  })
 
   await nextTick()
   // Add line numbers and copy button to code blocks
