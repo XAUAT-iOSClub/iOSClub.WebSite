@@ -8,6 +8,7 @@ using iOSClub.Data.DataObjects;
 using iOSClub.Data.Mappers;
 using iOSClub.DataApi.Services;
 using iOSClub.WebAPI.Common;
+using iOSClub.WebAPI.Common.Audit;
 using iOSClub.WebAPI.Common.Config;
 using iOSClub.WebAPI.Common.Extensions;
 using iOSClub.WebAPI.Common.Middleware;
@@ -83,6 +84,8 @@ builder.Services.Configure<KestrelServerOptions>(options =>
 var mvcBuilder = builder.Services.AddControllers(options =>
 {
     options.Filters.Add<GlobalAuthorizationFilter>();
+    // 记录后台写操作；资源过滤器在模型绑定前采集请求体、在 action 后落审计行
+    options.Filters.Add<OperationLogFilter>();
     // 统一让 HTTP 状态码跟随响应体里的 code（详见 ApiResponseResultFilter）
     options.Filters.Add<ApiResponseResultFilter>();
 });
@@ -424,6 +427,7 @@ else
 builder.Services.AddHttpClient();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<GlobalAuthorizationFilter>();
+builder.Services.AddScoped<OperationLogFilter>();
 // 注册ITokenGenerator服务
 builder.Services.AddScoped<ITokenGenerator, JwtGenerator>();
 

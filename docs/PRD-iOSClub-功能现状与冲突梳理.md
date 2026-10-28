@@ -141,6 +141,7 @@ flowchart TD
 | F39 | 运行与访问监控 | 运行指标、HTTP 统计、数据访问和变更统计、重置统计，Prometheus 与 Grafana 配置 | 监控接口未限制身份，是否由网关隔离未验证 | [MonitoringController.cs](../rearend/iOSClub.WebAPI/iOSClub.WebAPI/Controllers/MonitoringController.cs)、[docker-compose.yml](../docker-compose.yml) |
 | F40 | IP 与请求防护 | 黑名单统计、添加、移除、检查、刷新，限流、脱敏与统一错误响应 | 配置和中间件存在，效果未做运行验收 | [IpBlacklistController.cs](../rearend/iOSClub.WebAPI/iOSClub.WebAPI/Controllers/IpBlacklistController.cs)、[Program.cs](../rearend/iOSClub.WebAPI/iOSClub.WebAPI/Program.cs) |
 | F41 | 会话缓存清理 | `GET /clean` 清理登录、刷新等 Redis 键 | 无接口身份要求，列为 P0 | [CacheController.cs](../rearend/iOSClub.WebAPI/iOSClub.WebAPI/Controllers/CacheController.cs) |
+| F42 | 操作日志 `/Centre/OperationLogs` | 自动记录后台写操作（模块、操作人、结果、IP、耗时、脱敏后的路由/查询/请求体），支持模块/操作人/结果/时间/关键词筛选与分页 | 仅 Founder / President 可读；永久保留，不提供清理；Auth/SSO、匿名端点与定时任务不记录 | [OperationLogsController.cs](../rearend/iOSClub.WebAPI/iOSClub.WebAPI/Controllers/OperationLogsController.cs)、[OperationLogFilter.cs](../rearend/iOSClub.WebAPI/iOSClub.WebAPI/Common/Audit/OperationLogFilter.cs) |
 
 ### 6.7 当前主要权限矩阵
 

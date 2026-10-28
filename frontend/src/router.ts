@@ -224,6 +224,12 @@ const routes = [
                 component: () => import('./adminPages/LogsViewer.vue'),
             },
             {
+                path: 'OperationLogs',
+                name: 'OperationLogs',
+                meta: { title: "操作日志 - 西建大 iOS Club", requiresAuth: true, presidentOnly: true },
+                component: () => import('./adminPages/OperationLogs.vue'),
+            },
+            {
                 path: 'IpBlacklist',
                 name: 'IpBlacklist',
                 meta: { title: "IP黑名单管理 - 西建大 iOS Club" },
@@ -268,6 +274,9 @@ router.beforeEach((to, _from, next) => {
     if (to.meta.requiresAuth && !authorizationStore.isTokenValid) {
         next('/login');
     } else if (to.meta.founderOnly && role !== 'Founder') {
+        next('/access-denied');
+    } else if (to.meta.presidentOnly && role !== 'Founder' && role !== 'President') {
+        // 「社长及以上」：Founder 也满足；Minister 及以下不可直达。
         next('/access-denied');
     } else if (to.meta.categoryWriteOnly && !canWriteCategories) {
         // Menu hiding is not the permission boundary: block direct navigation.

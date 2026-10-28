@@ -23,6 +23,7 @@ public static class ServiceCollectionExtensions
             services.AddScoped<IActivityRepository, ActivityRepository>();
             services.AddScoped<IActivityParticipantRepository, ActivityParticipantRepository>();
             services.AddScoped<IActivityOperationLogRepository, ActivityOperationLogRepository>();
+            services.AddScoped<IOperationLogRepository, OperationLogRepository>();
 
             services.AddScoped<IDataCentreService, DataCentreService>();
             services.AddScoped<IClientApplicationRepository, ClientApplicationRepository>();

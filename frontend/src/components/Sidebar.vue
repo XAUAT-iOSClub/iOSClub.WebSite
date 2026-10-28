@@ -158,6 +158,8 @@ const menuItems = [
   {name: 'IP黑名单', path: '/Centre/IpBlacklist', icon: 'lock-keyhole', requiresRole: 'Minister'},
   {name: 'OAuth2 接入', path: '/Centre/Client', icon: 'key', requiresRole: 'Minister'},
   {name: '系统日志', path: '/Centre/Logs', icon: 'scroll-text', requiresRole: 'Minister'},
+  // 操作日志仅 Founder / President 可见；requiresRole 是最低层级过滤。
+  {name: '操作日志', path: '/Centre/OperationLogs', icon: 'list', requiresRole: 'President'},
 ]
 
 const filteredMenuItems = computed(() => {
