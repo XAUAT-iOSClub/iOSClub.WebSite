@@ -9,6 +9,7 @@ using iOSClub.Data.VOs;
 using iOSClub.DataApi.Services;
 using iOSClub.WebAPI.Common;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,6 +46,8 @@ public class DepartmentImportControllerTests : IClassFixture<WebApplicationFacto
 
         _factory = factory.WithWebHostBuilder(builder =>
         {
+            // 与其他集成测试保持一致：Testing 环境不会去连 appsettings 里的本地 Redis。
+            builder.UseEnvironment("Testing");
             builder.ConfigureServices(services =>
             {
                 var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IDbContextFactory<ClubContext>));

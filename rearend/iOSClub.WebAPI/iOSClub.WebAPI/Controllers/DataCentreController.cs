@@ -7,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using iOSClub.Data.DTOs;
 using iOSClub.Data.VOs;
+using iOSClub.WebAPI.Common.Security;
+using iOSClub.WebAPI.IdentityModels;
 using Microsoft.AspNetCore.Authorization;
 
 namespace iOSClub.WebAPI.Controllers;
@@ -86,6 +88,20 @@ public class DataCentreController(
                 return Ok(ApiResponse<object>.Fail(ErrorCode.ParameterFormatError, "JSON文件格式不正确"));
             }
 
+            // 全量导入会直接写 Staffs.Identity 和 Students.PasswordHash，等同于批量发角色/发密码。
+            // 必须先按调用者职级校验，否则任何 Minister 都能导入一份含 Founder 的文件。
+            var actor = HttpContext.User.GetUser();
+            if (actor == null)
+            {
+                return Ok(ApiResponse<object>.Fail(ErrorCode.Unauthorized, "用户未认证"));
+            }
+
+            var authorizationError = await ValidateImportAuthorizationAsync(allData, actor.Identity);
+            if (authorizationError != null)
+            {
+                return Ok(ApiResponse<object>.Fail(ErrorCode.InsufficientPermission, authorizationError));
+            }
+
             // 处理学生数据，与现有方法保持一致
             foreach (var student in allData.Students)
             {
@@ -128,6 +144,55 @@ public class DataCentreController(
 
             return Ok(ApiResponse<object>.Fail(ErrorCode.InternalServerError, "数据更新失败"));
         }
+    }
+
+    /// <summary>
+    /// 校验全量导入是否越权。
+    /// <para>
+    /// 导入文件可以携带任意 <c>StaffDO.Identity</c> 和 <c>StudentDO.PasswordHash</c>，
+    /// 因此必须满足两条：
+    /// 1. 不能导入高于调用者职级的员工身份（尤其不能新建 Founder）；
+    /// 2. 不能为高于调用者职级的现有员工补建 Student 档案（那等于替对方设置登录密码）。
+    /// </para>
+    /// </summary>
+    private async Task<string?> ValidateImportAuthorizationAsync(AllDataImportDTO data, string actorRole)
+    {
+        var incomingStaff = data.Staffs.Concat(data.Presidents).ToList();
+
+        // 1) 不能授予高于自己的身份（尤其不能新建 Founder）。
+        var unauthorizedRole = incomingStaff
+            .FirstOrDefault(s => !RoleHierarchy.CanAssign(actorRole, s.Identity));
+        if (unauthorizedRole != null)
+        {
+            return $"导入文件包含无权设置的身份 {unauthorizedRole.Identity}（学号 {unauthorizedRole.UserId}）";
+        }
+
+        await using var context = await dbContextFactory.CreateDbContextAsync();
+        var existingStudentIds = await context.Students.Select(s => s.UserId).ToHashSetAsync();
+        var staffRoles = await context.Staffs.ToDictionaryAsync(s => s.UserId, s => s.Identity);
+
+        // 2) 修改既有员工的身份属于权限变更，要求严格高于其当前职级；
+        //    否则 Minister 可以在导入文件里把 President 降成 Department。
+        var unauthorizedChange = incomingStaff
+            .Where(s => staffRoles.TryGetValue(s.UserId, out var current) &&
+                        !string.Equals(current, s.Identity, StringComparison.Ordinal) &&
+                        !RoleHierarchy.CanTakeOver(actorRole, current))
+            .Select(s => s.UserId)
+            .FirstOrDefault();
+        if (unauthorizedChange != null)
+        {
+            return $"导入文件包含无权调整身份的现有员工（学号 {unauthorizedChange}）";
+        }
+
+        // 3) 不能为高于调用者职级的现有员工补建 Student 档案（那等于替对方设置登录密码）。
+        var unauthorizedStudent = data.Students
+            .Where(s => !existingStudentIds.Contains(s.UserId))
+            .FirstOrDefault(s => staffRoles.TryGetValue(s.UserId, out var role) &&
+                                 !RoleHierarchy.CanTakeOver(actorRole, role));
+
+        return unauthorizedStudent == null
+            ? null
+            : $"导入文件包含无权为其创建登录档案的成员（学号 {unauthorizedStudent.UserId}）";
     }
 
     [HttpGet]

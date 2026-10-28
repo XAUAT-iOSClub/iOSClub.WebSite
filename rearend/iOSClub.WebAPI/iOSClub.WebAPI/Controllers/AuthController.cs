@@ -15,6 +15,7 @@ namespace iOSClub.WebAPI.Controllers;
 [Route("[controller]")]
 public class AuthController(
     IStudentRepository studentRepository,
+    IStaffRepository staffRepository,
     ILoginService loginService,
     ITokenGenerator tokenGenerator)
     : ControllerBase
@@ -27,6 +28,14 @@ public class AuthController(
     [HttpPost("signup")]
     public async Task<ActionResult<ApiResponse<string>>> SignUp(StudentCreateDTO dto)
     {
+        // 公开注册不能占用已有员工账号的学号。登录身份来自 Staffs 表，
+        // 若允许注册一个已有 Staff 的学号，任何人都能用自己的密码接管该身份
+        // （包括 Founder）。这里与管理员创建接口共用同一条拒绝规则。
+        if (await staffRepository.StaffExistsAsync(dto.UserId))
+        {
+            return Ok(ApiResponse<string>.Fail(ErrorCode.ResourceAlreadyExists, "用户已存在"));
+        }
+
         var createdStudent = await studentRepository.Create(dto.Adapt<StudentDO>());
 
         if (createdStudent == null)

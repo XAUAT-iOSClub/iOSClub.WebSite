@@ -4,7 +4,6 @@ using System.Net;
 using System.Security.Cryptography;
 using FluentValidation.AspNetCore;
 using iOSClub.Data;
-using iOSClub.Data.DataObjects;
 using iOSClub.Data.Mappers;
 using iOSClub.DataApi.Services;
 using iOSClub.WebAPI.Common;
@@ -530,53 +529,80 @@ using (var scope = app.Services.CreateScope())
             Console.WriteLine("No pending migrations.");
         }
 
-        // 初始化数据
+        // 初始化数据。
+        // 安全约束：不再从 USER 环境变量或固定值推导 Founder 学号，也不使用默认密码。
+        // 公开注册只检查 Students 表，而登录身份来自 Staffs 表；如果这里创建一个
+        // 学号可预测（0000000000）、密码固定的 Founder，任何人都能直接登录，
+        // 或在该账号缺 Student 档案时通过 /Auth/signup 抢注并成为超级管理员。
         if (!await context.Staffs.AnyAsync())
         {
-            var user = Environment.GetEnvironmentVariable("USER", EnvironmentVariableTarget.Process);
-            Console.WriteLine(user);
-            var model = new StaffDO() { Identity = "Founder", Name = "root", UserId = "0000000000" };
-            var users = user?.Split(',');
-            if (!string.IsNullOrEmpty(user) && users != null)
-            {
-                if (users.Length > 0)
-                    model.Name = users[0];
-                if (users.Length > 1)
-                    model.UserId = users[1];
-            }
+            var founderUserId = Environment.GetEnvironmentVariable("FOUNDER_USER_ID");
+            var founderPassword = Environment.GetEnvironmentVariable("FOUNDER_INIT_PASSWORD");
+            var founderName = Environment.GetEnvironmentVariable("FOUNDER_NAME") ?? "root";
 
-            context.Staffs.Add(model);
-            // 先落库，下面的 Founder 查询才会命中（FirstOrDefaultAsync 查数据库，不查变更跟踪器）
-            await context.SaveChangesAsync();
+            if (FounderBootstrap.IsValidUserId(founderUserId) &&
+                FounderBootstrap.IsValidPassword(founderPassword))
+            {
+                // 该学号已有 Student 档案时不能静默覆盖或跳过：来源不明的账号可能已被抢注。
+                // 宁可让部署者人工核对，也不要把一个已有密码的档案直接升成 Founder。
+                if (await context.Students.AnyAsync(x => x.UserId == founderUserId))
+                {
+                    Console.WriteLine($"[SECURITY] 学号 {founderUserId} 已存在 Student 档案，拒绝自动创建 Founder；" +
+                                      "请人工核对该账号归属后再初始化。");
+                }
+                else
+                {
+                    FounderBootstrap.CreateFounder(context, founderName, founderUserId!, founderPassword!);
+                    // Staff 与 Student 同一次 SaveChanges，不存在"只有 Staff"的中间状态。
+                    await context.SaveChangesAsync();
+                    Console.WriteLine($"Founder bootstrapped for user {founderUserId}.");
+                }
+            }
+            else if (app.Environment.IsDevelopment())
+            {
+                // 仅开发环境保留固定的本地默认账号，方便本地起库。
+                // 生产环境绝不回退到固定学号/固定密码。
+                var devPassword = Environment.GetEnvironmentVariable("FOUNDER_PASSWORD");
+                if (string.IsNullOrWhiteSpace(devPassword)) devPassword = "iosclub123";
+
+                if (await context.Students.AnyAsync(x => x.UserId == "0000000000"))
+                {
+                    Console.WriteLine("[SECURITY] 开发环境学号 0000000000 已存在 Student 档案，跳过自动创建 Founder。");
+                }
+                else
+                {
+                    FounderBootstrap.CreateFounder(context, "root", "0000000000", devPassword);
+                    await context.SaveChangesAsync();
+                    Console.WriteLine("Development Founder created (0000000000).");
+                }
+            }
+            else
+            {
+                Console.WriteLine("[SECURITY] 未创建 Founder：请设置 FOUNDER_USER_ID（10 位数字）与 " +
+                                  "FOUNDER_INIT_PASSWORD（至少 12 位，含字母和数字）后重启。");
+            }
         }
 
-        // 开发环境：保证 Founder 同时拥有 Student 档案。
-        // 系统约定 Founder = Staff + Student；缺 Student 时 /User/data 会返回 404，
-        // 前端若把它当成会话失效就会把已登录用户弹回登录页。仅开发环境自动补齐，
-        // 生产环境仍由管理员显式创建，避免写入默认密码。
-        if (app.Environment.IsDevelopment())
+        // 账号模型约定 Founder = Staff + Student；缺 Student 时该账号无法登录。
+        // 开发环境自动补齐；生产环境只告警，绝不写入默认密码。
+        var existingFounder = await context.Staffs.FirstOrDefaultAsync(x => x.Identity == "Founder");
+        if (existingFounder is { UserId: not null and not "" } &&
+            !await context.Students.AnyAsync(x => x.UserId == existingFounder.UserId))
         {
-            var founder = await context.Staffs.FirstOrDefaultAsync(x => x.Identity == "Founder");
-            if (founder is { UserId: not null and not "" } &&
-                !await context.Students.AnyAsync(x => x.UserId == founder.UserId))
+            if (app.Environment.IsDevelopment())
             {
-                var password = Environment.GetEnvironmentVariable("FOUNDER_PASSWORD", EnvironmentVariableTarget.Process);
+                var password = Environment.GetEnvironmentVariable("FOUNDER_PASSWORD");
                 if (string.IsNullOrWhiteSpace(password)) password = "iosclub123";
 
-                Console.WriteLine($"Creating Student profile for Founder: {founder.Name} ({founder.UserId})");
-                context.Students.Add(new StudentDO
-                {
-                    UserId = founder.UserId,
-                    UserName = founder.Name,
-                    Academy = "计算机与信息工程学院",
-                    PoliticalLandscape = "共青团员",
-                    Gender = "男",
-                    ClassName = "计科2301",
-                    PhoneNum = "13800138000",
-                    EMail = "iosclub@example.com",
-                    PasswordHash = DataTool.StringToHash(password),
-                    JoinTime = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
-                });
+                Console.WriteLine($"Creating Student profile for Founder: {existingFounder.Name} ({existingFounder.UserId})");
+                context.Students.Add(FounderBootstrap.CreateStudent(
+                    existingFounder.UserId, existingFounder.Name, password));
+                await context.SaveChangesAsync();
+            }
+            else
+            {
+                Console.WriteLine($"[SECURITY] Founder {existingFounder.UserId} 缺少 Student 档案，将无法登录；" +
+                                  "请由运维显式创建并设置密码。");
             }
         }
 

@@ -205,7 +205,7 @@ public class DepartmentController(
 
         var operatorStaff = await staffRepository.GetStaffByIdAsync(userJwt.UserId);
         var result = await departmentImportService.ImportRosterAsync(name, model, userJwt.UserId,
-            operatorStaff?.Name ?? "");
+            operatorStaff?.Name ?? "", userJwt.Identity);
         return Ok(ApiResponse<DepartmentImportResultVO>.Success(result, "导入成功"));
     }
 
@@ -253,7 +253,7 @@ public class DepartmentController(
 
         var operatorStaff = await staffRepository.GetStaffByIdAsync(userJwt.UserId);
         var result = await departmentImportService.RollbackAsync(name, historyId, userJwt.UserId,
-            operatorStaff?.Name ?? "");
+            operatorStaff?.Name ?? "", userJwt.Identity);
         return Ok(ApiResponse<DepartmentImportResultVO>.Success(result, "回滚成功"));
     }
 
