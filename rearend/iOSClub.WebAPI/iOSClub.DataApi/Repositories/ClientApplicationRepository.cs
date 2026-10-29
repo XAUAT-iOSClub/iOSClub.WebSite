@@ -1,6 +1,8 @@
 using iOSClub.Data;
 using iOSClub.Data.DataObjects;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace iOSClub.DataApi.Repositories;
 
@@ -89,7 +91,8 @@ public class ClientApplicationRepository(IDbContextFactory<ClubContext> contextF
     {
         await using var context = await contextFactory.CreateDbContextAsync();
         // 对客户端密钥进行哈希处理后再存储
-        clientApplication.ClientSecret = BCrypt.Net.BCrypt.HashPassword(clientApplication.ClientSecret);
+        if (!IsBcryptHash(clientApplication.ClientSecret))
+            clientApplication.ClientSecret = BCrypt.Net.BCrypt.HashPassword(clientApplication.ClientSecret);
         context.ClientApplications.Add(clientApplication);
         return await context.SaveChangesAsync() > 0;
     }
@@ -98,9 +101,8 @@ public class ClientApplicationRepository(IDbContextFactory<ClubContext> contextF
     {
         await using var context = await contextFactory.CreateDbContextAsync();
         // 检查客户端密钥是否需要重新哈希（如果提供了新密钥）
-        // 如果客户端密钥不是BCrypt哈希格式，则进行哈希处理
         if (!string.IsNullOrEmpty(clientApplication.ClientSecret) &&
-            !clientApplication.ClientSecret.StartsWith("$2"))
+            !IsBcryptHash(clientApplication.ClientSecret))
         {
             clientApplication.ClientSecret = BCrypt.Net.BCrypt.HashPassword(clientApplication.ClientSecret);
         }
@@ -121,6 +123,9 @@ public class ClientApplicationRepository(IDbContextFactory<ClubContext> contextF
 
     public async Task<ClientApplicationDO?> ValidateCredentialsAsync(string clientId, string clientSecret)
     {
+        if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(clientSecret))
+            return null;
+
         await using var context = await contextFactory.CreateDbContextAsync();
         var clientApplication =
             await context.ClientApplications.FirstOrDefaultAsync(c =>
@@ -129,24 +134,49 @@ public class ClientApplicationRepository(IDbContextFactory<ClubContext> contextF
         if (clientApplication is not { IsActive: true })
             return null;
 
-        // 只接受 BCrypt 哈希。以前的 "ClientSecret == clientSecret" 明文相等分支
-        // 会让 ClientAppVO 里返回的哈希本身变成可用的 client_secret —— 任何能读到
-        // 应用列表的人都能冒充该客户端。明文存储的旧数据必须重新生成密钥。
-        if (string.IsNullOrEmpty(clientApplication.ClientSecret) ||
-            !clientApplication.ClientSecret.StartsWith("$2"))
+        var storedSecret = clientApplication.ClientSecret;
+        if (string.IsNullOrEmpty(storedSecret))
+            return null;
+
+        // 正常路径：BCrypt 哈希。
+        if (IsBcryptHash(storedSecret))
+        {
+            try
+            {
+                return BCrypt.Net.BCrypt.Verify(clientSecret, storedSecret)
+                    ? clientApplication
+                    : null;
+            }
+            catch (BCrypt.Net.SaltParseException)
+            {
+                return null;
+            }
+        }
+
+        // 兼容路径：历史明文/旧格式。
+        // 只有"存储值不是 BCrypt 哈希"时才走这里，所以 BCrypt 哈希本身仍然
+        // 不能作为口令使用（H1 修复的核心）。校验成功后立即升级为 BCrypt。
+        var storedBytes = Encoding.UTF8.GetBytes(storedSecret);
+        var providedBytes = Encoding.UTF8.GetBytes(clientSecret);
+        if (storedBytes.Length != providedBytes.Length ||
+            !CryptographicOperations.FixedTimeEquals(storedBytes, providedBytes))
         {
             return null;
         }
 
-        try
-        {
-            return BCrypt.Net.BCrypt.Verify(clientSecret, clientApplication.ClientSecret)
-                ? clientApplication
-                : null;
-        }
-        catch (BCrypt.Net.SaltParseException)
-        {
-            return null;
-        }
+        clientApplication.ClientSecret = BCrypt.Net.BCrypt.HashPassword(clientSecret);
+        await context.SaveChangesAsync();
+        return clientApplication;
     }
+
+    /// <summary>
+    /// BCrypt 哈希格式：$2a$/$2b$/$2x$/$2y$ + 成本 + 22 位盐 + 31 位哈希，共 60 字符。
+    /// 只按前缀 "$2" 判断会把"恰好以 $2 开头的明文密钥"误判成哈希。
+    /// </summary>
+    private static bool IsBcryptHash(string value)
+        => value.Length == 60
+           && value[0] == '$'
+           && value[1] == '2'
+           && value[2] is 'a' or 'b' or 'x' or 'y'
+           && value[3] == '$';
 }

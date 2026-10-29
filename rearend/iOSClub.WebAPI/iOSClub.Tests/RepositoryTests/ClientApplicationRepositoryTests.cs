@@ -231,4 +231,54 @@ public class ClientApplicationRepositoryTests
         Assert.NotNull(result);
         Assert.Equal(clientApp.ClientId, result.ClientId);
     }
+
+    [Fact]
+    public async Task ValidateCredentialsAsync_LegacyPlaintextSecret_WorksAndUpgradesToBCrypt()
+    {
+        // 回归：H1 删除了明文相等分支后，历史明文存储的客户端会全部 invalid_client。
+        // 兼容路径只对"存储值不是 BCrypt 哈希"的行生效，并在首次成功后升级。
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var clientApp = BogusDataGenerator.ClientApplicationFaker.Generate();
+        clientApp.IsActive = true;
+        clientApp.ClientSecret = "legacy-plain-secret";
+        await context.ClientApplications.AddAsync(clientApp);
+        await context.SaveChangesAsync();
+
+        var result = await _clientAppRepository.ValidateCredentialsAsync(clientApp.ClientId, "legacy-plain-secret");
+
+        Assert.NotNull(result);
+        await using (var verify = new ClubContext(_options))
+        {
+            var saved = await verify.ClientApplications.SingleAsync(c => c.ClientId == clientApp.ClientId);
+            Assert.StartsWith("$2", saved.ClientSecret);
+            Assert.True(BCrypt.Net.BCrypt.Verify("legacy-plain-secret", saved.ClientSecret));
+        }
+
+        // 升级后平台继续使用同一个密钥
+        Assert.NotNull(await _clientAppRepository.ValidateCredentialsAsync(clientApp.ClientId, "legacy-plain-secret"));
+    }
+
+    [Fact]
+    public async Task ValidateCredentialsAsync_LegacyPlaintextSecret_WrongSecret_ReturnsNull()
+    {
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var clientApp = BogusDataGenerator.ClientApplicationFaker.Generate();
+        clientApp.IsActive = true;
+        clientApp.ClientSecret = "legacy-plain-secret";
+        await context.ClientApplications.AddAsync(clientApp);
+        await context.SaveChangesAsync();
+
+        var result = await _clientAppRepository.ValidateCredentialsAsync(clientApp.ClientId, "wrong-secret");
+
+        Assert.Null(result);
+        await using var verify = new ClubContext(_options);
+        var saved = await verify.ClientApplications.SingleAsync(c => c.ClientId == clientApp.ClientId);
+        Assert.Equal("legacy-plain-secret", saved.ClientSecret); // 失败时不升级
+    }
 }
