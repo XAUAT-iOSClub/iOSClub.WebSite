@@ -1,8 +1,6 @@
 using iOSClub.Data;
 using iOSClub.Data.DataObjects;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace iOSClub.DataApi.Repositories;
 
@@ -138,35 +136,25 @@ public class ClientApplicationRepository(IDbContextFactory<ClubContext> contextF
         if (string.IsNullOrEmpty(storedSecret))
             return null;
 
-        // 正常路径：BCrypt 哈希。
-        if (IsBcryptHash(storedSecret))
-        {
-            try
-            {
-                return BCrypt.Net.BCrypt.Verify(clientSecret, storedSecret)
-                    ? clientApplication
-                    : null;
-            }
-            catch (BCrypt.Net.SaltParseException)
-            {
-                return null;
-            }
-        }
+        // 【临时回退 H1】恢复历史上的明文相等分支，兼容把库里存的值直接当
+        // client_secret 使用的旧客户端（包括历史上存明文、以及把 BCrypt 哈希
+        // 当密钥使用的客户端）。
+        // 安全影响：这会让"库内哈希本身"重新变成可用口令。目前 ClientAppVO
+        // 仍不回显密钥，暴露面比 H1 之前小；但这是一次有意的安全回退，
+        // 待所有客户端迁移到真实密钥后应删除此分支并恢复 BCrypt-only 校验。
+        if (storedSecret == clientSecret)
+            return clientApplication;
 
-        // 兼容路径：历史明文/旧格式。
-        // 只有"存储值不是 BCrypt 哈希"时才走这里，所以 BCrypt 哈希本身仍然
-        // 不能作为口令使用（H1 修复的核心）。校验成功后立即升级为 BCrypt。
-        var storedBytes = Encoding.UTF8.GetBytes(storedSecret);
-        var providedBytes = Encoding.UTF8.GetBytes(clientSecret);
-        if (storedBytes.Length != providedBytes.Length ||
-            !CryptographicOperations.FixedTimeEquals(storedBytes, providedBytes))
+        try
+        {
+            return BCrypt.Net.BCrypt.Verify(clientSecret, storedSecret)
+                ? clientApplication
+                : null;
+        }
+        catch (BCrypt.Net.SaltParseException)
         {
             return null;
         }
-
-        clientApplication.ClientSecret = BCrypt.Net.BCrypt.HashPassword(clientSecret);
-        await context.SaveChangesAsync();
-        return clientApplication;
     }
 
     /// <summary>

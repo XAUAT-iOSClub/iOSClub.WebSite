@@ -170,10 +170,10 @@ public class ClientApplicationRepositoryTests
     }
 
     [Fact]
-    public async Task ValidateCredentialsAsync_RejectsStoredHashAsSecret()
+    public async Task ValidateCredentialsAsync_TemporaryH1Rollback_AcceptsStoredHashAsSecret()
     {
-        // 回归：以前 ValidateCredentialsAsync 有明文相等分支，配合 ClientAppVO 回显哈希，
-        // 任何能读取应用列表的人都能拿哈希当 client_secret 冒充客户端。
+        // 【临时回退 H1】恢复明文相等分支后，库内哈希本身又能当 client_secret 使用。
+        // 这条测试刻意记录当前的回退行为；恢复 BCrypt-only 校验时改回 Assert.Null。
         await using var context = new ClubContext(_options);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
@@ -186,7 +186,7 @@ public class ClientApplicationRepositoryTests
 
         var result = await _clientAppRepository.ValidateCredentialsAsync(clientApp.ClientId, clientApp.ClientSecret);
 
-        Assert.Null(result);
+        Assert.NotNull(result);
     }
 
     [Fact]
@@ -233,10 +233,9 @@ public class ClientApplicationRepositoryTests
     }
 
     [Fact]
-    public async Task ValidateCredentialsAsync_LegacyPlaintextSecret_WorksAndUpgradesToBCrypt()
+    public async Task ValidateCredentialsAsync_LegacyPlaintextSecret_Works()
     {
-        // 回归：H1 删除了明文相等分支后，历史明文存储的客户端会全部 invalid_client。
-        // 兼容路径只对"存储值不是 BCrypt 哈希"的行生效，并在首次成功后升级。
+        // 临时回退 H1：历史明文存储的客户端恢复可用；不再自动升级为 BCrypt。
         await using var context = new ClubContext(_options);
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
@@ -250,15 +249,9 @@ public class ClientApplicationRepositoryTests
         var result = await _clientAppRepository.ValidateCredentialsAsync(clientApp.ClientId, "legacy-plain-secret");
 
         Assert.NotNull(result);
-        await using (var verify = new ClubContext(_options))
-        {
-            var saved = await verify.ClientApplications.SingleAsync(c => c.ClientId == clientApp.ClientId);
-            Assert.StartsWith("$2", saved.ClientSecret);
-            Assert.True(BCrypt.Net.BCrypt.Verify("legacy-plain-secret", saved.ClientSecret));
-        }
-
-        // 升级后平台继续使用同一个密钥
-        Assert.NotNull(await _clientAppRepository.ValidateCredentialsAsync(clientApp.ClientId, "legacy-plain-secret"));
+        await using var verify = new ClubContext(_options);
+        var saved = await verify.ClientApplications.SingleAsync(c => c.ClientId == clientApp.ClientId);
+        Assert.Equal("legacy-plain-secret", saved.ClientSecret); // 恢复 H1 后应改回断言已升级为 BCrypt
     }
 
     [Fact]
