@@ -194,10 +194,33 @@ catch (Exception)
     rsaParams = rsa.ExportParameters(false);
 }
 
-// 从RSA密钥中导出公钥的SHA256哈希值作为KeyId，与生成令牌时使用的KeyId保持一致
-var publicKeyBytes = RSA.Create(rsaParams).ExportRSAPublicKey();
-var keyId = Convert.ToBase64String(SHA256.HashData(publicKeyBytes)).Substring(0, 16);
+// kid 与 JWT 签发、JWKS 端点（/.well-known/access-token/jwks）共用同一算法，避免客户端按 kid 取不到钥匙
+string keyId;
+using (var publicKeyForKid = RSA.Create(rsaParams))
+{
+    keyId = RsaKeyManager.ComputeKeyId(publicKeyForKid);
+}
+
 var rsaSecurityKey = new RsaSecurityKey(rsaParams) { KeyId = keyId };
+
+// 轮换前的上一代公钥也要参与验签：轮换后 20 分钟内的在途 token 由旧私钥签发。
+// 拿不到时不影响启动，只是这些 token 会验签失败。
+var jwtSigningKeys = new List<SecurityKey> { rsaSecurityKey };
+try
+{
+    var previousPublicKey = rsaKeyManager.TryLoadPreviousPublicKey();
+    if (previousPublicKey is not null)
+    {
+        jwtSigningKeys.Add(new RsaSecurityKey(previousPublicKey)
+        {
+            KeyId = RsaKeyManager.ComputeKeyId(previousPublicKey)
+        });
+    }
+}
+catch
+{
+    // 上一代公钥不可用属于降级场景，这里不阻断启动
+}
 
 builder.Services.AddAuthentication(options =>
     {
@@ -209,7 +232,9 @@ builder.Services.AddAuthentication(options =>
         options.TokenValidationParameters = new TokenValidationParameters()
         {
             ValidateIssuerSigningKey = true,
+            // 同时保留 IssuerSigningKey：与 JwtService 的默认参数保持一致，兼容只读单 key 的调用方。
             IssuerSigningKey = rsaSecurityKey,
+            IssuerSigningKeys = jwtSigningKeys,
             ValidateIssuer = true,
             ValidIssuer = jwtConfig.Issuer,
             ValidateAudience = true,

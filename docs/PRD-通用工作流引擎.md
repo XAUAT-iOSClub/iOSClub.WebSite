@@ -7,7 +7,7 @@
 | 归属 | 西建大 iOS Club |
 | 承载形态 | 独立 Node 服务（TypeScript）+ 官网后台 Vue 3 模块 + 引擎自托管审批页 |
 | 存储 | PostgreSQL（独立 database `clubflow`，复用现有实例） |
-| 文档版本 | v0.10（草案） |
+| 文档版本 | v0.12（草案） |
 | 日期 | 2026-11-01 |
 | 状态 | 待评审 |
 
@@ -25,6 +25,8 @@
 | v0.8 | 2026-11-01 | 后台路由定为 `/Centre/Flow`；API 走独立子域 `flowapi.<域名>`（补跨域方案）；PostgreSQL 改独立实例；事件保留 90 天确认满足审计；学管链接、审批人联系方式、webhook 触发归入 connector；开放问题收敛到 3 条 |
 | v0.9 | 2026-11-01 | 验签方案定为 B（统一 JWKS）：.NET 新增 access token 的 JWKS 端点（B1）+ 签发算法改标准 `RS256`（B2），引擎回归标准 jose 验签、取消 PEM 挂载；开放问题减到 2 条 |
 | v0.10 | 2026-11-01 | 二次确认分强 / 轻两档；connector action 增加 `idempotent` 声明，非幂等禁用自动重试；出站幂等键升为 P0 并定义 attempt 语义；开放问题清零 |
+| v0.11 | 2026-11-01 | 方案 B 落地：B1/B2 已在 iOSClub.WebAPI 实现（新增 JWKS 端点、kid 统一算法、签发改标准 RS256），新增 7 个回归测试，全量 616 测试通过；待随官网发版部署 |
+| v0.12 | 2026-11-01 | B1/B2 通过只读评审并修掉 1 个崩溃级竞态（缓存实例被 Dispose）与 3 处窗口缺陷：单锁防 ABBA、缓存不再提前释放、上一代公钥参与服务端验签、上一代 JWK 省略 `alg`；回归测试 9 条，全量 618 通过 |
 
 **相关文档**
 
@@ -362,10 +364,16 @@ queued ──▶ running ──▶ succeeded
 
 方案 B 由 .NET 侧提供，分两步。**关键前提：新增端点，不改 `/SSO/jwks`**——现有 JWKS 是给 id_token 用的（`rsa-key.xml`、`kid=main-key-1`、`iss` 硬编码 `https://api.xauat.site`），改它会直接破坏第三方 OIDC 验签。
 
-| 步骤 | 内容 | 归属 | 预估 |
+| 步骤 | 内容 | 归属 | 状态 |
 |---|---|---|---|
-| B1 | 新增 `GET /.well-known/access-token/jwks`：返回 `RsaKeyManager` 当前公钥的 JWKS（`kty=RSA`、`use=sig`、`kid` 与 JWT header 一致，即 `base64(sha256(pub))[:16]`）；轮换期保留上一代公钥 | .NET | 0.5 天 |
-| B2 | access token 签发算法从 `SecurityAlgorithms.RsaSha256Signature`（XML-DSig URI）改为 `SecurityAlgorithms.RsaSha256`（标准 `RS256`） | .NET | 0.5 天 |
+| B1 | 新增 `GET /.well-known/access-token/jwks`：返回 `RsaKeyManager` 当前公钥的 JWKS（`kty=RSA`、`use=sig`、`kid` 与 JWT header 一致，即 `base64(sha256(pub))[:16]`）；轮换期保留上一代公钥 | .NET | **已实现**，待部署 |
+| B2 | access token 签发算法从 `SecurityAlgorithms.RsaSha256Signature`（XML-DSig URI）改为 `SecurityAlgorithms.RsaSha256`（标准 `RS256`） | .NET | **已实现**，待部署 |
+
+> 实现记录（2026-11-01，经只读评审后修订）：`Controllers/AccessTokenJwksController.cs` 新增端点；`RsaKeyManager` 新增 `ComputeKeyId`（签发与 JWKS 共用同一 kid 算法）与 `TryLoadPreviousPublicKey`（读 `RotateKeys` 产生的 `.bak` 备份）；`JwtService` 改用 `ComputeKeyId` 并切换到标准 `RS256`。
+>
+> 评审修掉的问题：① `ClearKeyCache` 原先会 Dispose 调用方正在使用的缓存实例，轮换瞬间 `/jwks` 与签发会 500，改为只丢弃引用；② 公/私钥两把锁会在 `EnsureKeysValid → RotateKeys → ClearKeyCache` 上构成 ABBA 死锁，合并为单锁；③ 上一代公钥原先只给外部 JWKS 客户端用，服务端自验仍只认当前 key，轮换后 20 分钟内在途 token 全 401，现同时加入 `IssuerSigningKeys`（`Program.cs` 与 `GetDefaultValidationParameters`）；④ 上一代 JWK 原先硬写 `alg=RS256`，而旧 token 是 XML-DSig URI，严格匹配 alg 的客户端会选不中，改为省略 `alg` 字段；⑤ `.bak` 命名改用统一毫秒时间戳，避免跨秒错配与同秒覆盖；⑥ 公钥导入失败路径补 `Dispose`，避免句柄累积。
+>
+> 配套 9 个回归测试覆盖：标准 `RS256`、kid 一致性、n/e 可还原且无填充、轮换双密钥与上一代无 `alg`、轮换后旧 token 仍可验、旧 `alg` 灰度兼容、非 `access` 拒绝、真实路由可达。全量 618 个测试通过。代码已就绪，部署后生效。
 
 引擎侧（B1 + B2 同时上线后）：
 
@@ -813,7 +821,7 @@ queued ──▶ running ──▶ succeeded
 
 | 依赖 | 提供方 | 状态 |
 |---|---|---|
-| 官网 access token 的 JWKS 端点 | .NET 新增（B1） | 阻塞引擎鉴权，需与 B2 同批上线 |
+| 官网 access token 的 JWKS 端点 | .NET 新增（B1） | 已实现（`/.well-known/access-token/jwks`），待随官网发版部署 |
 | OIDC client（引擎调业务接口） | 现有 .NET | 需注册 |
 | Word 插值服务 | 社团自有 | 已核实可用 |
 | QQ 机器人（AstrBot） | 社团自有 | 已部署，作为 HTTP 工具被调用 |
@@ -834,7 +842,7 @@ queued ──▶ running ──▶ succeeded
 | R-07 | 依赖供应链 | 两年后没人敢动 node_modules | 锁文件入库、定期 audit、每月重建镜像 |
 | R-08 | 交接断层 | 换届后没人维护 | 选型备忘附录 + 文档与验收清单保持更新 |
 | R-09 | 崩溃后需人工介入 | 运维负担 | 详情页标出「中断」，提供一键「从失败节点继续」 |
-| R-10 | 官网改造（B1+B2）延期 | 引擎鉴权整条链路阻塞，M0 无法验收 | B1/B2 作为引擎开工前置项，排进 .NET 的迭代；B2 先行合入，窗口只有 20 分钟 |
+| R-10 | ~~官网改造延期~~（已消除） | 原风险为引擎鉴权整条链路阻塞 | B1/B2 已实现并通过全量测试；剩余风险仅是部署顺序，按 B2 → B1 → 引擎切换推进 |
 
 ---
 
@@ -1224,6 +1232,8 @@ triggers:
 ```
 
 > 探针里 `iss`/`aud` 用的是示例值；真实部署由环境变量 `JWT_ISSUER` / `JWT_AUDIENCE` 决定，默认 `iOS Club of XAUAT`。
+>
+> 本附录记录的是 **B2 改造前**的实测值。B2 之后新签发的 token，header 的 `alg` 已是标准 `RS256`；改造前签发的 token 在 20 分钟窗口内仍是上面的 XML-DSig URI，服务端两种都接受。
 
 **证据出处**
 
