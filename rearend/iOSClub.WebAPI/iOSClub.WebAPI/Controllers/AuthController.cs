@@ -57,6 +57,7 @@ public class AuthController(
     [HttpPost("signup")]
     public async Task<ActionResult<ApiResponse<string>>> SignUp(StudentCreateDTO dto)
     {
+        return BadRequest();
         // 公开注册不能占用已有员工账号的学号。登录身份来自 Staffs 表，
         // 若允许注册一个已有 Staff 的学号，任何人都能用自己的密码接管该身份
         // （包括 Founder）。这里与管理员创建接口共用同一条拒绝规则。
