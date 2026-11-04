@@ -115,6 +115,8 @@ public class RoleEscalationTests : IClassFixture<WebApplicationFactory<Program>>
 
     // ===== C1：公开注册不能占用已有 Staff 的学号 =====
 
+    // 注册功能暂停期间保留这两个测试，恢复注册后重新启用。
+    /*
     [Fact]
     public async Task SignUp_CannotClaimExistingStaffUserId()
     {
@@ -141,6 +143,7 @@ public class RoleEscalationTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.True(await verify.Students.AnyAsync(s => s.UserId == "2024999998"));
     }
 
+    */
     // ===== C2：员工管理不能越级授予身份 =====
 
     [Fact]

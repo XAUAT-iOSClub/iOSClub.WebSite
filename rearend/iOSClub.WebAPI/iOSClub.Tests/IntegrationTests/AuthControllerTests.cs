@@ -94,6 +94,8 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         }).CreateClient(); 
     } 
     
+    // 注册功能暂停期间保留此测试，恢复注册后重新启用。
+    /*
     [Fact] 
     public async Task Register_Success_ReturnsToken() 
     { 
@@ -134,6 +136,7 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal("注册成功", result.Message);
     }
 
+    */
     /// <summary>
     /// 非法姓名/学号必须在进入 action 之前被 DataAnnotations 拦下，返回统一信封的 400。
     /// </summary>
