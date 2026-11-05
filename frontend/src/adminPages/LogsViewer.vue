@@ -299,7 +299,7 @@
 
         <div>
           <h4 class="text-sm font-medium text-slate-500 mb-2 flex items-center gap-2">
-            <Icon icon="solar:chat-square-text-bold" class="text-blue-500" width="16"/>
+            <Icon icon="solar:chat-round-bold" class="text-blue-500" width="16"/>
             消息
           </h4>
           <div
@@ -339,7 +339,7 @@
       <div class="pt-4 pb-2">
         <div
             class="flex items-center gap-4 mb-4 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg text-yellow-700 dark:text-yellow-400 text-sm">
-          <Icon icon="solar:alert-circle-bold" width="24" class="shrink-0"/>
+          <Icon icon="solar:danger-circle-bold" width="24" class="shrink-0"/>
           此操作不可撤销。仅保留最近几天的日志。
         </div>
         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">

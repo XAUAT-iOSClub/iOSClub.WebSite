@@ -153,7 +153,7 @@
                 class="w-full apple-button"
             >
               <template #icon>
-                <Icon icon="mdi:shield-minus"/>
+                <Icon icon="mdi:shield-remove"/>
               </template>
               从黑名单移除
             </n-button>

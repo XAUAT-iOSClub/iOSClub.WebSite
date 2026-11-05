@@ -114,7 +114,7 @@
                 class="!px-8 !font-medium"
                 @click="openCreateModal">
               <template #icon>
-                <Icon icon="sf:plus" />
+                <Icon icon="lucide:plus" />
               </template>
               新建文章
             </n-button>

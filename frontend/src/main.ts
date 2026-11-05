@@ -7,9 +7,16 @@ import { createPinia } from 'pinia'
 import router from './router'
 import { googleAnalyticsService } from './services/GoogleAnalyticsService'
 import { getAnalyticsKey, isAnalyticsEnabled } from './lib/analyticsConfig'
+import { addCollection } from '@iconify/vue'
+import iconCollections from './icons-bundle.json'
 
 // @ts-ignore
 import './style.css'
+
+// 注册离线图标，避免运行时依赖 api.iconify.design（部分网络下会被阻断导致图标空白）。
+for (const collection of Object.values(iconCollections)) {
+  addCollection(collection as any)
+}
 
 const pinia = createPinia()
 
