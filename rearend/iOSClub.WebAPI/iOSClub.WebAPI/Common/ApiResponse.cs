@@ -132,6 +132,35 @@ public interface IApiResponse
                 Timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
             };
         }
+
+        /// <summary>
+        /// 带数据的失败响应
+        /// <para>
+        /// 供"业务失败但需要把逐行结果带回给界面"的场景使用（如批量更新的零写入失败）：
+        /// <c>Code</c> / <c>ErrorCode</c> 表达失败，<c>Data</c> 仍然是完整的结果对象。
+        /// 与 <see cref="Fail"/> 区分开，避免同参数签名的重载产生歧义。
+        /// </para>
+        /// </summary>
+        /// <param name="errorCode">业务错误码</param>
+        /// <param name="data">响应数据</param>
+        /// <param name="message">错误消息</param>
+        /// <param name="detail">详细描述</param>
+        /// <param name="requestId">请求ID</param>
+        /// <returns>带数据的失败响应模型</returns>
+        public static ApiResponse<T> FailWithData(int errorCode, T data, string message, string? detail = null,
+            string? requestId = null)
+        {
+            return new ApiResponse<T>
+            {
+                Code = ErrorCodeHttpMapper.HttpStatusFor(errorCode),
+                ErrorCode = errorCode,
+                Message = message,
+                Detail = detail,
+                Data = data,
+                RequestId = requestId,
+                Timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+            };
+        }
     }
 
 /// <summary>

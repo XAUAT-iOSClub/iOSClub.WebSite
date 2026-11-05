@@ -2,15 +2,42 @@ import { apiRequest } from './ApiService';
 import {url} from './Url';
 
 /**
+ * HTTP 性能指标 —— 对应后端 MonitoringController 的 http 字段。
+ *
+ * C30：后端改为固定统计窗口（windowSeconds，默认 3600），并用
+ * averageRequestsPerSecond 取代了含义含混的 requestsPerSecond。
+ */
+export interface MonitoringHttpMetrics {
+    totalRequests: number;
+    /** 固定统计窗口（秒），3600 表示近 1 小时。 */
+    windowSeconds: number;
+    /** 窗口内平均每秒请求数（不是瞬时 QPS）。 */
+    averageRequestsPerSecond: number;
+    errorRate: number;
+    averageResponseTime: number;
+}
+
+/** 系统指标 —— cpuSecondsTotal 是累计 CPU 秒数，不再是使用率。 */
+export interface MonitoringSystemMetrics {
+    cpuSecondsTotal: number;
+}
+
+export interface MonitoringPerformanceMetrics {
+    http: MonitoringHttpMetrics;
+    system?: MonitoringSystemMetrics;
+    timestamp?: string;
+}
+
+/**
  * 监控数据服务
  */
 export class MonitoringService {
     /**
      * 获取性能监控数据
-     * @returns Promise<any> 性能监控数据
+     * @returns Promise<MonitoringPerformanceMetrics> 性能监控数据
      */
-    static async getPerformanceMetrics(): Promise<any> {
-        return apiRequest({
+    static async getPerformanceMetrics(): Promise<MonitoringPerformanceMetrics> {
+        return apiRequest<MonitoringPerformanceMetrics>({
             url: `${url}/Monitoring/performance`,
             requiresAuth: true
         });

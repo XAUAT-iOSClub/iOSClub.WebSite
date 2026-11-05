@@ -14,7 +14,7 @@ import {
   NNumberAnimation,
   NTag
 } from 'naive-ui'
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import {MemberQueryService} from '../services/MemberQueryService'
 import {MemberManagementService} from '../services/MemberManagementService'
 import {AdminBackupService} from '../services/AdminBackupService'
@@ -22,7 +22,7 @@ import {InfoService} from '../services/InfoService'
 import {
   DataCentreService
 } from '../services/DataCentreService'
-import type {MemberVO, StudentUpdateDTO, PaginatedMemberResponse} from '../models'
+import type {MemberVO, StudentCreateDTO, StudentUpdateDTO, PaginatedMemberResponse} from '../models'
 import type {
   AcademyCount,
   GenderCount,
@@ -59,6 +59,15 @@ const passwordFormRef = ref<any>(null)
 const loading = ref(false)
 const activeTab = ref('memberData')
 
+// 新增 / 编辑模式：以前用 identity 是否为空判断，但列表数据的 identity 恒为非空
+// （无 Staff 档案时后端回落为 Member），导致"新增"永远走 update 分支。
+// 现在显式记录正在编辑的学号：null 表示新增。
+const editingUserId = ref<string | null>(null)
+// 新增成员时的初始密码由管理员设置（后端要求 >=8 位且含大写字母和数字）
+const createPassword = ref('')
+const createPasswordConfirm = ref('')
+const createPasswordPattern = /^(?=.*[A-Z])(?=.*\d).{8,256}$/
+
 const fileInput = ref<HTMLInputElement>()
 
 // Pagination
@@ -93,12 +102,12 @@ const searchItems = [
 ]
 
 const tabs = [
-  {label: '成员列表', value: 'memberData', icon: 'ion:list'},
-  {label: '历年趋势', value: 'yearData', icon: 'ion:trending-up'},
-  {label: '学院分布', value: 'collegeData', icon: 'ion:school'},
-  {label: '年级构成', value: 'gradeData', icon: 'ion:stats-bars'},
-  {label: '性别比例', value: 'genderData', icon: 'ion:male-female'},
-  {label: '政治面貌', value: 'politicalData', icon: 'ion:flag'},
+  {label: '成员列表', value: 'memberData', icon: 'list'},
+  {label: '历年趋势', value: 'yearData', icon: 'trending-up'},
+  {label: '学院分布', value: 'collegeData', icon: 'school'},
+  {label: '年级构成', value: 'gradeData', icon: 'chart-column'},
+  {label: '性别比例', value: 'genderData', icon: 'venus-and-mars'},
+  {label: '政治面貌', value: 'politicalData', icon: 'flag'},
 ]
 
 // 学院列表由后端 /Info/academies 提供，避免与 SignRecord.Academies 校验漂移
@@ -113,7 +122,7 @@ const fetchAcademyOptions = async () => {
   }
 }
 
-const politicalLandscapeOptions = ['群众', '共青团员', '中共党员'].map(p => ({label: p, value: p}))
+const politicalLandscapeOptions = ['群众', '共青团员', '中共党员', '中共预备党员'].map(p => ({label: p, value: p}))
 const genderOptions = ['男', '女']
 
 // --- Data Models ---
@@ -137,20 +146,39 @@ const passwordForm = ref({
 })
 
 // --- Validation Rules ---
+// 与后端 StudentUpdateDTO 的 DataAnnotations 保持一致
+const namePattern = /^[\p{L}· ]{2,20}$/u
+const studentIdPattern = /^\d{10}$/
+const classNamePattern = /^.{2,20}$/
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+// 邮箱非必填：空值放行，只在填了内容时校验格式
+const emailValidator = (_rule: any, value: string | null) => {
+  if (!value) return true
+  return emailPattern.test(value) || new Error('请输入有效的邮箱地址')
+}
+
 const rules = {
-  userName: {required: true, message: '请输入姓名', trigger: 'blur'},
+  userName: [
+    {required: true, message: '请输入姓名', trigger: 'blur'},
+    {pattern: namePattern, message: '姓名应为2-20个汉字或字母，不能包含数字或特殊符号', trigger: 'blur'}
+  ],
   userId: [
     {required: true, message: '请输入学号', trigger: 'blur'},
-    {min: 10, max: 10, message: '学号应为10位数字', trigger: 'blur'}
+    {pattern: studentIdPattern, message: '学号必须是10位数字', trigger: 'blur'}
   ],
   academy: {required: true, message: '请选择学院', trigger: 'change'},
-  className: {required: true, message: '请输入专业班级', trigger: 'blur'},
+  className: [
+    {required: true, message: '请输入专业班级', trigger: 'blur'},
+    {pattern: classNamePattern, message: '班级名称长度需为2-20个字符', trigger: 'blur'}
+  ],
   phoneNum: [
     {required: true, message: '请输入手机号', trigger: 'blur'},
     {pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: 'blur'}
   ],
   politicalLandscape: {required: true, message: '请选择政治面貌', trigger: 'change'},
-  gender: {required: true, message: '请选择性别', trigger: 'change'}
+  gender: {required: true, message: '请选择性别', trigger: 'change'},
+  eMail: {validator: emailValidator, trigger: 'blur'}
 }
 
 const passwordRules = {
@@ -440,6 +468,9 @@ const handleTabChange = (val: string) => {
 
 // --- CRUD Operations ---
 const showAddMemberModal = () => {
+  editingUserId.value = null
+  createPassword.value = ''
+  createPasswordConfirm.value = ''
   currentMember.value = {
     identity: '', userName: '', userId: '', academy: '', className: '',
     phoneNum: '', politicalLandscape: '', gender: '',
@@ -449,6 +480,9 @@ const showAddMemberModal = () => {
 }
 
 const editMember = (member: MemberVO) => {
+  editingUserId.value = member.userId
+  createPassword.value = ''
+  createPasswordConfirm.value = ''
   currentMember.value = {...member}
   showModal.value = true
 }
@@ -479,9 +513,9 @@ const saveMember = async () => {
   formRef.value?.validate(async (errors: any) => {
     if (!errors) {
       try {
-        // 只提交后端 StudentUpdateDTO 接受的字段；
-        // identity / joinTime 不在该 DTO 里，发过去会被静默忽略。
-        const payload: StudentUpdateDTO = {
+        // 只提交后端 StudentUpdateDTO / StudentCreateDTO 接受的字段；
+        // identity / joinTime 不在这些 DTO 里，发过去会被静默忽略。
+        const basePayload = {
           userId: currentMember.value.userId,
           userName: currentMember.value.userName,
           academy: currentMember.value.academy,
@@ -491,15 +525,27 @@ const saveMember = async () => {
           phoneNum: currentMember.value.phoneNum,
           eMail: currentMember.value.eMail
         }
-        if (currentMember.value.identity) {
+        if (editingUserId.value) {
+          // 编辑：以学号为定位键（不能用 identity——同角色成员不止一个）。
+          const payload: StudentUpdateDTO = {...basePayload}
           await MemberManagementService.updateMember(payload)
-          const index = members.value.findIndex(m => m.identity === currentMember.value.identity)
+          const index = members.value.findIndex(m => m.userId === payload.userId)
           if (index !== -1) members.value[index] = {...currentMember.value}
           message.success('已更新')
         } else {
-          await MemberManagementService.updateMember(payload)
-          message.success('已添加')
-          await fetchMembers() // Refresh for ID generation if real backend
+          // 新增：走独立创建接口，初始密码由管理员设置。
+          if (!createPasswordPattern.test(createPassword.value)) {
+            message.error('初始密码至少8个字符，且包含大写字母和数字')
+            return
+          }
+          if (createPassword.value !== createPasswordConfirm.value) {
+            message.error('两次输入的初始密码不一致')
+            return
+          }
+          const payload: StudentCreateDTO = {...basePayload, password: createPassword.value}
+          const created = await MemberManagementService.createMember(payload)
+          message.success(`已创建成员 ${created.userName}（${created.userId}），请将初始密码告知本人`)
+          await fetchMembers()
         }
         showModal.value = false
       } catch (error: any) {
@@ -525,12 +571,25 @@ const updateMemberUseJson = async (event: Event) => {
     const data = await files[0]?.text().then(x => JSON.parse(x))
     if (!data) throw new Error('Empty data')
     const result = await MemberManagementService.updateManyMembers(data)
-    if (result) {
-      message.success('数据更新成功')
-      await fetchMembers()
+    const counts = `新增 ${result.created} 条，更新 ${result.updated} 条，跳过 ${result.skipped} 条，失败 ${result.failed} 条`
+    const reasons = result.issues
+        .map(issue => `${issue.userId}：${issue.reason}（${issue.kind === 'failed' ? '失败' : '跳过'}）`)
+    const detail = reasons.length ? `；${reasons.join('；')}` : ''
+    const wrote = result.created + result.updated > 0
+    if (!wrote) {
+      // 零写入时后端返回失败业务码（HTTP 400），同样不能提示成功。
+      message.error(`导入失败：未写入任何成员（${counts}）${detail}`)
+    } else if (result.success) {
+      message.success(`数据导入完成：${counts}${detail}`)
+    } else {
+      message.error(`导入未完全成功（${counts}）${detail}`)
     }
+    await fetchMembers()
   } catch (e: any) {
-    message.error('导入失败')
+    message.error(e?.message ? `导入失败：${e.message}` : '导入失败')
+  } finally {
+    // 允许重复选择同一个文件时仍然触发 change。
+    target.value = ''
   }
 }
 
@@ -640,8 +699,9 @@ onMounted(() => {
           onClick: downloadLatestDatabaseBackup
         }, [
           h(Icon, {
-            icon: backupDownloading.value ? 'eos-icons:loading' : 'ion:server-outline',
-            class: ['w-5 h-5 mr-1', backupDownloading.value ? 'animate-spin' : '']
+            icon: backupDownloading.value ? 'loader-circle' : 'server',
+            spin: backupDownloading.value,
+            class: 'w-5 h-5 mr-1'
           }),
           '数据库备份'
         ]) : null,
@@ -650,7 +710,7 @@ onMounted(() => {
           class: 'bg-white dark:bg-[#2C2C2E] text-[#1d1d1f] dark:text-white font-medium rounded-full border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-[#3A3A3C] transition-all duration-200 active:scale-95 flex items-center justify-center h-9 px-4 text-[14px]',
           onClick: () => dropdownOpen.value = !dropdownOpen.value
         }, [
-          h(Icon, {icon: 'ion:download-outline', class: 'w-5 h-5 mr-1'}),
+          h(Icon, {icon: 'download', class: 'w-5 h-5 mr-1'}),
           '导出'
         ]),
 
@@ -691,7 +751,7 @@ onMounted(() => {
           class: 'bg-white dark:bg-[#2C2C2E] text-[#1d1d1f] dark:text-white font-medium rounded-full border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-[#3A3A3C] transition-all duration-200 active:scale-95 flex items-center justify-center h-9 px-4 text-[14px]',
           onClick: triggerFileInput
         }, [
-          h(Icon, {icon: 'ion:cloud-upload-outline', class: 'w-5 h-5 mr-1'}),
+          h(Icon, {icon: 'cloud-upload', class: 'w-5 h-5 mr-1'}),
           '导入'
         ]),
 
@@ -699,7 +759,7 @@ onMounted(() => {
           class: 'bg-[#007AFF] hover:bg-[#0062CC] text-white font-medium rounded-full transition-all duration-200 shadow-sm active:scale-95 flex items-center justify-center h-9 px-4 text-[14px]',
           onClick: showAddMemberModal
         }, [
-          h(Icon, {icon: 'ion:add', class: 'w-5 h-5 mr-1'}),
+          h(Icon, {icon: 'plus', class: 'w-5 h-5 mr-1'}),
           '添加成员'
         ])
       ])
@@ -756,7 +816,7 @@ onBeforeUnmount(() => {
 
           <div class="flex-1 w-full relative group">
             <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none text-gray-400">
-              <Icon icon="ion:search" class="w-5 h-5"/>
+              <Icon icon="search" class="w-5 h-5"/>
             </div>
             <n-input
                 v-model:value="searchTerm"
@@ -809,14 +869,14 @@ onBeforeUnmount(() => {
               {{ tabs.find(t => t.value === activeTab)?.label }}
             </h3>
             <div class="p-2 bg-gray-100 dark:bg-gray-800 rounded-full">
-              <Icon :icon="tabs.find(t => t.value === activeTab)?.icon || ''" class="w-6 h-6 text-gray-500"/>
+              <Icon :icon="tabs.find(t => t.value === activeTab)?.icon || ''" morph class="w-6 h-6 text-gray-500"/>
             </div>
           </div>
 
           <!-- Chart Containers -->
           <div class="h-[400px] w-full relative">
             <div v-if="loading" class="absolute inset-0 flex items-center justify-center backdrop-blur-sm z-10">
-              <Icon icon="svg-spinners:90-ring-with-bg" class="w-10 h-10 text-blue-500"/>
+              <Icon icon="loader" spin class="w-10 h-10 text-blue-500"/>
             </div>
 
             <div v-show="activeTab === 'yearData'" ref="yearChartRef" class="h-full w-full"/>
@@ -832,7 +892,7 @@ onBeforeUnmount(() => {
 
     <!-- Modals (Customized Presets) -->
     <n-modal v-model:show="showModal" preset="card" class="custom-modal w-full max-w-lg"
-             :title="currentMember.identity ? '编辑成员' : '添加成员'">
+             :title="editingUserId ? '编辑成员' : '添加成员'">
       <n-form :model="currentMember" :rules="rules" ref="formRef" label-placement="left" label-width="auto"
               require-mark-placement="right-hanging">
         <div class="grid grid-cols-1 gap-4 py-2">
@@ -840,8 +900,22 @@ onBeforeUnmount(() => {
             <n-input v-model:value="currentMember.userName" class="custom-input" placeholder="姓名"/>
           </n-form-item>
           <n-form-item label="学号" path="userId">
-            <n-input v-model:value="currentMember.userId" class="custom-input" placeholder="10位学号"/>
+            <n-input v-model:value="currentMember.userId" class="custom-input" placeholder="10位学号"
+                     :disabled="!!editingUserId"/>
           </n-form-item>
+          <template v-if="!editingUserId">
+            <n-form-item label="初始密码">
+              <n-input v-model:value="createPassword" type="password" show-password-on="click"
+                       class="custom-input" placeholder="至少8位，含大写字母和数字"/>
+            </n-form-item>
+            <n-form-item label="确认密码">
+              <n-input v-model:value="createPasswordConfirm" type="password" show-password-on="click"
+                       class="custom-input" placeholder="再次输入初始密码"/>
+            </n-form-item>
+            <p class="text-xs text-gray-500 dark:text-gray-400 -mt-2">
+              新增成功后请把学号和初始密码告知本人；初始密码不会在响应中回传。
+            </p>
+          </template>
           <n-form-item label="学院" path="academy">
             <n-select v-model:value="currentMember.academy" :options="academyOptions" filterable class="custom-select"/>
           </n-form-item>

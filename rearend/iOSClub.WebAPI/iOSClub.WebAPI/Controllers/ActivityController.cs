@@ -323,6 +323,8 @@ public class ActivityController(
     {
         if (string.IsNullOrWhiteSpace(dto.Name) || dto.Name.Length < 2 || dto.Name.Length > 20)
             return (null, "姓名长度需在 2-20 个字符之间");
+        if (!dto.Name.All(c => char.IsLetter(c) || c == '·' || c == ' '))
+            return (null, "姓名只能包含汉字、字母和间隔号，不能包含数字或特殊符号");
         if (string.IsNullOrWhiteSpace(dto.StudentId) || dto.StudentId.Length != 10 || !dto.StudentId.All(char.IsDigit))
             return (null, "学号必须是 10 位数字");
         if (string.IsNullOrWhiteSpace(dto.Academy))

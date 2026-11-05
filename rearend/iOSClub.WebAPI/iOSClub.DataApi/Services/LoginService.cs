@@ -2,6 +2,8 @@ using iOSClub.Data.DTOs;
 using iOSClub.Data.VOs;
 using iOSClub.DataApi.Repositories;
 using StackExchange.Redis;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using iOSClub.Data;
 using Microsoft.Extensions.Logging;
@@ -54,15 +56,6 @@ public interface ILoginService
     /// <param name="clientId">客户端 ID</param>
     /// <returns>是否有效</returns>
     public Task<bool> ValidateToken(string userId, string token, string clientId);
-
-    /// <summary>
-    /// 员工登录
-    /// </summary>
-    /// <param name="model">数据</param>
-    /// <param name="clientId">客户端 ID</param>
-    /// <param name="scope">权限</param>
-    /// <returns>凭证</returns>
-    public Task<string> StaffLogin(LoginDTO model, string clientId = "", string scope = "");
 
     /// <summary>
     /// 修改用户密码
@@ -127,6 +120,13 @@ public interface ILoginService
     /// <param name="clientId">客户端ID</param>
     /// <returns>刷新令牌</returns>
     public Task<string> GetRefreshToken(string userId, string clientId = "");
+
+    /// <summary>
+    /// 根据刷新令牌反查用户ID（供 /SSO/token 的 refresh_token 授权使用）
+    /// </summary>
+    /// <param name="refreshToken">刷新令牌</param>
+    /// <returns>用户ID，令牌未知或已失效时返回空字符串</returns>
+    public Task<string> GetUserIdByRefreshToken(string refreshToken);
 }
 
 public class LoginService(
@@ -143,7 +143,13 @@ public class LoginService(
 
     private const string TokenPrefix = "token:";
     private const string RefreshTokenPrefix = "refresh:";
+    // 刷新令牌反向索引：刷新令牌本身是不透明 GUID，/SSO/token 的
+    // refresh_token 授权只携带令牌，必须靠 refresh-owner:{token} 反查 userId。
+    private const string RefreshOwnerPrefix = "refresh-owner:";
     private const int RefreshTokenExpiryHours = 72; // 刷新令牌过期时间：72小时
+    private const int MaxResetCodeAttempts = 5; // 同一验证码最多尝试 5 次
+    private const int ResetCodeExpiryMinutes = 10;
+    private const int ResetCodeCooldownSeconds = 60; // 两次发信的最小间隔
 
     public async Task<string> Login(LoginDTO model, string clientId = "", string scope = "")
     {
@@ -181,6 +187,9 @@ public class LoginService(
         var batch = _db.CreateBatch();
         _ = batch.StringSetAsync(redisKey, accessToken, TimeSpan.FromMinutes(20 * (model.RememberMe ? 24 : 1)));
         _ = batch.StringSetAsync(refreshTokenKey, refreshToken, TimeSpan.FromHours(RefreshTokenExpiryHours));
+        // 反向索引与刷新令牌同生命周期，供 refresh_token 授权反查用户
+        _ = batch.StringSetAsync(GetRefreshOwnerKey(refreshToken), model.UserId,
+            TimeSpan.FromHours(RefreshTokenExpiryHours));
         _ = batch.StringSetAsync(userInfoKey, JsonSerializer.Serialize(memberModel),
             TimeSpan.FromHours(RefreshTokenExpiryHours * (model.RememberMe ? 24 : 2)));
         batch.Execute();
@@ -236,6 +245,10 @@ public class LoginService(
         var refreshTokenKey = $"{RefreshTokenPrefix}{userId}{s}";
         await _db.StringSetAsync(refreshTokenKey, refreshToken, TimeSpan.FromHours(RefreshTokenExpiryHours));
 
+        // 写入刷新令牌反向索引，供 /SSO/token 的 refresh_token 授权定位账号
+        await _db.StringSetAsync(GetRefreshOwnerKey(refreshToken), userId,
+            TimeSpan.FromHours(RefreshTokenExpiryHours));
+
         // 存储用户信息，便于后续验证
         var userInfoKey = $"user:{userId}{s}";
         await _db.StringSetAsync(userInfoKey, JsonSerializer.Serialize(memberModel),
@@ -256,11 +269,20 @@ public class LoginService(
             var s = await GetClientKey(clientId);
 
             // 同时删除用户信息、访问令牌和刷新令牌
-            await _db.KeyDeleteAsync([
+            // 登出前先取出当前刷新令牌，以便连同其反向索引一起清理
+            var storedRefreshToken = await _db.StringGetAsync($"{RefreshTokenPrefix}{userId}{s}");
+            var keysToDelete = new List<RedisKey>
+            {
                 $"user:{userId}{s}",
                 $"{TokenPrefix}{userId}{s}",
                 $"{RefreshTokenPrefix}{userId}{s}"
-            ]);
+            };
+            if (storedRefreshToken.HasValue && !string.IsNullOrEmpty(storedRefreshToken))
+            {
+                keysToDelete.Add(GetRefreshOwnerKey(storedRefreshToken.ToString()));
+            }
+
+            await _db.KeyDeleteAsync(keysToDelete.ToArray());
 
             if (logger.IsEnabled(LogLevel.Information))
             {
@@ -297,13 +319,31 @@ public class LoginService(
         var s = await GetClientKey(clientId);
         var accessTokenKey = $"{TokenPrefix}{userId}{s}";
         var refreshTokenKey = $"{RefreshTokenPrefix}{userId}{s}";
+        var userInfoKey = $"user:{userId}{s}";
+
+        // 刷新接口用 user:{id} 缓存重建新令牌。注册路径此前漏写这个键，
+        // 导致新注册用户不重新登录就无法完成第一次刷新。
+        var student = await studentRepository.GetByIdAsync(userId);
+        var staff = await staffRepository.GetStaffByIdWithoutOtherData(userId);
+        var memberInfo = new MemberVO
+        {
+            UserId = userId,
+            UserName = student?.UserName ?? staff?.Name ?? "",
+            Identity = staff?.Identity ?? "Member"
+        };
 
         var batch = _db.CreateBatch();
         _ = batch.StringSetAsync(accessTokenKey, accessToken, TimeSpan.FromMinutes(20 * 24));
         if (!string.IsNullOrEmpty(refreshToken))
         {
             _ = batch.StringSetAsync(refreshTokenKey, refreshToken, TimeSpan.FromHours(RefreshTokenExpiryHours));
+            // 注册/补写令牌同样要维护反向索引，否则新签发的刷新令牌无法用于续期
+            _ = batch.StringSetAsync(GetRefreshOwnerKey(refreshToken), userId,
+                TimeSpan.FromHours(RefreshTokenExpiryHours));
         }
+
+        _ = batch.StringSetAsync(userInfoKey, JsonSerializer.Serialize(memberInfo),
+            TimeSpan.FromHours(RefreshTokenExpiryHours * 2));
 
         batch.Execute();
     }
@@ -385,6 +425,12 @@ public class LoginService(
             // 更新Redis中的令牌信息
             await _db.StringSetAsync($"{TokenPrefix}{userId}{s}", newAccessToken, TimeSpan.FromMinutes(20));
             await _db.StringSetAsync(refreshTokenKey, newRefreshToken, TimeSpan.FromHours(RefreshTokenExpiryHours));
+
+            // 轮换：新刷新令牌写入反向索引，旧令牌的反向索引立即删除，
+            // 保证旧令牌重放时 refresh_token 端点连 userId 都查不到。
+            await _db.StringSetAsync(GetRefreshOwnerKey(newRefreshToken), userId,
+                TimeSpan.FromHours(RefreshTokenExpiryHours));
+            await _db.KeyDeleteAsync(GetRefreshOwnerKey(refreshToken));
 
             // 将旧的刷新令牌加入黑名单
             var isAdded = await AddRefreshTokenToBlacklist(refreshToken);
@@ -514,6 +560,34 @@ public class LoginService(
         }
     }
 
+    /// <summary>
+    /// 根据刷新令牌反查用户ID（供 /SSO/token 的 refresh_token 授权使用）。
+    /// 刷新令牌是不透明 GUID，请求中不含 userId，只能通过签发时写入的
+    /// refresh-owner:{token} 反向索引定位账号。
+    /// </summary>
+    /// <param name="refreshToken">刷新令牌</param>
+    /// <returns>用户ID，令牌未知或已失效时返回空字符串</returns>
+    public async Task<string> GetUserIdByRefreshToken(string refreshToken)
+    {
+        if (string.IsNullOrEmpty(refreshToken)) return "";
+
+        try
+        {
+            var owner = await _db.StringGetAsync(GetRefreshOwnerKey(refreshToken));
+            if (!owner.HasValue || string.IsNullOrEmpty(owner)) return "";
+            return owner.ToString();
+        }
+        catch (Exception ex)
+        {
+            if (logger.IsEnabled(LogLevel.Error))
+            {
+                logger.LogError(ex, "根据刷新令牌查询用户ID失败");
+            }
+
+            return "";
+        }
+    }
+
     public Task<bool> ValidateToken(string userId, string token)
     {
         return ValidateToken(userId, token, "");
@@ -532,42 +606,6 @@ public class LoginService(
             return false;
 
         return storedToken == token;
-    }
-
-    public async Task<string> StaffLogin(LoginDTO model, string clientId = "", string scope = "")
-    {
-        var staff = await staffRepository.GetStaffByIdWithoutOtherData(model.Password);
-
-        if (staff == null || staff.Name != model.UserId)
-            return "";
-
-        var memberModel = new MemberVO()
-        {
-            UserName = staff.Name,
-            UserId = staff.UserId,
-            Identity = staff.Identity
-        };
-
-        var s = await GetClientKey(clientId);
-
-        var redisKey = $"{TokenPrefix}{model.Password}{s}";
-        // 生成访问令牌和刷新令牌
-        var (accessToken, refreshToken) =
-            tokenGenerator.GetMemberToken(memberModel, model.RememberMe, scope, clientId: clientId);
-
-        // 将访问令牌存储到Redis中（可选，因为JWT本身包含过期时间）
-        await _db.StringSetAsync(redisKey, accessToken, TimeSpan.FromHours(2 * (model.RememberMe ? 12 : 1)));
-
-        // 将刷新令牌存储到Redis中，设置过期时间
-        var refreshTokenKey = $"{RefreshTokenPrefix}{model.Password}{s}";
-        await _db.StringSetAsync(refreshTokenKey, refreshToken, TimeSpan.FromHours(RefreshTokenExpiryHours));
-
-        // 存储用户信息，便于后续验证
-        var userInfoKey = $"user:{model.Password}{s}";
-        await _db.StringSetAsync(userInfoKey, JsonSerializer.Serialize(memberModel),
-            TimeSpan.FromHours(RefreshTokenExpiryHours * (model.RememberMe ? 12 : 2)));
-
-        return accessToken;
     }
 
     public async Task<bool> ChangePassword(string userId, string oldPassword, string newPassword)
@@ -600,39 +638,36 @@ public class LoginService(
 
     public async Task<bool> RequestPasswordResetCode(string userId)
     {
+        if (string.IsNullOrWhiteSpace(userId)) return false;
+
         // 获取用户信息
         var student = await studentRepository.GetByIdAsync(userId);
-        if (student == null)
+        if (student == null || string.IsNullOrEmpty(student.EMail))
             return false;
 
-        // 检查是否有邮箱
-        if (string.IsNullOrEmpty(student.EMail))
-            return false;
+        var cooldownKey = $"password_reset_cooldown:{userId}";
+        // 冷却期内不重复发信：防止邮件轰炸，也让"用户是否存在"的响应时间更一致。
+        if (await _db.KeyExistsAsync(cooldownKey))
+            return true;
 
-        var redisKey = $"password_reset_code:{userId}";
-        string code;
-        var storedCode = await _db.StringGetAsync(redisKey);
-        if (!storedCode.HasValue || string.IsNullOrEmpty(storedCode))
-        {
-            // 生成6位随机验证码
-            var random = new Random();
-            code = random.Next(100000, 999999).ToString();
-            // 将验证码存储到Redis，设置10分钟过期时间
+        // 6 位数字必须用 CSPRNG 生成；System.Random 的种子可预测。
+        var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
 
-            await _db.StringSetAsync(redisKey, code, TimeSpan.FromMinutes(10));
-        }
-        else
-        {
-            code = storedCode.ToString();
-        }
+        var codeKey = $"password_reset_code:{userId}";
+        var attemptsKey = $"password_reset_attempts:{userId}";
+
+        // 每次申请都覆盖旧验证码并清零尝试次数。
+        var batch = _db.CreateBatch();
+        _ = batch.StringSetAsync(codeKey, HashResetCode(code), TimeSpan.FromMinutes(ResetCodeExpiryMinutes));
+        _ = batch.KeyDeleteAsync(attemptsKey);
+        _ = batch.StringSetAsync(cooldownKey, "1", TimeSpan.FromSeconds(ResetCodeCooldownSeconds));
+        batch.Execute();
 
         // 发送邮件
         const string subject = "iOS Club 密码重置验证码";
         var body = GeneratePasswordResetEmailBody(student.UserName, code);
 
-        var result = await emailService.SendEmailAsync(student.EMail, subject, body, true);
-
-        return result;
+        return await emailService.SendEmailAsync(student.EMail, subject, body, true);
     }
 
     public async Task<bool> ResetPasswordWithCode(string userId, string code, string newPassword)
@@ -643,21 +678,63 @@ public class LoginService(
             string.IsNullOrWhiteSpace(newPassword))
             return false;
 
-        // 从Redis获取存储的验证码
-        var redisKey = $"password_reset_code:{userId}";
-        var storedCode = await _db.StringGetAsync(redisKey);
+        var codeKey = $"password_reset_code:{userId}";
+        var attemptsKey = $"password_reset_attempts:{userId}";
+        var storedHash = await _db.StringGetAsync(codeKey);
 
-        // 检查验证码是否存在且匹配
-        if (!storedCode.HasValue || storedCode != code)
+        // 检查验证码是否存在
+        if (!storedHash.HasValue || string.IsNullOrEmpty(storedHash))
+            return false;
+
+        // 先计数再比对：错误尝试也必须消耗次数，否则 6 位数字可以在 10 分钟内被穷举。
+        var attempts = await _db.StringIncrementAsync(attemptsKey);
+        if (attempts == 1)
+            await _db.KeyExpireAsync(attemptsKey, TimeSpan.FromMinutes(ResetCodeExpiryMinutes));
+
+        if (attempts > MaxResetCodeAttempts)
+        {
+            // 超过上限直接作废，必须重新申请。
+            await _db.KeyDeleteAsync(codeKey);
+            await _db.KeyDeleteAsync(attemptsKey);
+            return false;
+        }
+
+        if (!ResetCodeMatches(code, storedHash.ToString()))
             return false;
 
         // 密码重置走的是邮箱验证码，用户本来就是忘了密码才来的，所以不校验"新密码是否等于旧密码"。
         var result = await studentRepository.SetPasswordAsync(userId, newPassword);
 
-        // 删除已使用的验证码
-        if (result) await _db.KeyDeleteAsync(redisKey);
+        // 删除已使用的验证码与计数
+        if (result)
+        {
+            await _db.KeyDeleteAsync(codeKey);
+            await _db.KeyDeleteAsync(attemptsKey);
+        }
 
         return result;
+    }
+
+    /// <summary>
+    /// 不把验证码明文写入 Redis。6 位数字的哈希可被离线穷举，
+    /// 真正的防爆破依赖 <see cref="MaxResetCodeAttempts"/> 的尝试次数上限。
+    /// </summary>
+    private static string HashResetCode(string code)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
+
+    private static bool ResetCodeMatches(string provided, string storedHash)
+    {
+        try
+        {
+            var storedBytes = Convert.FromHexString(storedHash);
+            var providedBytes = SHA256.HashData(Encoding.UTF8.GetBytes(provided));
+            return storedBytes.Length == providedBytes.Length &&
+                   CryptographicOperations.FixedTimeEquals(providedBytes, storedBytes);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -741,6 +818,11 @@ public class LoginService(
 </body>
 </html>";
     }
+
+    /// <summary>
+    /// 刷新令牌反向索引键：refresh-owner:{refreshToken} -> userId
+    /// </summary>
+    private static string GetRefreshOwnerKey(string refreshToken) => $"{RefreshOwnerPrefix}{refreshToken}";
 
     private async Task<string> GetClientKey(string clientId, bool isNotHasEMail = false)
     {

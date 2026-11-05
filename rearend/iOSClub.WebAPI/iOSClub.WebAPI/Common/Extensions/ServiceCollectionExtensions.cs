@@ -23,6 +23,7 @@ public static class ServiceCollectionExtensions
             services.AddScoped<IActivityRepository, ActivityRepository>();
             services.AddScoped<IActivityParticipantRepository, ActivityParticipantRepository>();
             services.AddScoped<IActivityOperationLogRepository, ActivityOperationLogRepository>();
+            services.AddScoped<IOperationLogRepository, OperationLogRepository>();
 
             services.AddScoped<IDataCentreService, DataCentreService>();
             services.AddScoped<IClientApplicationRepository, ClientApplicationRepository>();
@@ -51,6 +52,9 @@ public static class ServiceCollectionExtensions
 
             // 注册IP黑名单缓存服务
             services.AddSingleton<IIpBlacklistCacheService, IpBlacklistCacheService>();
+
+            // OAuth 客户端密钥的可恢复加密存储（查看密钥用）
+            services.AddSingleton<IClientSecretProtector, ClientSecretProtector>();
         }
     }
 }

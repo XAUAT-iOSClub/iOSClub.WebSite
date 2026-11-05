@@ -5,6 +5,7 @@ using iOSClub.Data.DTOs;
 using iOSClub.Data.VOs;
 using iOSClub.DataApi.Exceptions;
 using iOSClub.WebAPI.Common;
+using iOSClub.WebAPI.Common.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace iOSClub.WebAPI.Services;
@@ -19,7 +20,7 @@ public interface IDepartmentImportService
     /// 覆盖导入指定部门的名单（仅限 President / Minister / Department 身份）
     /// </summary>
     Task<DepartmentImportResultVO> ImportRosterAsync(string departmentName, DepartmentImportDTO dto,
-        string operatorId, string operatorName);
+        string operatorId, string operatorName, string operatorRole);
 
     /// <summary>
     /// 获取指定部门的导入历史（按时间倒序）
@@ -35,7 +36,7 @@ public interface IDepartmentImportService
     /// 回滚到指定版本：以该版本快照覆盖当前名单，回滚前自动备份当前名单。
     /// </summary>
     Task<DepartmentImportResultVO> RollbackAsync(string departmentName, string historyId,
-        string operatorId, string operatorName);
+        string operatorId, string operatorName, string operatorRole);
 }
 
 public class DepartmentImportService(IDbContextFactory<ClubContext> factory) : IDepartmentImportService
@@ -43,14 +44,14 @@ public class DepartmentImportService(IDbContextFactory<ClubContext> factory) : I
     private static readonly string[] AllowedIdentities = ["President", "Minister", "Department"];
 
     public async Task<DepartmentImportResultVO> ImportRosterAsync(string departmentName, DepartmentImportDTO dto,
-        string operatorId, string operatorName)
+        string operatorId, string operatorName, string operatorRole)
     {
         var incoming = NormalizeMembers(dto.Members);
-        return await ApplyRosterAsync(departmentName, incoming, dto.FileName, operatorId, operatorName);
+        return await ApplyRosterAsync(departmentName, incoming, dto.FileName, operatorId, operatorName, operatorRole);
     }
 
     public async Task<DepartmentImportResultVO> RollbackAsync(string departmentName, string historyId,
-        string operatorId, string operatorName)
+        string operatorId, string operatorName, string operatorRole)
     {
         await using var context = await factory.CreateDbContextAsync();
         var record = await context.ImportHistories
@@ -77,11 +78,13 @@ public class DepartmentImportService(IDbContextFactory<ClubContext> factory) : I
         }).ToList();
 
         var label = $"回滚至 {record.ImportedAt:yyyy-MM-dd HH:mm:ss}";
-        return await ApplyRosterAsync(departmentName, NormalizeMembers(members), label, operatorId, operatorName);
+        return await ApplyRosterAsync(departmentName, NormalizeMembers(members), label, operatorId, operatorName,
+            operatorRole);
     }
 
     private async Task<DepartmentImportResultVO> ApplyRosterAsync(string departmentName,
-        List<DepartmentImportMemberDTO> incoming, string? fileName, string operatorId, string operatorName)
+        List<DepartmentImportMemberDTO> incoming, string? fileName, string operatorId, string operatorName,
+        string operatorRole)
     {
         await using var context = await factory.CreateDbContextAsync();
 
@@ -95,9 +98,52 @@ public class DepartmentImportService(IDbContextFactory<ClubContext> factory) : I
             .Where(s => s.Department != null && s.Department.Name == departmentName)
             .ToListAsync();
 
-        // 不允许把 Founder 纳入部门名单覆盖流程
-        if (current.Any(s => s.Identity == "Founder"))
+        // 职级校验：
+        // 1) 名单里的目标身份不能高于操作者（否则 Minister 导入一份含 President 的名单即可越权）；
+        // 2) 现有名单里不能有高于操作者的成员——覆盖导入会删除名单外成员，等于间接降级/移除更高职级。
+        var unauthorizedIncoming = incoming.FirstOrDefault(m => !RoleHierarchy.CanAssign(operatorRole, m.Identity));
+        if (unauthorizedIncoming != null)
+        {
+            throw new BusinessException(ErrorCode.InsufficientPermission,
+                $"无权将学号 {unauthorizedIncoming.UserId} 设置为 {unauthorizedIncoming.Identity}");
+        }
+
+        var unauthorizedCurrent = current.FirstOrDefault(s => !RoleHierarchy.CanTakeOver(operatorRole, s.Identity));
+        if (unauthorizedCurrent != null)
+        {
+            throw new BusinessException(ErrorCode.InsufficientPermission,
+                $"名单中存在无权调整的成员（学号 {unauthorizedCurrent.UserId}，身份 {unauthorizedCurrent.Identity}）");
+        }
+
+        var incomingIds = incoming.Select(m => m.UserId).ToHashSet(StringComparer.Ordinal);
+        if (current.Any(s => s.Identity == "Founder") ||
+            await context.Staffs.AnyAsync(s => s.Identity == "Founder" && incomingIds.Contains(s.UserId)))
             throw new BusinessException(ErrorCode.InvalidStatusForOperation, "部门名单中存在创始人，无法覆盖");
+
+        // 导入会为"没有 Student 档案"的成员新建登录凭据（默认密码为手机号或学号）。
+        // 因此跨部门的既有员工也必须校验：不能替高于自己职级的员工补建登录档案。
+        var incomingStaff = await context.Staffs
+            .Where(s => incomingIds.Contains(s.UserId))
+            .Select(s => new { s.UserId, s.Identity })
+            .ToListAsync();
+
+        if (incomingStaff.Count > 0)
+        {
+            var existingStudentIds = await context.Students
+                .Where(s => incomingIds.Contains(s.UserId))
+                .Select(s => s.UserId)
+                .ToListAsync();
+
+            var unauthorizedCredential = incomingStaff
+                .Where(s => !existingStudentIds.Contains(s.UserId))
+                .FirstOrDefault(s => !RoleHierarchy.CanTakeOver(operatorRole, s.Identity));
+
+            if (unauthorizedCredential != null)
+            {
+                throw new BusinessException(ErrorCode.InsufficientPermission,
+                    $"无权为成员 {unauthorizedCredential.UserId}（{unauthorizedCredential.Identity}）创建登录档案");
+            }
+        }
 
         // 一并加载当前部门成员的学生档案，用于备份完整信息
         var currentIds = current.Select(s => s.UserId).ToList();
@@ -125,8 +171,6 @@ public class DepartmentImportService(IDbContextFactory<ClubContext> factory) : I
             })
             .ToList();
 
-        var incomingIds = incoming.Select(m => m.UserId).ToHashSet(StringComparer.Ordinal);
-
         // 1. 删除不在新名单中的原部门成员（仅解除部门关系，保留其学生档案）
         foreach (var staff in current.Where(s => !incomingIds.Contains(s.UserId)))
             context.Staffs.Remove(staff);
@@ -134,8 +178,14 @@ public class DepartmentImportService(IDbContextFactory<ClubContext> factory) : I
         // 2. 逐条 upsert：Staff（部门/职位）+ Student（学生档案字段）
         foreach (var item in incoming)
         {
+            // 从库中补查时必须带上 Department：把社长清成无部门依赖已加载的导航属性，
+            // 否则 EF 认为关系没变化，社长会继续留在原来的部门里。
             var existing = current.FirstOrDefault(s => s.UserId == item.UserId)
-                           ?? await context.Staffs.FirstOrDefaultAsync(s => s.UserId == item.UserId);
+                           ?? await context.Staffs.Include(s => s.Department)
+                               .FirstOrDefaultAsync(s => s.UserId == item.UserId);
+
+            // C23：社长是社团层面身份，名单里的社长行不能挂到被导入的部门上。
+            var targetDepartment = item.Identity == "President" ? null : department;
 
             if (existing == null)
             {
@@ -144,14 +194,14 @@ public class DepartmentImportService(IDbContextFactory<ClubContext> factory) : I
                     UserId = item.UserId,
                     Name = item.Name,
                     Identity = item.Identity,
-                    Department = department
+                    Department = targetDepartment
                 });
             }
             else
             {
                 existing.Name = item.Name;
                 existing.Identity = item.Identity;
-                existing.Department = department;
+                existing.Department = targetDepartment;
             }
 
             var student = studentMap.GetValueOrDefault(item.UserId)

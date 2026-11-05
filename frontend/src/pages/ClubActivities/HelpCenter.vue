@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {ref, computed} from 'vue'
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import {NCollapse, NCollapseItem} from 'naive-ui'
 
 // --- 类型定义 ---
@@ -20,12 +20,12 @@ interface FaqItem {
 
 // --- 数据 Mock ---
 const categories = ref<Category[]>([
-  {id: 'start', title: '快速开始', icon: 'ion:rocket-outline', desc: '新手指南与入门教程'},
-  {id: 'account', title: '账户管理', icon: 'ion:person-outline', desc: '设置、安全与隐私'},
-  {id: 'join', title: '加入我们', icon: 'ion:people-outline', desc: '招新信息与会员权益'},
-  {id: 'tech', title: '技术支持', icon: 'ion:hammer-outline', desc: '技术问题与开发指导'},
-  {id: 'community', title: '社区活动', icon: 'ion:chatbubbles-outline', desc: '活动交流与项目协作'},
-  {id: 'contact', title: '联系我们', icon: 'ion:mail-outline', desc: '获取人工帮助'},
+  {id: 'start', title: '快速开始', icon: 'rocket', desc: '新手指南与入门教程'},
+  {id: 'account', title: '账户管理', icon: 'user', desc: '设置、安全与隐私'},
+  {id: 'join', title: '加入我们', icon: 'users', desc: '招新信息与会员权益'},
+  {id: 'tech', title: '技术支持', icon: 'hammer', desc: '技术问题与开发指导'},
+  {id: 'community', title: '社区活动', icon: 'messages-square', desc: '活动交流与项目协作'},
+  {id: 'contact', title: '联系我们', icon: 'mail', desc: '获取人工帮助'},
 ])
 
 const faqs = ref<FaqItem[]>([
@@ -119,7 +119,7 @@ const filteredFaqs = computed(() => {
       <!-- 搜索框 (Spotlight Style) -->
       <div class="w-full max-w-2xl relative group">
         <div class="absolute inset-y-0 left-4 flex items-center pointer-events-none z-10">
-          <Icon icon="ion:search-outline"
+          <Icon icon="search"
                 class="text-gray-400 text-xl group-focus-within:text-[#0071e3] transition-colors"/>
         </div>
         <!-- 使用原生 input 实现更精细的 Apple 风格控制，也可以用 Naive NInput -->
@@ -170,7 +170,7 @@ const filteredFaqs = computed(() => {
       <!-- FAQ 区域 -->
       <div class="mx-auto">
         <h2 class="text-2xl font-semibold mb-6 px-1 flex items-center gap-2">
-          <Icon v-if="searchQuery" icon="ion:search"/>
+          <Icon v-if="searchQuery" icon="search"/>
           {{ searchQuery ? '搜索结果' : '常见问题' }}
         </h2>
 
@@ -184,7 +184,7 @@ const filteredFaqs = computed(() => {
           >
             <!-- 无结果状态 -->
             <div v-if="filteredFaqs.length === 0" class="p-8 text-center text-gray-500">
-              <Icon icon="ion:document-text-outline" class="text-4xl mx-auto mb-2 opacity-30"/>
+              <Icon icon="file-text" class="text-4xl mx-auto mb-2 opacity-30"/>
               <p>没有找到与 "{{ searchQuery }}" 相关的内容</p>
             </div>
 
@@ -216,7 +216,7 @@ const filteredFaqs = computed(() => {
         <p class="text-gray-500 mb-6">我们的支持团队随时准备为您服务。</p>
         <button
             class="bg-[#0071e3] hover:bg-[#0077ED] text-white px-6 py-3 rounded-full font-medium transition-all hover:shadow-lg active:scale-95 flex items-center justify-center gap-2 mx-auto">
-          <Icon icon="ion:chatbox-ellipses-outline"/>
+          <Icon icon="message-circle-more"/>
           联系支持团队
         </button>
       </div>

@@ -4,6 +4,7 @@ using iOSClub.Data.DTOs;
 using iOSClub.Data.VOs;
 using iOSClub.DataApi.Repositories;
 using iOSClub.WebAPI.Common;
+using iOSClub.WebAPI.IdentityModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
@@ -12,7 +13,9 @@ namespace iOSClub.WebAPI.Controllers;
 
 [ApiController]
 [Route("[controller]")] // 使用C#推荐的API路径格式
-public class CategoryController(ICategoryRepository categoryRepository)
+public class CategoryController(
+    ICategoryRepository categoryRepository,
+    IStaffRepository staffRepository)
     : ControllerBase
 {
     /// <summary>
@@ -36,7 +39,8 @@ public class CategoryController(ICategoryRepository categoryRepository)
             return Ok(ApiResponse<CategoryVO>.Fail(ErrorCode.ParameterEmpty, "分类名称不能为空"));
         }
 
-        var category = await categoryRepository.GetByName(name);
+        // 分类详情里带有文章列表，必须按访问者可见性过滤（与 ArticleController 同一套语义）。
+        var category = await categoryRepository.GetByName(name, await GetAccessScope());
         if (category == null)
         {
             return Ok(ApiResponse<CategoryVO>.Fail(ErrorCode.CategoryNotFound, $"未找到名称为 '{name}' 的分类"));
@@ -60,7 +64,8 @@ public class CategoryController(ICategoryRepository categoryRepository)
     [HttpGet("articles/{id}")]
     public async Task<ActionResult<ApiResponse<IEnumerable<ArticleListItemVO>>>> GetArticles(string id)
     {
-        var articles = await categoryRepository.GetArticlesById(id);
+        // 公开接口，但文章列表必须遵循 ArticleAccessPolicy，不能绕过文章详情接口的可见性。
+        var articles = await categoryRepository.GetArticlesById(id, await GetAccessScope());
         return Ok(ApiResponse<IEnumerable<ArticleListItemVO>>.Success(articles.Adapt<List<ArticleListItemVO>>()));
     }
 
@@ -150,5 +155,22 @@ public class CategoryController(ICategoryRepository categoryRepository)
         }
 
         return Ok(ApiResponse<string>.Fail(ErrorCode.OperationFailed, "部分或全部分类更新失败"));
+    }
+
+    /// <summary>
+    /// 当前访问者的文章可见范围，语义与 ArticleController.GetAccessScope 保持一致：
+    /// 匿名以普通成员处理；Founder/President 不受部门约束；其他角色按员工表取部门。
+    /// </summary>
+    private async Task<ArticleAccessScope> GetAccessScope()
+    {
+        var user = HttpContext.User.GetUser();
+        if (user == null)
+            return new ArticleAccessScope();
+
+        if (user.Identity is "Founder" or "President")
+            return new ArticleAccessScope(user.Identity);
+
+        var staff = await staffRepository.GetStaffByIdAsync(user.UserId);
+        return new ArticleAccessScope(user.Identity, staff?.Department?.Name);
     }
 }

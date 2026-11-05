@@ -8,6 +8,7 @@ using iOSClub.WebAPI.IdentityModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Mapster;
+using System.Text.RegularExpressions;
 
 namespace iOSClub.WebAPI.Controllers;
 
@@ -15,10 +16,39 @@ namespace iOSClub.WebAPI.Controllers;
 [Route("[controller]")]
 public class AuthController(
     IStudentRepository studentRepository,
+    IStaffRepository staffRepository,
     ILoginService loginService,
     ITokenGenerator tokenGenerator)
     : ControllerBase
 {
+    // 与 StudentCreateDTO.UserId 的 [RegularExpression] 保持一致
+    private static readonly Regex StudentIdPattern = new(@"^\d{10}$", RegexOptions.Compiled);
+
+    /// <summary>
+    /// 注册第一步：检查学号是否可注册
+    /// </summary>
+    /// <param name="studentId">10 位数字学号</param>
+    /// <returns>true 表示该学号尚未被学生或员工占用</returns>
+    [HttpGet("student-id-available")]
+    public async Task<ActionResult<ApiResponse<bool>>> CheckStudentIdAvailable(string studentId)
+    {
+        var userId = studentId ?? string.Empty;
+
+        // 与 StudentCreateDTO.UserId 的规则保持一致，格式不合法时不必查库。
+        if (!StudentIdPattern.IsMatch(userId))
+        {
+            return Ok(ApiResponse<bool>.Fail(ErrorCode.ParameterFormatError, "学号必须为10位数字"));
+        }
+
+        // 与 SignUp 的拒绝规则保持一致：学号被学生或员工占用都不可注册。
+        // 该接口必然暴露"某学号是否已注册"，但注册接口本身就会返回同样的信息，
+        // 所以不构成新的泄露面；枚举速率由 register-check 限流策略约束。
+        var available = !await studentRepository.StudentExistsAsync(userId) &&
+                        !await staffRepository.StaffExistsAsync(userId);
+
+        return Ok(ApiResponse<bool>.Success(available, available ? "学号可注册" : "该学号已被占用"));
+    }
+
     /// <summary>
     /// 学生注册接口
     /// </summary>
@@ -27,6 +57,15 @@ public class AuthController(
     [HttpPost("signup")]
     public async Task<ActionResult<ApiResponse<string>>> SignUp(StudentCreateDTO dto)
     {
+        return BadRequest();
+        // 公开注册不能占用已有员工账号的学号。登录身份来自 Staffs 表，
+        // 若允许注册一个已有 Staff 的学号，任何人都能用自己的密码接管该身份
+        // （包括 Founder）。这里与管理员创建接口共用同一条拒绝规则。
+        if (await staffRepository.StaffExistsAsync(dto.UserId))
+        {
+            return Ok(ApiResponse<string>.Fail(ErrorCode.ResourceAlreadyExists, "用户已存在"));
+        }
+
         var createdStudent = await studentRepository.Create(dto.Adapt<StudentDO>());
 
         if (createdStudent == null)
@@ -65,16 +104,6 @@ public class AuthController(
             return Ok(ApiResponse<string>.Success(studentToken, "登录成功"));
         }
 
-        // 如果学生登录失败，尝试员工登录
-        var staffToken = await loginService.StaffLogin(loginModel, clientId, scope);
-        if (!string.IsNullOrEmpty(staffToken))
-        {
-            // 从Redis中获取刷新令牌
-            var refreshToken = await loginService.GetRefreshToken(loginModel.UserId, clientId);
-            Response.Headers.Append("X-Refresh-Token", refreshToken);
-            return Ok(ApiResponse<string>.Success(staffToken, "登录成功"));
-        }
-        
         return Ok(ApiResponse<string>.Fail(ErrorCode.UserNotFound, "用户不存在或密码错误"));
     }
 
@@ -88,6 +117,15 @@ public class AuthController(
     [HttpPost("logout")]
     public async Task<ActionResult<ApiResponse<bool>>> Logout(string userId, string clientId = "")
     {
+        // 会话撤销只能作用于当前令牌对应的账号。userId 来自查询参数，不能直接信任：
+        // 否则任意登录用户都能让别人的 token/refresh/user 三个键一起失效。
+        var currentUser = HttpContext.User.GetUser();
+        if (currentUser == null)
+            return Ok(ApiResponse<bool>.Fail(ErrorCode.Unauthorized, "用户未认证"));
+
+        if (!string.Equals(currentUser.UserId, userId, StringComparison.Ordinal))
+            return Ok(ApiResponse<bool>.Fail(ErrorCode.InsufficientPermission, "只能撤销本人的会话"));
+
         var result = await loginService.Logout(userId, clientId);
         return Ok(result
             ? ApiResponse<bool>.Success(true, "登出成功")
@@ -149,16 +187,11 @@ public class AuthController(
     [HttpPost("request-password-reset")]
     public async Task<ActionResult<ApiResponse<bool>>> RequestPasswordReset(string userId)
     {
-        var result = await loginService.RequestPasswordResetCode(userId);
+        // 无论用户是否存在、是否绑定邮箱、邮件是否发送成功，都返回同一句话。
+        // 之前按"用户不存在 / 请联系管理员"区分响应，等于把学号枚举接口送给了攻击者。
+        await loginService.RequestPasswordResetCode(userId);
 
-        if (result) return Ok(ApiResponse<bool>.Success(true, "请求重置密码验证码成功"));
-        // 检查用户是否存在
-        var student = await studentRepository.GetByIdAsync(userId);
-        return Ok(student == null
-            ? ApiResponse<bool>.Fail(ErrorCode.UserNotFound, "用户不存在")
-            : ApiResponse<bool>.Fail(ErrorCode.OperationFailed, "请联系管理员进行密码更改"));
-
-        // 用户存在但没有邮箱
+        return Ok(ApiResponse<bool>.Success(true, "如果该账号已绑定邮箱，验证码已发送"));
     }
 
     /// <summary>

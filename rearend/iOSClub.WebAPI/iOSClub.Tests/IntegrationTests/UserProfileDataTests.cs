@@ -25,7 +25,6 @@ public class UserProfileDataTests
 {
     private readonly DbContextOptions<ClubContext> _options;
     private readonly StudentRepository _studentRepository;
-    private readonly StaffRepository _staffRepository;
 
     public UserProfileDataTests()
     {
@@ -35,7 +34,6 @@ public class UserProfileDataTests
             .Options;
 
         _studentRepository = new StudentRepository(new TestDbContextFactory(_options));
-        _staffRepository = new StaffRepository(new TestDbContextFactory(_options));
     }
 
     private UserController CreateController(string userId, string identity)
@@ -49,7 +47,7 @@ public class UserProfileDataTests
         var accessor = new Mock<IHttpContextAccessor>();
         accessor.Setup(a => a.HttpContext).Returns(new DefaultHttpContext { User = principal });
 
-        return new UserController(_studentRepository, _staffRepository, accessor.Object);
+        return new UserController(_studentRepository, accessor.Object);
     }
 
     /// <summary>
@@ -136,6 +134,32 @@ public class UserProfileDataTests
     {
         // Arrange：token 有效但库里没有这个人。
         var controller = CreateController("9999999999", "Member");
+
+        // Act
+        var response = await controller.GetData();
+
+        // Assert
+        var payload = Unwrap(response);
+        Assert.Equal(ErrorCode.UserNotFound, payload.ErrorCode);
+        Assert.Null(payload.Data);
+    }
+
+    /// <summary>
+    /// 账号模型已决定不再支持只有 Staff 档案的账号：没有 Student 档案时，
+    /// 即使 Staffs 里有 Founder 记录，也不能再回退返回 Staff 信息。
+    /// </summary>
+    [Fact]
+    public async Task StaffOnlyAccount_ReturnsUserNotFound()
+    {
+        // Arrange
+        const string userId = "0000000000";
+        await using (var context = new ClubContext(_options))
+        {
+            context.Staffs.Add(new StaffDO { UserId = userId, Name = "超管", Identity = "Founder" });
+            await context.SaveChangesAsync();
+        }
+
+        var controller = CreateController(userId, "Founder");
 
         // Act
         var response = await controller.GetData();

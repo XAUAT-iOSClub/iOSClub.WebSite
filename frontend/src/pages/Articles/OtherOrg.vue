@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import {ref} from 'vue'
 import {NImage, NModal} from 'naive-ui'
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
+
 // 保持原有图片引用路径（这些实际上是二维码）
 import xiaomiQr from '/assets/other/xiaomi.jpg'
 import huaweiQr from '/assets/other/huawei.jpg'
@@ -35,7 +36,7 @@ const organizations = ref<Organization[]>([
     subtitle: '探索科技无限可能',
     qrCode: xiaomiQr,
     themeColor: '#ff6900',
-    icon: 'simple-icons:xiaomi',
+    icon: 'brand-xiaomi',
     bgGradient: 'from-orange-500/10 to-orange-600/5',
     description: [
       '欢迎来到西建大米粉俱乐部。这是一个充满创新和科技热情的社区。',
@@ -48,7 +49,7 @@ const organizations = ref<Organization[]>([
     subtitle: '构建万物互联的智能世界',
     qrCode: huaweiQr,
     themeColor: '#cf0a2c',
-    icon: 'simple-icons:huawei',
+    icon: 'brand-huawei',
     bgGradient: 'from-red-600/10 to-red-700/5',
     description: [
       '西建大花粉俱乐部是由华为公司创办的科技社团。',
@@ -61,7 +62,7 @@ const organizations = ref<Organization[]>([
     subtitle: '制霸蓝天，放飞梦想',
     qrCode: aircraftQr,
     themeColor: '#007aff',
-    icon: 'mdi:airplane',
+    icon: 'plane',
     bgGradient: 'from-blue-500/10 to-blue-600/5',
     description: [
       '致力于航空模型和无人机的设计、制作与飞行。',
@@ -74,21 +75,21 @@ const offCampusOrgs = ref<OffCampusOrg[]>([
   {
     name: '仙建协会【MC社】',
     url: 'https://skin.xauatcraft.com/',
-    icon: 'mdi:minecraft',
+    icon: 'brand-minecraft',
     category: 'Gaming',
     desc: 'Minecraft 爱好者聚集地'
   },
   {
     name: '西邮 Linux 小组',
     url: 'https://www.xiyoulinux.com/',
-    icon: 'uim:linux',
+    icon: 'brand-linux',
     category: 'Tech',
     desc: '开源技术与 Linux 学习社区'
   },
   {
     name: '西邮 MC 兴趣团体',
     url: 'https://cop.cooo.site/',
-    icon: 'tabler:brand-minecraft',
+    icon: 'brand-minecraft',
     category: 'Gaming',
     desc: '跨校联谊与游戏构建'
   }
@@ -160,7 +161,7 @@ const handleShowQr = (org: Organization) => {
               class="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 text-zinc-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:bg-white/10 dark:text-zinc-400 dark:hover:bg-blue-500/20 dark:hover:text-blue-400"
               title="显示群二维码"
           >
-            <Icon icon="lucide:qr-code" class="h-5 w-5"/>
+            <Icon icon="qr-code" class="h-5 w-5"/>
           </button>
         </div>
 
@@ -180,7 +181,7 @@ const handleShowQr = (org: Organization) => {
               class="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white transition-transform active:scale-98"
               :style="{ backgroundColor: org.themeColor }"
           >
-            <Icon icon="lucide:scan-line" class="h-4 w-4 opacity-80"/>
+            <Icon icon="scan-line" class="h-4 w-4 opacity-80"/>
             扫码加入/了解更多
           </button>
         </div>
@@ -213,7 +214,7 @@ const handleShowQr = (org: Organization) => {
               <h3 class="text-sm font-semibold text-slate-900 group-hover:text-blue-600 dark:text-slate-100 dark:group-hover:text-blue-400">
                 {{ link.name }}
               </h3>
-              <Icon icon="lucide:arrow-up-right"
+              <Icon icon="arrow-up-right"
                     class="w-3 h-3 opacity-0 -translate-x-1 group-hover:translate-x-0 group-hover:opacity-100 transition-all text-zinc-400"/>
             </div>
             <p class="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400 truncate">

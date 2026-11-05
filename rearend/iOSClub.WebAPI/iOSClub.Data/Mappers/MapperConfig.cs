@@ -37,6 +37,7 @@ public static class MapperConfig
 
         // DO 里回调地址是分号拼接的字符串，VO 暴露为数组（与 ClientAppResultVO 一致）。
         config.NewConfig<ClientApplicationDO, ClientAppVO>()
+            .Map(dest => dest.HasRecoverableSecret, src => !string.IsNullOrEmpty(src.ClientSecretCipher))
             .Map(dest => dest.RedirectUris,
                 src => src.RedirectUris
                     .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -68,9 +69,11 @@ public static class MapperConfig
                     ? null
                     : new DepartmentDO { Name = src.DepartmentName });
 
+        // 可空属性加 ! ：Mapster 的 Ignore<TProperty> 把表达式返回类型当成非空，
+        // 而这里只是取成员表达式，值本身是否为空不影响忽略行为。
         config.NewConfig<DTOs.ArticleCreateDTO, ArticleDO>()
-            .Ignore(dest => dest.CategoryId)
-            .Ignore(dest => dest.Category)
+            .Ignore(dest => dest.CategoryId!)
+            .Ignore(dest => dest.Category!)
             .Ignore(dest => dest.LastWriteTime);
 
         config.NewConfig<DTOs.ResourceCreateUpdateDTO, ResourceDO>();
@@ -97,7 +100,7 @@ public static class MapperConfig
             .Ignore(dest => dest.Id)
             .Ignore(dest => dest.ActivityId)
             .Ignore(dest => dest.CreatedAt)
-            .Ignore(dest => dest.Activity);
+            .Ignore(dest => dest.Activity!);
 
         config.NewConfig<ActivityOperationLogDO, ActivityOperationLogVO>();
     }

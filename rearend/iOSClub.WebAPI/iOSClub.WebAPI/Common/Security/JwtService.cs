@@ -84,14 +84,17 @@ public class JwtService(
 
         // 获取当前有效的RSA私钥
         var rsa = rsaKeyManager.GetCurrentPrivateKey();
-        // 从RSA密钥中导出公钥的SHA256哈希值作为KeyId
-        var publicKeyBytes = rsa.ExportRSAPublicKey();
-        var keyId = Convert.ToBase64String(SHA256.HashData(publicKeyBytes)).Substring(0, 16);
+        // kid 与 JWKS 端点（/.well-known/access-token/jwks）共用同一算法，
+        // 否则客户端按 kid 取不到钥匙。见 RsaKeyManager.ComputeKeyId。
+        var keyId = RsaKeyManager.ComputeKeyId(rsa);
 
         var rsaSecurityKey = new RsaSecurityKey(rsa) { KeyId = keyId };
+        // 标准 RS256（"RS256"）。此前用的 RsaSha256Signature 会把 alg 写成
+        // XML-DSig URI（http://www.w3.org/2001/04/xmldsig-more#rsa-sha256），
+        // 标准 JWT 库（jose 等）无法识别，客户端经 JWKS 验签会直接失败。
         var signingCredentials = new SigningCredentials(
             rsaSecurityKey,
-            SecurityAlgorithms.RsaSha256Signature);
+            SecurityAlgorithms.RsaSha256);
 
         var securityToken = new JwtSecurityToken(
             issuer: jwtConfig.Issuer, // 签发者
@@ -224,18 +227,26 @@ public class JwtService(
     /// <returns>令牌验证参数</returns>
     public TokenValidationParameters GetDefaultValidationParameters()
     {
-        // 获取当前有效的RSA公钥
-        var rsa = rsaKeyManager.GetCurrentPublicKey();
+        // 当前公钥 + 轮换前的上一代公钥都要参与验签：轮换后最长 20 分钟内的在途 token
+        // 是用旧私钥签的，只放当前公钥会让服务端自己把它们全部判成 401。
+        var current = rsaKeyManager.GetCurrentPublicKey();
+        var signingKeys = new List<SecurityKey>
+        {
+            new RsaSecurityKey(current) { KeyId = RsaKeyManager.ComputeKeyId(current) }
+        };
 
-        // 从RSA密钥中导出公钥的SHA256哈希值作为KeyId，与生成令牌时使用的KeyId保持一致
-        var publicKeyBytes = rsa.ExportRSAPublicKey();
-        var keyId = Convert.ToBase64String(SHA256.HashData(publicKeyBytes)).Substring(0, 16);
-        var rsaSecurityKey = new RsaSecurityKey(rsa) { KeyId = keyId };
+        var previous = rsaKeyManager.TryLoadPreviousPublicKey();
+        if (previous is not null)
+        {
+            signingKeys.Add(new RsaSecurityKey(previous) { KeyId = RsaKeyManager.ComputeKeyId(previous) });
+        }
 
         return new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = rsaSecurityKey,
+            // 同时保留 IssuerSigningKey：部分旧代码与测试仍读这个属性，设为当前公钥即可。
+            IssuerSigningKey = signingKeys[0],
+            IssuerSigningKeys = signingKeys,
             ValidateIssuer = true,
             ValidIssuer = jwtConfig.Issuer,
             ValidateAudience = true,

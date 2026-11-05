@@ -74,7 +74,7 @@
 
               <!-- 悬停时出现的箭头 -->
               <Icon
-                  icon="iconamoon:arrow-top-right-1"
+                  icon="arrow-up-right"
                   class="w-4 h-4 text-gray-400 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300"
               />
             </div>
@@ -88,7 +88,7 @@
         <div v-if="models.length === 0"
              class="col-span-full flex flex-col items-center justify-center py-20 animate-fade-in">
           <div class="w-20 h-20 bg-gray-100 dark:bg-[#1c1c1e] rounded-full flex items-center justify-center mb-4">
-            <Icon icon="ios-folder-open-outline" class="w-10 h-10 text-gray-400"/>
+            <Icon icon="folder-open" class="w-10 h-10 text-gray-400"/>
           </div>
           <span class="text-gray-500 font-medium">暂无工具</span>
         </div>
@@ -99,7 +99,7 @@
 
 <script setup lang="ts">
 import {ref, onMounted, computed} from 'vue';
-import {Icon} from '@iconify/vue'; // 替代 n-icon
+import Icon from '@/components/Icon.vue' // 替代 n-icon
 import PageStart from "../../components/PageStart.vue";
 import {ToolService} from "../../services/ToolService";
 import type {LinkModel} from "../../models";

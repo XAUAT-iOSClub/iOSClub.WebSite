@@ -16,7 +16,7 @@
       <div class="pt-10 pb-6 text-center">
         <div
             class="mx-auto w-16 h-16 mb-4 bg-linear-to-b from-gray-100 to-gray-300 dark:from-gray-700 dark:to-gray-800 rounded-[18px] shadow-inner flex items-center justify-center border border-white/20 icon-box">
-          <Icon icon="ion:person" class="text-3xl text-gray-600 dark:text-gray-200"/>
+          <Icon icon="user" class="text-3xl text-gray-600 dark:text-gray-200"/>
         </div>
         <h1 class="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
           iMember ID
@@ -50,30 +50,33 @@
 
             <!-- 步骤 1: 基本信息 -->
             <div v-if="currentStep === 1" key="step1" class="space-y-4">
-              <n-form-item path="name" :rule="{ required: true, message: '', trigger: 'blur' }" class="apple-input">
-                <n-input v-model:value="form.name" placeholder="姓名">
+              <n-form-item path="name"
+                           :rule="[{ required: true, message: '请输入姓名', trigger: 'blur' }, { pattern: namePattern, message: '姓名应为2-20个汉字或字母，不能包含数字或特殊符号', trigger: 'blur' }]"
+                           class="apple-input">
+                <n-input v-model:value="form.name" placeholder="姓名" :maxlength="20">
                   <template #prefix>
-                    <Icon icon="ion:person-outline" class="input-icon"/>
+                    <Icon icon="user" class="input-icon"/>
                   </template>
                 </n-input>
               </n-form-item>
 
-              <n-form-item path="studentId" :rule="{ required: true, message: '', trigger: 'blur' }"
+              <n-form-item path="studentId"
+                           :rule="[{ required: true, message: '请输入学号', trigger: 'blur' }, { pattern: studentIdPattern, message: '学号必须是10位数字', trigger: 'blur' }]"
                            class="apple-input">
-                <n-input v-model:value="form.studentId" placeholder="学号">
+                <n-input v-model:value="form.studentId" placeholder="学号" :maxlength="10">
                   <template #prefix>
-                    <Icon icon="ion:card-outline" class="input-icon"/>
+                    <Icon icon="credit-card" class="input-icon"/>
                   </template>
                 </n-input>
               </n-form-item>
 
               <div class="grid grid-cols-2 gap-4">
-                <n-form-item path="gender" :rule="{ required: true, message: '', trigger: 'change' }">
+                <n-form-item path="gender" :rule="{ required: true, message: '请选择性别', trigger: 'change' }">
                   <n-select v-model:value="form.gender" :options="genderOptions" placeholder="性别"
                             class="apple-select"/>
                 </n-form-item>
 
-                <n-form-item path="political" :rule="{ required: true, message: '', trigger: 'change' }">
+                <n-form-item path="political" :rule="{ required: true, message: '请选择政治面貌', trigger: 'change' }">
                   <n-select v-model:value="form.political" :options="politicalOptions" placeholder="政治面貌"
                             class="apple-select"/>
                 </n-form-item>
@@ -82,34 +85,37 @@
 
             <!-- 步骤 2: 学校信息 -->
             <div v-else-if="currentStep === 2" key="step2" class="space-y-4">
-              <n-form-item path="major" :rule="{ required: true, message: '', trigger: 'change' }" class="apple-select">
+              <n-form-item path="major" :rule="{ required: true, message: '请选择学院', trigger: 'change' }" class="apple-select">
                 <n-select v-model:value="form.major" :options="academyOptions" placeholder="选择学院"
                 />
               </n-form-item>
 
-              <n-form-item path="className" :rule="{ required: true, message: '', trigger: 'blur' }"
+              <n-form-item path="className"
+                           :rule="[{ required: true, message: '请输入班级', trigger: 'blur' }, { pattern: classNamePattern, message: '班级名称长度需为2-20个字符', trigger: 'blur' }]"
                            class="apple-input">
-                <n-input v-model:value="form.className" placeholder="班级 (如: 机电2401)">
+                <n-input v-model:value="form.className" placeholder="班级 (如: 机电2401)" :maxlength="20">
                   <template #prefix>
-                    <Icon icon="ion:people-outline" class="input-icon"/>
+                    <Icon icon="users" class="input-icon"/>
                   </template>
                 </n-input>
               </n-form-item>
 
-              <n-form-item path="phone" :rule="{ required: true, message: '', trigger: 'blur' }" class="apple-input">
-                <n-input v-model:value="form.phone" placeholder="手机号码">
+              <n-form-item path="phone"
+                           :rule="[{ required: true, message: '请输入手机号', trigger: 'blur' }, { pattern: phonePattern, message: '请输入正确的手机号', trigger: 'blur' }]"
+                           class="apple-input">
+                <n-input v-model:value="form.phone" placeholder="手机号码" :maxlength="11">
                   <template #prefix>
-                    <Icon icon="ion:call-outline" class="input-icon"/>
+                    <Icon icon="phone" class="input-icon"/>
                   </template>
                 </n-input>
               </n-form-item>
 
               <n-form-item path="email"
-                           :rule="[{ required: true, message: '' }, { validator: emailValidator, trigger: 'blur' }]"
+                           :rule="[{ required: true, message: '请输入邮箱' }, { validator: emailValidator, trigger: 'blur' }]"
                            class="apple-input">
-                <n-input v-model:value="form.email" placeholder="电子邮箱">
+                <n-input v-model:value="form.email" placeholder="电子邮箱" :maxlength="256">
                   <template #prefix>
-                    <Icon icon="ion:mail-outline" class="input-icon"/>
+                    <Icon icon="mail" class="input-icon"/>
                   </template>
                 </n-input>
               </n-form-item>
@@ -126,7 +132,7 @@
                     class="apple-input"
                 >
                   <template #prefix>
-                    <Icon icon="ion:lock-closed-outline" class="input-icon"/>
+                    <Icon icon="lock" class="input-icon"/>
                   </template>
                 </n-input>
               </n-form-item>
@@ -143,7 +149,7 @@
                     class="apple-input"
                 >
                   <template #prefix>
-                    <Icon icon="ion:shield-checkmark-outline" class="input-icon"/>
+                    <Icon icon="shield-check" class="input-icon"/>
                   </template>
                 </n-input>
               </n-form-item>
@@ -152,7 +158,7 @@
               <div
                   class="mt-4 p-4 bg-gray-50 dark:bg-white/5 rounded-xl text-sm border border-gray-100 dark:border-white/10">
                 <div class="flex items-center gap-2 mb-2 text-gray-500 dark:text-gray-400">
-                  <Icon icon="ion:information-circle-outline"/>
+                  <Icon icon="info"/>
                   <span class="font-medium">信息预览</span>
                 </div>
                 <div class="space-y-1 text-gray-800 dark:text-gray-200 font-medium pl-1">
@@ -169,7 +175,7 @@
             <div v-else-if="currentStep === 4" key="step4" class="flex flex-col items-center py-6 text-center">
               <div
                   class="w-20 h-20 rounded-full bg-[#34c759]/10 text-[#34c759] flex items-center justify-center mb-6 animate-scale-in">
-                <Icon icon="ion:checkmark-circle" class="text-5xl"/>
+                <Icon icon="circle-check" class="text-5xl"/>
               </div>
               <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">欢迎加入</h2>
               <p class="text-gray-500 dark:text-gray-400">账号已创建，即将跳转...</p>
@@ -181,7 +187,7 @@
         <!-- 错误提示 -->
         <div v-if="errorMsg"
              class="mt-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-lg flex items-center gap-2 animate-shake">
-          <Icon icon="ion:alert-circle"/>
+          <Icon icon="circle-alert"/>
           {{ errorMsg }}
         </div>
 
@@ -193,7 +199,7 @@
               type="button"
               class="w-12 h-12 rounded-full flex items-center justify-center bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/20 transition-colors"
           >
-            <Icon icon="ion:arrow-back"/>
+            <Icon icon="arrow-left"/>
           </button>
 
           <button
@@ -202,9 +208,9 @@
               type="button"
               class="flex-1 h-12 rounded-full bg-[#0071e3] hover:bg-[#0077ED] active:bg-[#006edb] text-white font-medium text-[15px] transition-all shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            <Icon v-if="loading" icon="svg-spinners:180-ring" class="text-xl"/>
+            <Icon v-if="loading" icon="loader" spin class="text-xl"/>
             <span v-else>{{ currentStep === 3 ? '完成注册' : '继续' }}</span>
-            <Icon v-if="!loading && currentStep !== 3" icon="ion:arrow-forward"/>
+            <Icon v-if="!loading && currentStep !== 3" icon="arrow-right"/>
           </button>
         </div>
 
@@ -213,7 +219,7 @@
           <a href="/Login"
              class="text-sm text-[#0071e3] dark:text-[#2997ff] hover:underline font-medium inline-flex items-center gap-1">
             已有 iMember ID? 立即登录
-            <Icon icon="ion:chevron-forward" class="text-xs"/>
+            <Icon icon="chevron-right" class="text-xs"/>
           </a>
         </div>
 
@@ -226,9 +232,9 @@
 import {ref, reactive, onMounted} from 'vue'
 import {useRouter} from 'vue-router'
 import {NInput, NForm, NFormItem, NSelect} from 'naive-ui'
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import {useAuthorizationStore} from '../../stores/Authorization'
-import {ios} from '../../services/AuthService'
+import {ios, AuthService} from '../../services/AuthService'
 import {InfoService} from '../../services/InfoService'
 import {isWeiXin, NavigateTo} from "../../lib/site"
 
@@ -276,9 +282,16 @@ const genderOptions = [
 const politicalOptions = [
   {label: '群众', value: '群众'},
   {label: '共青团员', value: '共青团员'},
-  {label: '预备党员', value: '预备党员'},
+  // 与后端 SignRecord.PoliticalLandscapes 保持一致，不能简写成“预备党员”
+  {label: '中共预备党员', value: '中共预备党员'},
   {label: '中共党员', value: '中共党员'},
 ]
+
+// 与后端 StudentCreateDTO 的 DataAnnotations 保持一致
+const namePattern = /^[\p{L}· ]{2,20}$/u
+const studentIdPattern = /^\d{10}$/
+const classNamePattern = /^.{2,20}$/
+const phonePattern = /^1[3-9]\d{9}$/
 
 // 学院列表由后端 /Info/academies 提供，保持与 SignRecord.Academies 校验一致
 const academyOptions = ref<{ label: string; value: string }[]>([])
@@ -301,6 +314,13 @@ const passwordValidator = (_rule: any, value: string) => {
 
 const validateCurrentStep = async (): Promise<boolean> => {
   errorMsg.value = ''
+
+  // 先去掉首尾空白，避免用户无意输入的空格被当成"非法字符"
+  form.name = form.name.trim()
+  form.studentId = form.studentId.trim()
+  form.className = form.className.trim()
+  form.phone = form.phone.trim()
+  form.email = form.email.trim()
 
   // 手动简单检查，提升 UX (直接反馈为空)
   let emptyFields: string[] = []
@@ -345,11 +365,43 @@ const validateCurrentStep = async (): Promise<boolean> => {
   }
 }
 
+// 学号占用校验结果缓存：同一个学号只查一次，用户改了学号后 key 不再匹配会自动重查。
+const checkedStudentId = ref('')
+const checkedStudentIdAvailable = ref<boolean | null>(null)
+
+const isStudentIdAvailable = async (): Promise<boolean> => {
+  if (checkedStudentId.value === form.studentId && checkedStudentIdAvailable.value !== null) {
+    return checkedStudentIdAvailable.value
+  }
+
+  const available = await AuthService.checkStudentIdAvailable(form.studentId)
+  checkedStudentId.value = form.studentId
+  checkedStudentIdAvailable.value = available
+  return available
+}
+
 const nextStep = async () => {
   if (loading.value) return;
 
   const isValid = await validateCurrentStep()
   if (!isValid) return
+
+  // 第一步先把"学号已注册"挡在流程前，避免用户填完三步才在提交时失败。
+  if (currentStep.value === 1) {
+    loading.value = true
+    try {
+      if (!await isStudentIdAvailable()) {
+        errorMsg.value = '该学号已注册，请直接登录；如有疑问请联系管理员'
+        return
+      }
+    } catch (e: any) {
+      // 校验失败不等于学号可用：网络异常或触发限流时提示重试，而不是放行。
+      errorMsg.value = e?.message || '学号校验失败，请稍后重试'
+      return
+    } finally {
+      loading.value = false
+    }
+  }
 
   if (currentStep.value === 3) {
     await submitRegistration()

@@ -40,7 +40,7 @@
             <div class="flex justify-between items-start z-10">
               <!-- 模拟文件夹图标 -->
               <div class="folder-icon-bg w-12 h-12 rounded-2xl flex items-center justify-center text-blue-500 dark:text-blue-400">
-                <Icon icon="solar:folder-with-files-bold-duotone" class="w-7 h-7" />
+                <Icon icon="folder-open" class="w-7 h-7" />
               </div>
 
               <!-- 操作区 -->
@@ -50,13 +50,13 @@
                     class="drag-handle w-8 h-8 rounded-full bg-gray-100 dark:bg-white/10 flex items-center justify-center cursor-grab active:cursor-grabbing hover:bg-gray-200 dark:hover:bg-white/20 transition-colors"
                     @click.stop
                 >
-                  <Icon icon="material-symbols:drag-pan-rounded" class="w-4 h-4 text-gray-600 dark:text-gray-300" />
+                  <Icon icon="grip" class="w-4 h-4 text-gray-600 dark:text-gray-300" />
                 </div>
                 <!-- 设置按钮 -->
                 <div
                     class="w-8 h-8 rounded-full bg-gray-100 dark:bg-white/10 flex items-center justify-center cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-500/30 transition-colors"
                 >
-                  <Icon icon="material-symbols:arrow-forward-ios-rounded" class="w-3 h-3 text-gray-600 dark:text-white" />
+                  <Icon icon="chevron-right" class="w-3 h-3 text-gray-600 dark:text-white" />
                 </div>
               </div>
             </div>
@@ -86,7 +86,7 @@
           class="flex flex-col items-center justify-center py-32 text-center"
       >
         <div class="w-24 h-24 bg-gray-100 dark:bg-white/5 rounded-[2rem] flex items-center justify-center mb-6">
-          <Icon icon="solar:box-minimalistic-linear" class="w-12 h-12 text-gray-400" />
+          <Icon icon="package" class="w-12 h-12 text-gray-400" />
         </div>
         <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">没有分类</h3>
         <p class="text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
@@ -101,7 +101,7 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import { useMessage } from 'naive-ui';
-import { Icon } from '@iconify/vue';
+import Icon from '@/components/Icon.vue'
 import draggable from 'vuedraggable';
 import { CategoryService } from '../../services/CategoryService';
 import type { CategoryModel } from '../../models';

@@ -50,7 +50,7 @@
 
               <!-- 右上角箭头 -->
               <div class="text-tertiary opacity-0 transform translate-x-[-10px] transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0">
-                <Icon icon="iconamoon:arrow-right-2-light" class="w-6 h-6" />
+                <Icon icon="arrow-right" class="w-6 h-6" />
               </div>
             </div>
 
@@ -70,7 +70,7 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
-import { Icon } from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import historyImage from '/assets/Centre/History.png'
 import PageStart from "../../components/PageStart.vue"; // 保持原有引用
 
@@ -80,7 +80,7 @@ interface HistoryItem {
   content: string;
   url: string;
   imageUrl?: string;
-  icon: string;        // Iconify 图标名称
+  icon: string;        // Lucide 图标名称
   iconBgClass: string; // Tailwind 背景色类名
   bgClass: string;     // 装饰背景色
   yearLabel: string;   // 添加一个年份标签增加设计感
@@ -94,7 +94,7 @@ const historyItems: HistoryItem[] = [
     title: "总述",
     content: "我们社团从何而来，又要到哪里去，这是一个值得思考的问题。探索 iOS Club 的核心理念与发展脉络。",
     url: "/Article/History-Overview",
-    icon: "ion:library",
+    icon: "library",
     iconBgClass: "bg-blue-500",
     bgClass: "bg-blue-500",
     yearLabel: "Overview"
@@ -103,7 +103,7 @@ const historyItems: HistoryItem[] = [
     title: "创社时代",
     content: "社团的开始总是有着一段传奇故事。回溯那些充满激情与梦想的最初时刻，星星之火如何燎原。",
     url: "/Article/History-Founding",
-    icon: "ion:flag",
+    icon: "flag",
     iconBgClass: "bg-orange-500",
     bgClass: "bg-orange-500",
     yearLabel: "2019 - 2021"
@@ -112,7 +112,7 @@ const historyItems: HistoryItem[] = [
     title: "邵韩之治",
     content: "解决完社团的初步建设，接下来就要进行社团的发展了。这是社团走向规范化、规模化的关键时期。",
     url: "/Article/History-Shao Han's Reign",
-    icon: "ion:hammer",
+    icon: "hammer",
     iconBgClass: "bg-purple-500",
     bgClass: "bg-purple-500",
     yearLabel: "GOLDEN AGE"
@@ -121,7 +121,7 @@ const historyItems: HistoryItem[] = [
     title: "活动室变迁",
     content: "沧海桑田，我们正在努力。每一次搬迁都见证了我们的成长，物理空间的变化折射出精神的传承。",
     url: "/Article/History-Room",
-    icon: "ion:map",
+    icon: "map",
     iconBgClass: "bg-green-500",
     bgClass: "bg-green-500",
     yearLabel: "Locations"

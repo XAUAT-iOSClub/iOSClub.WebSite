@@ -1,3 +1,4 @@
+using System.Text.Json;
 using iOSClub.Data;
 using iOSClub.Data.DTOs;
 using iOSClub.Data.VOs;
@@ -20,6 +21,7 @@ public class LoginIntegrationTests
     private readonly Mock<IClientApplicationRepository> _clientAppRepoMock;
     private readonly Mock<ILogger<LoginService>> _loggerMock;
     private readonly LoginService _loginService;
+    private readonly Dictionary<string, RedisValue> _redisCache = [];
 
     public LoginIntegrationTests()
     {
@@ -45,7 +47,9 @@ public class LoginIntegrationTests
         
         // 设置Redis
         _redisMock.Setup(r => r.GetDatabase(It.IsAny<int>(), It.IsAny<object>())).Returns(_redisDbMock.Object);
-        _redisDbMock.Setup(r => r.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>())).ReturnsAsync(RedisValue.Null);
+        _redisDbMock.Setup(r => r.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync((RedisKey key, CommandFlags _) =>
+                _redisCache.TryGetValue(key.ToString(), out var value) ? value : RedisValue.Null);
 
         // LoginService 用 _db.CreateBatch() 合并三次写入；不 setup 的话 mock 会返回 null，
         // 后续 batch.StringSetAsync 直接 NullReferenceException。
@@ -53,8 +57,30 @@ public class LoginIntegrationTests
         batchMock.Setup(b => b.StringSetAsync(
                 It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<TimeSpan?>(),
                 It.IsAny<When>(), It.IsAny<CommandFlags>()))
+            .Callback((RedisKey key, RedisValue value, TimeSpan? _, When _, CommandFlags _) =>
+                _redisCache[key.ToString()] = value)
+            .ReturnsAsync(true);
+        batchMock.Setup(b => b.StringSetAsync(
+                It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<Expiration>(),
+                It.IsAny<ValueCondition>(), It.IsAny<CommandFlags>()))
+            .Callback((RedisKey key, RedisValue value, Expiration _, ValueCondition _, CommandFlags _) =>
+                _redisCache[key.ToString()] = value)
             .ReturnsAsync(true);
         _redisDbMock.Setup(r => r.CreateBatch(It.IsAny<object>())).Returns(batchMock.Object);
+
+        // RefreshToken 的轮换写入和黑名单检查走非 batch API
+        _redisDbMock.Setup(r => r.StringSetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(),
+                It.IsAny<TimeSpan?>(), It.IsAny<When>(), It.IsAny<CommandFlags>()))
+            .Callback((RedisKey key, RedisValue value, TimeSpan? _, When _, CommandFlags _) =>
+                _redisCache[key.ToString()] = value)
+            .ReturnsAsync(true);
+        _redisDbMock.Setup(r => r.StringSetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(),
+                It.IsAny<Expiration>(), It.IsAny<ValueCondition>(), It.IsAny<CommandFlags>()))
+            .Callback((RedisKey key, RedisValue value, Expiration _, ValueCondition _, CommandFlags _) =>
+                _redisCache[key.ToString()] = value)
+            .ReturnsAsync(true);
+        _redisDbMock.Setup(r => r.KeyExistsAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(false);
 
         // 创建LoginService实例
         _loginService = new LoginService(
@@ -162,5 +188,42 @@ public class LoginIntegrationTests
         
         // 验证TokenGenerator使用了正确的Identity（President）
         _tokenGeneratorMock.Verify(t => t.GetMemberToken(It.Is<MemberVO>(m => m.Identity == "President"), It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+    }
+
+    /// <summary>
+    /// 注册签发令牌时也必须写入 user:{id} 用户缓存。刷新接口从缓存重建令牌，
+    /// 缺少该键时注册后首次刷新会直接失败，用户必须重新登录。
+    /// </summary>
+    [Fact]
+    public async Task StoreMemberToken_AfterSignup_WritesUserCacheSoFirstRefreshSucceeds()
+    {
+        // Arrange
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var student = BogusDataGenerator.StudentFaker.Clone()
+            .RuleFor(s => s.UserId, "2021000001")
+            .RuleFor(s => s.UserName, "新注册同学")
+            .RuleFor(s => s.PasswordHash, DataTool.StringToHash("Password123"))
+            .Generate();
+        await context.Students.AddAsync(student);
+        await context.SaveChangesAsync();
+
+        _tokenGeneratorMock.Setup(t => t.GetMemberToken(It.IsAny<MemberVO>(), It.IsAny<bool>(),
+                It.IsAny<string>(), It.IsAny<string>()))
+            .Returns(("new-access-token", "new-refresh-token"));
+
+        // Act
+        await _loginService.StoreMemberToken(student.UserId, "signup-access-token", "signup-refresh-token");
+        var refreshed = await _loginService.RefreshToken(student.UserId, "signup-refresh-token");
+
+        // Assert
+        Assert.Equal("new-access-token", refreshed);
+        Assert.True(_redisCache.ContainsKey($"user:{student.UserId}"));
+        var memberInfo = JsonSerializer.Deserialize<MemberVO>(_redisCache[$"user:{student.UserId}"].ToString());
+        Assert.NotNull(memberInfo);
+        Assert.Equal(student.UserName, memberInfo.UserName);
+        Assert.Equal("Member", memberInfo.Identity);
     }
 }

@@ -4,7 +4,8 @@ import type {
     ClientAppResultModel,
     CreateClientAppModel,
     UpdateClientAppModel,
-    RegenerateSecretResult
+    RegenerateSecretResult,
+    ClientSecretResult
 } from '../models';
 import {apiRequest} from './ApiService';
 
@@ -71,6 +72,18 @@ export class ClientAppService {
         await apiRequest<void>({
             url: `${url}/ClientApp/${clientId}`,
             method: 'DELETE'
+        });
+    }
+
+    /**
+     * 查看客户端应用的可恢复密钥（仅 Founder / President）
+     * @param clientId 客户端ID
+     * @returns Promise<ClientSecretResult> 原始密钥
+     */
+    static async getClientSecret(clientId: string): Promise<ClientSecretResult> {
+        return await apiRequest<ClientSecretResult>({
+            url: `${url}/ClientApp/${clientId}/secret`,
+            method: 'GET'
         });
     }
 

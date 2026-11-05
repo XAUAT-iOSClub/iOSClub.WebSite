@@ -1,6 +1,7 @@
 import {url} from './Url';
 import type {StudentCreateDTO, LoginModel} from '../models';
 import {apiRequest, readApiResponse} from './ApiService';
+import MessageService from './MessageService';
 
 /**
  * 密码哈希函数
@@ -71,7 +72,10 @@ export class AuthService {
         const data = await readApiResponse<string>(response);
 
         if (data.errorCode !== 0 || !data.data) {
-            throw new Error(data.message || '注册失败');
+            // 后端校验失败时 message 只有“请求参数验证失败”，具体字段原因在 detail 里
+            // （形如 "userName: 姓名应为2-20个汉字或字母…"），直接展示给用户。
+            const reason = data.detail ? `${data.message}：${data.detail}` : data.message;
+            throw new Error(reason || '注册失败');
         }
 
         const accessToken = data.data;
@@ -83,16 +87,36 @@ export class AuthService {
         return { accessToken, refreshToken };
     }
 
+    /**
+     * 注册第一步：检查学号是否已被注册（学生或员工占用）。
+     * 仅用于提前提示，最终以 signup 的重复校验为准——两次请求之间仍可能被他人抢先注册。
+     * @param studentId 10 位数字学号
+     * @returns Promise<boolean> true 表示该学号尚未被占用
+     */
+    static async checkStudentIdAvailable(studentId: string): Promise<boolean> {
+        // 注册页面没有登录态，必须显式声明匿名请求，避免 apiRequest 附带失效令牌。
+        return await apiRequest<boolean>({
+            url: `${url}/Auth/student-id-available?studentId=${encodeURIComponent(studentId)}`,
+            method: 'GET',
+            requiresAuth: false
+        });
+    }
+
     static async logout(userId: string, clientId: string | null | undefined = ''): Promise<boolean> {
         try {
             await apiRequest<boolean>({
                 url: `${url}/Auth/logout?userId=${userId}&clientId=${clientId}`,
                 method: 'POST'
             });
-            this.clearTokens();
             return true;
         } catch (error) {
+            // Server-side revoke may fail (offline / 5xx), but the local session
+            // must never survive logout. Report the remote failure separately.
+            MessageService.warning('服务器撤销会话失败，本地登录状态已清除');
+            console.error('退出登录时服务端撤销失败:', error);
             return false;
+        } finally {
+            this.clearTokens();
         }
     }
 

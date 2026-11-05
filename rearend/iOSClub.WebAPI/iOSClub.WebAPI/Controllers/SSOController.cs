@@ -5,7 +5,7 @@ using iOSClub.DataApi.Services;
 using iOSClub.DataApi.Repositories;
 using iOSClub.WebAPI.IdentityModels;
 using Microsoft.AspNetCore.Authorization;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 using StackExchange.Redis;
 using System.Security.Cryptography;
 using Microsoft.IdentityModel.Tokens;
@@ -508,12 +508,13 @@ public class SSOController(
     /// </summary>
     public class TokenRequest
     {
-        [JsonProperty("grant_type")] public string GrantType { get; set; } = "";
-        [JsonProperty("code")] public string Code { get; set; } = "";
-        [JsonProperty("client_id")] public string ClientId { get; set; } = "";
-        [JsonProperty("client_secret")] public string ClientSecret { get; set; } = "";
-        [JsonProperty("redirect_uri")] public string RedirectUri { get; set; } = "";
-        [JsonProperty("code_verifier")] public string? CodeVerifier { get; set; }
+        [JsonPropertyName("grant_type")] public string GrantType { get; set; } = "";
+        [JsonPropertyName("code")] public string Code { get; set; } = "";
+        [JsonPropertyName("refresh_token")] public string RefreshToken { get; set; } = "";
+        [JsonPropertyName("client_id")] public string ClientId { get; set; } = "";
+        [JsonPropertyName("client_secret")] public string ClientSecret { get; set; } = "";
+        [JsonPropertyName("redirect_uri")] public string RedirectUri { get; set; } = "";
+        [JsonPropertyName("code_verifier")] public string? CodeVerifier { get; set; }
     }
 
     /// <summary>
@@ -572,6 +573,7 @@ public class SSOController(
             {
                 GrantType = form["grant_type"].FirstOrDefault() ?? "",
                 Code = form["code"].FirstOrDefault() ?? "",
+                RefreshToken = form["refresh_token"].FirstOrDefault() ?? "",
                 ClientId = form["client_id"].FirstOrDefault() ?? "",
                 ClientSecret = form["client_secret"].FirstOrDefault() ?? "",
                 RedirectUri = form["redirect_uri"].FirstOrDefault() ?? "",
@@ -603,6 +605,13 @@ public class SSOController(
             return BadRequest(new { error = "invalid_request", error_description = "缺少必需参数: grant_type" });
         }
 
+        // refresh_token 授权（RFC 6749 §6）：刷新请求只携带刷新令牌，
+        // 由 LoginService 的反向索引定位账号，再走既有校验与轮换逻辑。
+        if (request.GrantType == "refresh_token")
+        {
+            return await HandleRefreshTokenGrant(request);
+        }
+
         if (request.GrantType != "authorization_code")
         {
             if (logger.IsEnabled(LogLevel.Warning))
@@ -626,19 +635,14 @@ public class SSOController(
 
         if (string.IsNullOrEmpty(request.ClientId))
         {
-            if (string.IsNullOrEmpty(request.RedirectUri))
+            if (logger.IsEnabled(LogLevel.Warning))
             {
-                if (logger.IsEnabled(LogLevel.Warning))
-                {
-                    logger.LogWarning("Token exchange failed: missing client_id parameter");
-                }
-
-                return BadRequest(new { error = "invalid_request", error_description = "缺少必需参数: client_id" });
+                logger.LogWarning("Token exchange failed: missing client_id parameter");
             }
 
-            var app = await clientAppRepository.GetByRedirectUriAsync(request.RedirectUri);
-            request.ClientId = app?.ClientId ?? "";
-            request.ClientSecret = app?.ClientSecret ?? "";
+            // 不再允许用 redirect_uri 反查客户端并回填 client_secret：
+            // 那等于把数据库里的密钥直接当成请求参数，客户端认证形同虚设。
+            return BadRequest(new { error = "invalid_request", error_description = "缺少必需参数: client_id" });
         }
 
         if (string.IsNullOrEmpty(request.ClientSecret))
@@ -820,7 +824,8 @@ public class SSOController(
                 }
             }
 
-            // 为用户生成访问令牌
+            // 账号模型约定：每个可用账号都必须有 Student 档案。
+            // 产品已决定不再支持只有 Staff 的账号，SSO 与主站、改密保持同一要求。
             var member = await studentRepository.GetByIdAsync(authCodeInfo.UserId);
             if (member == null)
             {
@@ -905,6 +910,107 @@ public class SSOController(
 
             return BadRequest(new { error = "invalid_grant", error_description = "无效的授权码" });
         }
+    }
+
+    /// <summary>
+    /// 处理 grant_type=refresh_token 的令牌续期请求（RFC 6749 §6）。
+    /// 刷新请求只携带刷新令牌与客户端凭据，userId 由 LoginService 的
+    /// refresh-owner 反向索引反查；令牌校验、黑名单检查与轮换沿用既有实现。
+    /// </summary>
+    /// <param name="request">令牌请求</param>
+    /// <returns>新的访问令牌与轮换后的刷新令牌</returns>
+    private async Task<IActionResult> HandleRefreshTokenGrant(TokenRequest request)
+    {
+        if (string.IsNullOrEmpty(request.RefreshToken))
+        {
+            if (logger.IsEnabled(LogLevel.Warning))
+            {
+                logger.LogWarning("Token refresh failed: missing refresh_token parameter");
+            }
+
+            return BadRequest(new { error = "invalid_request", error_description = "缺少必需参数: refresh_token" });
+        }
+
+        // 客户端校验与 authorization_code 分支保持一致：必须显式携带 client_id，
+        // 不能用 redirect_uri 反查并回填密钥。
+        if (string.IsNullOrEmpty(request.ClientId))
+        {
+            if (logger.IsEnabled(LogLevel.Warning))
+            {
+                logger.LogWarning("Token refresh failed: missing client_id parameter");
+            }
+
+            return BadRequest(new { error = "invalid_request", error_description = "缺少必需参数: client_id" });
+        }
+
+        if (string.IsNullOrEmpty(request.ClientSecret))
+        {
+            if (logger.IsEnabled(LogLevel.Warning))
+            {
+                logger.LogWarning("Token refresh failed: missing client_secret parameter");
+            }
+
+            return BadRequest(new { error = "invalid_request", error_description = "缺少必需参数: client_secret" });
+        }
+
+        var clientApp = await clientAppRepository.ValidateCredentialsAsync(request.ClientId, request.ClientSecret);
+        if (clientApp == null)
+        {
+            if (logger.IsEnabled(LogLevel.Warning))
+            {
+                logger.LogWarning("Token refresh failed: invalid client credentials for client {ClientId}",
+                    request.ClientId);
+            }
+
+            return Unauthorized(new { error = "invalid_client", error_description = "无效的客户端凭据" });
+        }
+
+        var userId = await loginService.GetUserIdByRefreshToken(request.RefreshToken);
+        if (string.IsNullOrEmpty(userId))
+        {
+            if (logger.IsEnabled(LogLevel.Warning))
+            {
+                logger.LogWarning("Token refresh failed: unknown refresh token for client {ClientId}",
+                    request.ClientId);
+            }
+
+            return BadRequest(new { error = "invalid_grant", error_description = "无效的刷新令牌" });
+        }
+
+        // 令牌未知、已过期、已轮换、已列入黑名单或不属于该客户端时均返回空
+        var newAccessToken = await loginService.RefreshToken(userId, request.RefreshToken, request.ClientId,
+            DefaultScore);
+        if (string.IsNullOrEmpty(newAccessToken))
+        {
+            if (logger.IsEnabled(LogLevel.Warning))
+            {
+                logger.LogWarning("Token refresh failed: refresh token rejected for user {UserId}", userId);
+            }
+
+            return BadRequest(new { error = "invalid_grant", error_description = "无效的刷新令牌" });
+        }
+
+        var newRefreshToken = await loginService.GetRefreshToken(userId, request.ClientId);
+        if (string.IsNullOrEmpty(newRefreshToken))
+        {
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Token refresh failed: unable to get rotated refresh token for user {UserId}",
+                    userId);
+            }
+
+            return BadRequest(new { error = "server_error", error_description = "刷新令牌生成失败" });
+        }
+
+        // scope 不随刷新令牌持久化，SSO 统一使用默认 scope 签发新令牌
+        return Ok(new Dictionary<string, object>
+        {
+            ["access_token"] = newAccessToken,
+            ["refresh_token"] = newRefreshToken,
+            ["token_type"] = "Bearer",
+            ["expires_in"] = 7200,
+            ["scope"] = DefaultScore
+        });
     }
 
     /// <summary>
@@ -1026,13 +1132,11 @@ public class SSOController(
                 return null;
             }
 
-            var identity = "Member";
-
             var staff = await staffRepository.GetStaffByIdWithoutOtherData(userId);
-            if (staff != null)
-            {
-                identity = staff.Identity;
-            }
+            var identity = staff?.Identity ?? "Member";
+            var userName = member.UserName;
+            var email = member.EMail ?? "";
+            var phoneNum = member.PhoneNum;
 
             var now = DateTime.UtcNow;
             var jwtId = Guid.NewGuid().ToString(); // 用于防止重放攻击
@@ -1040,7 +1144,7 @@ public class SSOController(
             var claims = new List<Claim>
             {
                 new(JwtRegisteredClaimNames.Sub, userId),
-                new(JwtRegisteredClaimNames.UniqueName, member.UserName),
+                new(JwtRegisteredClaimNames.UniqueName, userName),
                 new(ClaimTypes.Role, identity),
                 new(ClaimTypes.NameIdentifier, userId),
                 new(JwtRegisteredClaimNames.Jti, jwtId), // JWT ID 防止重放攻击
@@ -1048,8 +1152,8 @@ public class SSOController(
                     ClaimValueTypes.Integer64),
                 new("scope", DefaultScore),
                 new("client_id", clientId),
-                new("email", member.EMail ?? ""),
-                new("phone_numb", member.PhoneNum),
+                new("email", email),
+                new("phone_numb", phoneNum),
                 new("at_hash", ComputeAtHash(accessToken)) // 访问令牌哈希，供 OIDC 客户端校验
             };
 
@@ -1158,12 +1262,15 @@ public class SSOController(
 
         // logger.LogInformation("User info request successful for user {UserId}", userId);
 
-        var identity = "Member";
         var staff = await staffRepository.GetStaffByIdWithoutOtherData(userId);
-        if (staff != null)
-        {
-            identity = staff.Identity;
-        }
+        var identity = staff?.Identity ?? "Member";
+        var userName = member.UserName;
+        var academy = member.Academy;
+        var className = member.ClassName;
+        var joinTime = member.JoinTime.ToString("yyyy-MM-dd");
+        var gender = member.Gender;
+        var email = member.EMail ?? "";
+        var phoneNum = member.PhoneNum;
 
         // 获取访问令牌中的scope信息
         var scopes = DefaultScore.Split(" ").ToList(); // 默认包含openid
@@ -1210,18 +1317,18 @@ public class SSOController(
         // profile scope - 基本信息
         if (scopes.Contains("profile") || scopes.Contains("full"))
         {
-            userInfo.TryAdd("name", member.UserName);
-            userInfo.TryAdd("nickname", member.UserName);
-            userInfo.TryAdd("academy", member.Academy);
-            userInfo.TryAdd("class", member.ClassName);
-            userInfo.TryAdd("joinTime", member.JoinTime.ToString("yyyy-MM-dd"));
-            userInfo.TryAdd("avatar", $"https://www.xauat.site/assets/Centre/{member.Gender}生.png");
+            userInfo.TryAdd("name", userName);
+            userInfo.TryAdd("nickname", userName);
+            userInfo.TryAdd("academy", academy);
+            userInfo.TryAdd("class", className);
+            userInfo.TryAdd("joinTime", joinTime);
+            userInfo.TryAdd("avatar", $"https://www.xauat.site/assets/Centre/{gender}生.png");
         }
 
         // email scope - 邮箱信息
         if (scopes.Contains("email") || scopes.Contains("full"))
         {
-            userInfo.TryAdd("email", member.EMail ?? "");
+            userInfo.TryAdd("email", email);
         }
 
         // read scope - 角色信息
@@ -1233,7 +1340,7 @@ public class SSOController(
         // phone scope - 手机信息
         if (scopes.Contains("phone") || scopes.Contains("full"))
         {
-            userInfo.TryAdd("phone", member.PhoneNum);
+            userInfo.TryAdd("phone", phoneNum);
         }
 
         return Ok(userInfo);
@@ -1305,6 +1412,10 @@ public class SSOController(
                 {
                     logger.LogError(ex, "Failed to store session in Redis for user {UserId}", user.UserId);
                 }
+
+                // 会话没有真正写入 Redis 时不能返回成功，否则前端会继续成功回调，
+                // 而后端拿不到用户信息。这里向上层暴露存储失败，交由前端提示重试。
+                return StatusCode(500, new { success = false, message = "会话存储失败" });
             }
 
             return Ok(new { success = true, message = "会话存储成功" });
@@ -1321,8 +1432,8 @@ public class SSOController(
     /// </summary>
     public class StoreSessionRequest
     {
-        [JsonProperty("state")] public string State { get; set; } = "";
-        [JsonProperty("client_id")] public string ClientId { get; set; } = "";
+        [JsonPropertyName("state")] public string State { get; set; } = "";
+        [JsonPropertyName("client_id")] public string ClientId { get; set; } = "";
     }
 
     /// <summary>

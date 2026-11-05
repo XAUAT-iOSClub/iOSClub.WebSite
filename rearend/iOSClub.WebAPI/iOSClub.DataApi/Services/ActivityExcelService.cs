@@ -66,7 +66,7 @@ public class ActivityExcelService : IActivityExcelService
         guide.Cell(7, 1).Value = "示例（请仅在「参与者」表中按此格式填写）：";
         guide.Cell(8, 1).Value = "张三";
         guide.Cell(8, 2).Value = "2023000001";
-        guide.Cell(8, 3).Value = "计算机和信息工程学院";
+        guide.Cell(8, 3).Value = "计算机与信息工程学院";
         guide.Cell(8, 4).Value = "计科2301";
         guide.Columns().AdjustToContents();
 

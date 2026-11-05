@@ -2,7 +2,7 @@
 import {computed, h, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
 import {NDataTable, NModal, NSelect, useMessage} from 'naive-ui'
 import type {DataTableColumns} from 'naive-ui'
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import {useAuthorizationStore} from '../stores/Authorization'
 import {useLayoutStore} from '../stores/LayoutStore'
 import {FounderPermissionService} from '../services/FounderPermissionService'
@@ -116,7 +116,7 @@ const columns: DataTableColumns<StaffModel> = [
   {
     title: '姓名', key: 'name', width: 200,
     render: (row) => h('div', {class: 'flex items-center gap-2'}, [
-      h(Icon, {icon: 'ion:person-circle-outline', class: 'text-lg text-gray-400 shrink-0'}),
+      h(Icon, {icon: 'circle-user', class: 'text-lg text-gray-400 shrink-0'}),
       h('span', {class: 'font-medium text-gray-900 dark:text-gray-100'}, row.name),
       row.userId === currentId
         ? chip('我', 'bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300')
@@ -211,7 +211,7 @@ onBeforeUnmount(() => {
       <div class="apple-sub-card p-4 flex flex-col md:flex-row md:items-center gap-3">
         <div class="flex-1 relative">
           <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Icon icon="ion:search" class="text-gray-400"/>
+            <Icon icon="search" class="text-gray-400"/>
           </div>
           <input
               v-model="query"
@@ -223,7 +223,7 @@ onBeforeUnmount(() => {
         <div class="flex items-center justify-between md:justify-end gap-4 text-sm text-gray-500 dark:text-gray-400">
           <span>共 <b class="text-gray-900 dark:text-white">{{ filtered.length }}</b> 名成员</span>
           <button @click="load" class="apple-btn secondary">
-            <Icon icon="ion:refresh" class="mr-1"/>
+            <Icon icon="refresh-cw" class="mr-1"/>
             刷新
           </button>
         </div>
@@ -257,7 +257,7 @@ onBeforeUnmount(() => {
     >
       <div v-if="selected" class="space-y-5">
         <div class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded-xl">
-          <Icon icon="ion:person-circle" class="text-3xl text-gray-400 shrink-0"/>
+          <Icon icon="circle-user" class="text-3xl text-gray-400 shrink-0"/>
           <div class="min-w-0">
             <div class="font-semibold truncate">{{ selected.name }}</div>
             <div class="text-xs text-gray-500 font-mono">{{ selected.userId }}</div>

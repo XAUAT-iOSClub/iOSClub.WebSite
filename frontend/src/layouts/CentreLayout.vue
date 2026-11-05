@@ -21,7 +21,7 @@
                 @click="toggleSidebar"
                 class="p-2 -ml-2 rounded-full active:bg-gray-200 dark:active:bg-white/10 transition-colors"
             >
-              <Icon icon="ph:list" class="text-gray-900 dark:text-white text-xl"/>
+              <Icon icon="list" class="text-gray-900 dark:text-white text-xl"/>
             </button>
 
             <div class="flex flex-col justify-center">
@@ -57,14 +57,10 @@
               >
                 <span class="relative w-5 h-5 overflow-hidden block">
                   <Icon
-                      v-if="!isDark"
-                      icon="ph:sun-fill"
-                      class="w-5 h-5 text-orange-500 absolute transition-all duration-500 rotate-0 scale-100"
-                  />
-                  <Icon
-                      v-else
-                      icon="ph:moon-stars-fill"
-                      class="w-5 h-5 text-yellow-400 absolute transition-all duration-500 rotate-0 scale-100"
+                      :icon="isDark ? 'moon-star' : 'sun'"
+                      morph
+                      class="w-5 h-5 absolute transition-colors duration-500"
+                      :class="isDark ? 'text-yellow-400' : 'text-orange-500'"
                   />
                 </span>
               </button>
@@ -115,7 +111,7 @@
 </template>
 
 <script setup lang="ts">
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import Sidebar from '../components/Sidebar.vue'
 import {useThemeStore} from '../stores/theme'
 import {storeToRefs} from 'pinia'
@@ -129,9 +125,9 @@ const {isMobile, pageTitle, pageSubtitle, showPageActions} = storeToRefs(layoutS
 
 // 主题选项配置
 const themeOptions = [
-  {key: 'light', label: '浅色', icon: 'ph:sun-fill'},
-  {key: 'dark', label: '深色', icon: 'ph:moon-stars-fill'},
-  {key: 'system', label: '跟随系统', icon: 'basil:desktop-outline'}
+  {key: 'light', label: '浅色', icon: 'sun'},
+  {key: 'dark', label: '深色', icon: 'moon-star'},
+  {key: 'system', label: '跟随系统', icon: 'monitor'}
 ]
 
 // 主题选择处理函数

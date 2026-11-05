@@ -17,6 +17,27 @@
 
     <main class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
+      <!-- 统计数据不可用：失败时不能把示例值或零值当成查询结果 -->
+      <div
+          v-if="statisticsUnavailable"
+          role="alert"
+          class="ios-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-amber-200/70 bg-amber-50/80 dark:bg-amber-900/10 dark:border-amber-500/20"
+      >
+        <div>
+          <p class="font-semibold text-amber-700 dark:text-amber-300">统计数据暂不可用</p>
+          <p class="text-xs text-amber-600/90 dark:text-amber-200/70 mt-0.5">
+            无法获取最新统计结果，请稍后重试。
+          </p>
+        </div>
+        <button
+            @click="fetchStatistics"
+            :disabled="loading.statistics"
+            class="shrink-0 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white text-sm font-medium transition-colors"
+        >
+          {{ loading.statistics ? '重试中…' : '重试' }}
+        </button>
+      </div>
+
       <!-- 顶部主要信息区：Bento Grid 布局 -->
       <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
 
@@ -34,7 +55,7 @@
                 <p class="text-xs text-slate-400 mt-1 font-mono">ID: {{ userInfo.id }}</p>
               </div>
               <div class="bg-white/80 dark:bg-neutral-800/80 backdrop-blur-md p-1 rounded-full shadow-sm">
-                <Icon icon="solar:verified-check-bold" class="w-6 h-6 text-blue-500"/>
+                <Icon icon="badge-check" class="w-6 h-6 text-blue-500"/>
               </div>
             </div>
 
@@ -43,7 +64,7 @@
                   @click="goToPersonalData"
                   class="w-full py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-black font-medium text-sm hover:scale-[1.02] transition-transform active:scale-95 shadow-lg shadow-slate-200 dark:shadow-none flex items-center justify-center gap-2"
               >
-                <Icon icon="solar:pen-new-square-linear" class="w-4 h-4"/>
+                <Icon icon="square-pen" class="w-4 h-4"/>
                 编辑 iMember 资料
               </button>
             </div>
@@ -58,14 +79,14 @@
                @click="router.push('/Centre/MemberData')">
             <div class="flex items-center justify-between mb-2">
               <div class="p-2 bg-indigo-100 dark:bg-indigo-500/20 rounded-lg text-indigo-600 dark:text-indigo-400">
-                <Icon icon="solar:users-group-rounded-bold-duotone" class="w-6 h-6"/>
+                <Icon icon="users-round" class="w-6 h-6"/>
               </div>
-              <span
-                  class="text-xs font-medium text-green-500 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full">+2.4%</span>
             </div>
             <div>
               <div class="text-sm text-slate-500 dark:text-slate-400 font-medium">总成员</div>
-              <div class="text-2xl font-bold mt-0.5">{{ statistics.members }}</div>
+              <div v-if="loading.statistics" class="text-2xl font-bold mt-0.5 text-slate-400">加载中…</div>
+              <div v-else-if="statistics" class="text-2xl font-bold mt-0.5">{{ statistics.members }}</div>
+              <div v-else class="text-2xl font-bold mt-0.5 text-slate-400">暂不可用</div>
             </div>
           </div>
 
@@ -76,7 +97,7 @@
       <section>
         <div class="flex items-center justify-between mb-4 px-2">
           <h3 class="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-            <Icon icon="solar:widget-5-bold-duotone" class="text-blue-500"/>
+            <Icon icon="layout-grid" class="text-blue-500"/>
             iTools
           </h3>
         </div>
@@ -120,16 +141,18 @@
             <div class="relative z-10 h-full flex flex-col justify-between">
               <div class="flex items-center gap-3">
                 <div class="p-2.5 bg-purple-100 dark:bg-purple-500/20 rounded-xl text-purple-600 dark:text-purple-300">
-                  <Icon icon="solar:cloud-storage-bold-duotone" class="w-7 h-7"/>
+                  <Icon icon="cloud" class="w-7 h-7"/>
                 </div>
                 <div>
                   <h3 class="font-bold text-lg">社团资源</h3>
-                  <p class="text-xs text-slate-500 dark:text-slate-400">共 {{ statistics.resources }} 个资源</p>
+                  <p v-if="loading.statistics" class="text-xs text-slate-500 dark:text-slate-400">资源数量加载中…</p>
+                  <p v-else-if="statistics" class="text-xs text-slate-500 dark:text-slate-400">共 {{ statistics.resources }} 个资源</p>
+                  <p v-else class="text-xs text-slate-500 dark:text-slate-400">资源数量暂不可用</p>
                 </div>
               </div>
               <div class="flex items-center text-sm font-medium text-purple-600 dark:text-purple-400 mt-4">
                 浏览所有资源
-                <Icon icon="solar:alt-arrow-right-linear" class="ml-1 group-hover:translate-x-1 transition-transform"/>
+                <Icon icon="arrow-right" class="ml-1 group-hover:translate-x-1 transition-transform"/>
               </div>
             </div>
           </div>
@@ -162,7 +185,7 @@
                   </div>
                   <div
                       class="w-10 h-10 rounded-full border-2 border-white dark:border-neutral-900 bg-slate-100 dark:bg-neutral-800 flex items-center justify-center text-xs text-slate-500">
-                    +{{ statistics.departments }}
+                    {{ statistics ? `+${statistics.departments}` : '—' }}
                   </div>
                 </div>
                 <div>
@@ -172,7 +195,7 @@
               </div>
               <div
                   class="h-10 w-10 rounded-full bg-slate-100 dark:bg-neutral-800 flex items-center justify-center group-hover:bg-blue-500 group-hover:text-white transition-colors">
-                <Icon icon="solar:settings-minimalistic-bold-duotone" class="w-6 h-6"/>
+                <Icon icon="settings" class="w-6 h-6"/>
               </div>
             </div>
           </div>
@@ -193,7 +216,7 @@
 import {ref, onMounted, computed} from 'vue'
 import {useRouter} from 'vue-router'
 import {useMessage} from 'naive-ui'
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import {ToolService} from '../services/ToolService'
 import {UserService} from '../services/UserService'
 import {DataCentreService} from "../services/DataCentreService"
@@ -241,12 +264,9 @@ const userInfo = ref<UserInfo>({
 })
 
 const tools = ref<Tool[]>([])
-const statistics = ref<Statistics>({
-  members: 0,
-  staffs: 0,
-  resources: 0,
-  departments: 0
-})
+// null 表示没有可用的统计数据；失败时保持 null，避免把示例值或 0 当成结果。
+const statistics = ref<Statistics | null>(null)
+const statisticsUnavailable = ref(false)
 
 const loading = ref({
   tools: true,
@@ -305,11 +325,11 @@ const fetchTools = async () => {
   } catch (error) {
     // Mock Data
     tools.value = [
-      {id: 1, name: 'iLibrary', icon: 'solar:book-bookmark-linear', url: 'https://ilibrary.xauat.site'},
-      {id: 2, name: '官网', icon: 'solar:global-linear', url: 'https://www.xauat.site'},
-      {id: 3, name: 'AI Platform', icon: 'solar:magic-stick-3-linear', url: 'https://iosai.xauat.site'},
-      {id: 4, name: '导航', icon: 'solar:map-point-linear', url: '#'},
-      {id: 5, name: 'GitHub', icon: 'mdi:github', url: '#'},
+      {id: 1, name: 'iLibrary', icon: 'book-bookmark', url: 'https://ilibrary.xauat.site'},
+      {id: 2, name: '官网', icon: 'globe', url: 'https://www.xauat.site'},
+      {id: 3, name: 'AI Platform', icon: 'wand-sparkles', url: 'https://iosai.xauat.site'},
+      {id: 4, name: '导航', icon: 'map-pin', url: '#'},
+      {id: 5, name: 'GitHub', icon: 'brand-github', url: '#'},
     ]
   } finally {
     loading.value.tools = false
@@ -327,15 +347,17 @@ const fetchUserInfo = async () => {
       gender: userData.gender || '男'
     }
   } catch (error: any) {
-    // 只有真正的认证失败（401 / 令牌过期 / 无效令牌）才登出。
-    // 业务错误（如 404 档案不存在、5xx）只提示，否则 Founder/Staff 没有 Student
-    // 档案时会被误判为会话失效，登录成功后又被弹回登录页。
+    // 账号模型约定每个账号都必须有 Student 档案。UserNotFound 表示账号没有学生档案，
+    // 属于不受支持的账号，不能再用 JWT 里的姓名/角色兜底继续使用站点。
     const authErrorCodes: number[] = [ErrorCode.Unauthorized, ErrorCode.LoginExpired, ErrorCode.InvalidToken]
     const isAuthFailure = error instanceof ApiError
       && (error.code === 401 || authErrorCodes.includes(error.errorCode))
+    const isUnsupportedAccount = error instanceof ApiError
+      && error.errorCode === ErrorCode.UserNotFound
 
-    if (isAuthFailure) {
+    if (isAuthFailure || isUnsupportedAccount) {
       AuthService.clearTokens()
+      if (isUnsupportedAccount) message.error('账号没有学生档案，请联系管理员')
       router.push('/login')
       return
     }
@@ -343,7 +365,7 @@ const fetchUserInfo = async () => {
     console.error('获取用户信息失败:', error)
     message.error(error?.message || '用户信息加载失败')
 
-    // 非认证错误：用 JWT 里的信息兜底，保证概览页仍然可用
+    // 其他临时错误（5xx、网络）仍用 JWT 信息兜底，避免一次接口波动就把用户踢出登录。
     const claims: any = AuthService.getCurrentUserInfo() || {}
     const role = claims['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] || 'Member'
     userInfo.value = {
@@ -360,11 +382,14 @@ const fetchStatistics = async () => {
   if (!userInfo.value.isAdmin) {
     return
   }
+  loading.value.statistics = true
+  statisticsUnavailable.value = false
   try {
-    loading.value.statistics = true
     statistics.value = await DataCentreService.getCentreData()
   } catch (e) {
-    statistics.value = {members: 128, staffs: 42, resources: 24, departments: 4}
+    console.error('获取统计数据失败:', e)
+    statistics.value = null
+    statisticsUnavailable.value = true
   } finally {
     loading.value.statistics = false
   }

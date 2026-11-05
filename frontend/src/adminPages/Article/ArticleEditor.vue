@@ -45,7 +45,7 @@
               :bordered="false"
           >
             <template #suffix>
-              <Icon icon="solar:pen-2-bold-duotone" class="text-gray-400 text-xl" />
+              <Icon icon="pencil" class="text-gray-400 text-xl" />
             </template>
           </n-input>
         </div>
@@ -55,7 +55,7 @@
           <!-- 路径设置 -->
           <div class="ios-list-item">
             <div class="ios-label">
-              <Icon icon="solar:link-circle-bold-duotone" class="text-blue-500 text-xl" />
+              <Icon icon="link" class="text-blue-500 text-xl" />
               <span>路径 ID</span>
             </div>
             <div class="ios-input-wrapper">
@@ -72,7 +72,7 @@
           <!-- 分类选择 -->
           <div class="ios-list-item">
             <div class="ios-label">
-              <Icon icon="solar:folder-with-files-bold-duotone" class="text-orange-500 text-xl" />
+              <Icon icon="folder-open" class="text-orange-500 text-xl" />
               <span>所属分类</span>
             </div>
             <div class="ios-input-wrapper w-1/2">
@@ -93,7 +93,7 @@
           <!-- 权限选择 -->
           <div class="ios-list-item text-gray-400">
             <div class="ios-label">
-              <Icon icon="solar:shield-user-bold-duotone" class="text-green-500 text-xl" />
+              <Icon icon="shield-user" class="text-green-500 text-xl" />
               <span>访问权限</span>
             </div>
             <div class="ios-input-wrapper w-1/2">
@@ -109,7 +109,7 @@
 
           <div class="ios-list-item text-gray-400">
             <div class="ios-label">
-              <Icon icon="solar:buildings-2-bold-duotone" class="text-cyan-500 text-xl" />
+              <Icon icon="building-complex" class="text-cyan-500 text-xl" />
               <span>限定部门</span>
             </div>
             <div class="ios-input-wrapper w-1/2">
@@ -170,7 +170,7 @@
       <div class="hidden xl:flex flex-col gap-6 sticky top-24 h-[calc(100vh-8rem)]">
         <div class="flex items-center justify-between px-2">
           <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
-            <Icon icon="solar:eye-bold-duotone" class="text-indigo-500" />
+            <Icon icon="eye" class="text-indigo-500" />
             实时预览
           </h3>
           <span class="text-xs px-2 py-1 rounded-md bg-gray-200 dark:bg-gray-800 text-gray-500 font-mono">Preview</span>
@@ -194,11 +194,12 @@
 import { ref, computed, onMounted, onBeforeUnmount, defineComponent, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMessage, NForm, NFormItem, NInput, NSelect, NButton, NModal } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import { ArticleService } from '../../services/ArticleService'
 import type { ArticleModel, ArticleCreateDto, ArticleUpdateDto, CategoryModel } from '../../models'
 import MarkdownComponent from '../../components/MarkdownComponent.vue'
 import { useLayoutStore } from '../../stores/LayoutStore'
+import { useAuthorizationStore } from '../../stores/Authorization'
 import { CategoryService } from '../../services/CategoryService'
 import { DepartmentService } from '../../services/DepartmentService'
 
@@ -239,13 +240,30 @@ const editForm = ref<EditFormType>({
   lastWriteTime: new Date().toISOString(),
 })
 
-const identityOptions = [
+const authorizationStore = useAuthorizationStore()
+
+const allIdentityOptions = [
   { label: '所有人 (Member)', value: 'Member' },
   { label: '部员仅见 (Department)', value: 'Department' },
   { label: '部长仅见 (Minister)', value: 'Minister' },
   { label: '社长仅见 (President)', value: 'President' },
   { label: '创始人 (Founder)', value: 'Founder' }
 ]
+
+// 与后端 ArticleAccessPolicy 一致：数值越小职级越高。
+// 只能把文章权限设置为自己职级或更宽松的档位，否则后端会拒绝。
+const identityLevels: Record<string, number> = {
+  Founder: 0,
+  President: 1,
+  Minister: 2,
+  Department: 3,
+  Member: 4
+}
+
+const identityOptions = computed(() => {
+  const currentLevel = identityLevels[authorizationStore.getRole ?? 'Member'] ?? 4
+  return allIdentityOptions.filter(option => identityLevels[option.value] >= currentLevel)
+})
 
 // --- Computed ---
 const previewContent = computed(() => {
@@ -439,7 +457,7 @@ onMounted(async () => {
           onClick: triggerMarkdownImport,
           title: '导入 Markdown'
         }, [
-          h(Icon, { icon: 'solar:upload-minimalistic-bold', class: 'text-gray-500 dark:text-gray-300 w-5 h-5' })
+          h(Icon, { icon: 'upload', class: 'text-gray-500 dark:text-gray-300 w-5 h-5' })
         ]),
         h('button', {
           class: 'group w-10 h-10 rounded-full bg-gray-200/60 dark:bg-gray-700/60 hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center transition-all backdrop-blur-sm active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed',
@@ -447,7 +465,7 @@ onMounted(async () => {
           disabled: !editForm.value.content,
           title: '下载 Markdown'
         }, [
-          h(Icon, { icon: 'solar:download-minimalistic-bold', class: 'text-gray-500 dark:text-gray-300 w-5 h-5' })
+          h(Icon, { icon: 'download', class: 'text-gray-500 dark:text-gray-300 w-5 h-5' })
         ]),
         // Cancel Button - Circle with Icon
         h('button', {
@@ -455,7 +473,7 @@ onMounted(async () => {
           onClick: goBack
         }, [
           h(Icon, {
-            icon: 'solar:close-circle-bold',
+            icon: 'circle-x',
             class: 'text-gray-500 dark:text-gray-300 w-6 h-6 group-hover:text-gray-700 dark:group-hover:text-white transition-colors'
           }),
         ]),
@@ -466,7 +484,7 @@ onMounted(async () => {
           disabled: saving.value
         }, [
           h('span', { class: 'text-white font-medium text-[15px]' }, saving.value ? 'Saving...' : 'Done'),
-          !saving.value && h(Icon, { icon: 'solar:check-read-bold', class: 'text-white w-5 h-5' })
+          !saving.value && h(Icon, { icon: 'check-check', class: 'text-white w-5 h-5' })
         ])
       ])
     }

@@ -156,7 +156,8 @@ public class ClientApplicationRepositoryTests
         // 不固定的话这个测试会随机失败。
         clientApp.IsActive = true;
         var originalSecret = clientApp.ClientSecret;
-        // 保存原始密钥到数据库，不进行哈希处理
+        // 与生产写入路径一致：数据库只保存 BCrypt 哈希，校验时拿原始密钥比对。
+        clientApp.ClientSecret = BCrypt.Net.BCrypt.HashPassword(originalSecret);
         await context.ClientApplications.AddAsync(clientApp);
         await context.SaveChangesAsync();
 
@@ -166,6 +167,26 @@ public class ClientApplicationRepositoryTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(clientApp.ClientId, result.ClientId);
+    }
+
+    [Fact]
+    public async Task ValidateCredentialsAsync_TemporaryH1Rollback_AcceptsStoredHashAsSecret()
+    {
+        // 【临时回退 H1】恢复明文相等分支后，库内哈希本身又能当 client_secret 使用。
+        // 这条测试刻意记录当前的回退行为；恢复 BCrypt-only 校验时改回 Assert.Null。
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var clientApp = BogusDataGenerator.ClientApplicationFaker.Generate();
+        clientApp.IsActive = true;
+        clientApp.ClientSecret = BCrypt.Net.BCrypt.HashPassword("real-secret");
+        await context.ClientApplications.AddAsync(clientApp);
+        await context.SaveChangesAsync();
+
+        var result = await _clientAppRepository.ValidateCredentialsAsync(clientApp.ClientId, clientApp.ClientSecret);
+
+        Assert.NotNull(result);
     }
 
     [Fact]
@@ -209,5 +230,48 @@ public class ClientApplicationRepositoryTests
         // Assert
         Assert.NotNull(result);
         Assert.Equal(clientApp.ClientId, result.ClientId);
+    }
+
+    [Fact]
+    public async Task ValidateCredentialsAsync_LegacyPlaintextSecret_Works()
+    {
+        // 临时回退 H1：历史明文存储的客户端恢复可用；不再自动升级为 BCrypt。
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var clientApp = BogusDataGenerator.ClientApplicationFaker.Generate();
+        clientApp.IsActive = true;
+        clientApp.ClientSecret = "legacy-plain-secret";
+        await context.ClientApplications.AddAsync(clientApp);
+        await context.SaveChangesAsync();
+
+        var result = await _clientAppRepository.ValidateCredentialsAsync(clientApp.ClientId, "legacy-plain-secret");
+
+        Assert.NotNull(result);
+        await using var verify = new ClubContext(_options);
+        var saved = await verify.ClientApplications.SingleAsync(c => c.ClientId == clientApp.ClientId);
+        Assert.Equal("legacy-plain-secret", saved.ClientSecret); // 恢复 H1 后应改回断言已升级为 BCrypt
+    }
+
+    [Fact]
+    public async Task ValidateCredentialsAsync_LegacyPlaintextSecret_WrongSecret_ReturnsNull()
+    {
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var clientApp = BogusDataGenerator.ClientApplicationFaker.Generate();
+        clientApp.IsActive = true;
+        clientApp.ClientSecret = "legacy-plain-secret";
+        await context.ClientApplications.AddAsync(clientApp);
+        await context.SaveChangesAsync();
+
+        var result = await _clientAppRepository.ValidateCredentialsAsync(clientApp.ClientId, "wrong-secret");
+
+        Assert.Null(result);
+        await using var verify = new ClubContext(_options);
+        var saved = await verify.ClientApplications.SingleAsync(c => c.ClientId == clientApp.ClientId);
+        Assert.Equal("legacy-plain-secret", saved.ClientSecret); // 失败时不升级
     }
 }

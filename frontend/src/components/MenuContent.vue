@@ -35,7 +35,8 @@
             >
               <!-- Optional: Add generic icon if item doesn't specify one -->
               <Icon
-                  :icon="isActive(item.key) ? 'lucide:file-text' : 'lucide:file'"
+                  :icon="isActive(item.key) ? 'file-text' : 'file'"
+                  morph
                   class="shrink-0 w-4 h-4 transition-colors"
                   :class="isActive(item.key) ? 'text-blue-500 dark:text-blue-400' : 'text-zinc-400 group-hover:text-zinc-600 dark:text-zinc-600 dark:group-hover:text-zinc-400'"
               />
@@ -56,7 +57,7 @@
 import {onMounted, ref} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {NSkeleton} from 'naive-ui'
-import {Icon} from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import {ArticleService} from '../services/ArticleService'
 import type {ArticleModel} from '../models'
 
@@ -92,16 +93,17 @@ const fetchCategoryArticles = async () => {
           .filter(a => !specialPagesText.includes(a.title))
           .map(article => ({
             label: article.title || '未命名文档',
-            key: `/Article/${article.path}`
+            key: `/Article/${article.path}`,
+            index: article.articleOrder || 0, // 用于排序
           }))
 
       // 如果是社团简介分类，手动注入特殊页面
       if (category === '社团简介') {
         // 按照特定顺序插入
         const predefinedItems = [
-          {label: '关于我们', key: '/About'},
-          {label: '社团结构', key: '/Structure'},
-          {label: '其他组织', key: '/OtherOrg'}
+          {label: '关于我们', key: '/About', index: -3},
+          {label: '社团结构', key: '/Structure', index: -2},
+          {label: '其他组织', key: '/OtherOrg', index: -1}
         ]
         // 合并：预定义在前，API获取的在后（如果有的话）
         docItems.unshift(...predefinedItems)
@@ -109,7 +111,7 @@ const fetchCategoryArticles = async () => {
 
       newOptions.push({
         label: category,
-        children: docItems
+        children: docItems.sort((a, b) => a.index - b.index) // 按照 articleOrder 排序
       })
     })
 

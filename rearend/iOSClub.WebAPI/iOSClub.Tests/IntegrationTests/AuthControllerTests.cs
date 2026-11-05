@@ -3,6 +3,7 @@ using iOSClub.Data.DataObjects;
 using iOSClub.Data.DTOs;
 using iOSClub.Data.VOs; 
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing; 
 using Microsoft.Extensions.DependencyInjection; 
 using Microsoft.EntityFrameworkCore; 
@@ -11,8 +12,8 @@ using iOSClub.DataApi.Services;
 using iOSClub.DataApi.Repositories;
 using iOSClub.WebAPI.Common;
 using StackExchange.Redis;
-using System.Net.Http.Headers;
-using Newtonsoft.Json; 
+using System.Net;
+using Newtonsoft.Json;
 using System.Net.Http.Json; 
 
 namespace iOSClub.Tests.IntegrationTests; 
@@ -58,6 +59,7 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         // 创建HttpClient并配置服务 
         _client = _factory.WithWebHostBuilder(builder => 
         { 
+            builder.UseEnvironment("Testing");
             builder.ConfigureServices(services => 
             { 
                 // 替换ClubContext为内存数据库版本。
@@ -92,6 +94,8 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         }).CreateClient(); 
     } 
     
+    // 注册功能暂停期间保留此测试，恢复注册后重新启用。
+    /*
     [Fact] 
     public async Task Register_Success_ReturnsToken() 
     { 
@@ -105,33 +109,144 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         // 于是 MapperConfig 里的哈希映射抛 "密码不能为空"，接口返回 500。
         var studentModel = new StudentCreateDTO
         {
-            UserId = "20210001",
-            UserName = "Test Student",
-            Password = "password123",
-            Academy = "Computer Science",
+            UserId = "2021000001",
+            UserName = "测试学生",
+            Password = "Password123",
+            Academy = "计算机与信息工程学院",
             Gender = "男",
             PoliticalLandscape = "共青团员",
             ClassName = "2021级1班",
             PhoneNum = "13800138000"
         };
-        
-        var expectedToken = "mock-jwt-token"; 
-        _tokenGeneratorMock.Setup(t => t.GetMemberToken(It.IsAny<MemberVO>(), It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>())).Returns((expectedToken, "mock-refresh-token")); 
-        
-        // Act 
-        var response = await _client.PostAsJsonAsync("/Auth/signup", studentModel); 
-        
-        // Assert 
-        response.EnsureSuccessStatusCode(); // 200 OK 
-        var content = await response.Content.ReadAsStringAsync(); 
-        var result = JsonConvert.DeserializeObject<ApiResponse<string>>(content); 
-        
-        Assert.NotNull(result); 
-        Assert.True(result.Code == 200); 
-        Assert.Equal(expectedToken, result.Data); 
-        Assert.Equal("注册成功", result.Message); 
-    } 
+
+        var expectedToken = "mock-jwt-token";
+        _tokenGeneratorMock.Setup(t => t.GetMemberToken(It.IsAny<MemberVO>(), It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>())).Returns((expectedToken, "mock-refresh-token"));
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/Auth/signup", studentModel);
+
+        // Assert
+        response.EnsureSuccessStatusCode(); // 200 OK
+        var content = await response.Content.ReadAsStringAsync();
+        var result = JsonConvert.DeserializeObject<ApiResponse<string>>(content);
+
+        Assert.NotNull(result);
+        Assert.True(result.Code == 200);
+        Assert.Equal(expectedToken, result.Data);
+        Assert.Equal("注册成功", result.Message);
+    }
+
+    */
+    /// <summary>
+    /// 非法姓名/学号必须在进入 action 之前被 DataAnnotations 拦下，返回统一信封的 400。
+    /// </summary>
+    [Theory]
+    [InlineData("23456", "2021000001")]      // 姓名是纯数字
+    [InlineData("张三", "LIJIAJUN")]          // 学号是字母
+    [InlineData("张三", "20210001")]          // 学号只有 8 位
+    public async Task Register_InvalidNameOrStudentId_ReturnsValidationError(string userName, string userId)
+    {
+        var studentModel = new StudentCreateDTO
+        {
+            UserId = userId,
+            UserName = userName,
+            Password = "Password123",
+            Academy = "计算机与信息工程学院",
+            Gender = "男",
+            PoliticalLandscape = "共青团员",
+            ClassName = "2021级1班",
+            PhoneNum = "13800138000"
+        };
+
+        var response = await _client.PostAsJsonAsync("/Auth/signup", studentModel);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var content = await response.Content.ReadAsStringAsync();
+        var result = JsonConvert.DeserializeObject<ApiResponse<string>>(content);
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCode.ParameterValidationFailed, result.ErrorCode);
+        Assert.Contains(studentModel.UserName == "23456" ? "userName" : "userId", result.Detail);
+    }
     
+    // C21 已移除 /OAuth/exchange 入口，旧的备用登录路径不再存在；
+    // 该路由的移除由 OAuthEntryRemovalTests 单独锁定，这里只保留仍然可用的 /Auth/login。
+    [Theory]
+    [InlineData("/Auth/login", false)]
+    [InlineData("/Auth/login", true)]
+    public async Task Login_StaffNameAndStudentIdWithoutPassword_IsRejected(string endpoint, bool hasStudent)
+    {
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var staff = new StaffDO { UserId = "2021000001", Name = "测试干部", Identity = "Founder" };
+        context.Staffs.Add(staff);
+        if (hasStudent)
+        {
+            context.Students.Add(new StudentDO
+            {
+                UserId = staff.UserId,
+                UserName = staff.Name,
+                PasswordHash = DataTool.StringToHash("real-password")
+            });
+        }
+        await context.SaveChangesAsync();
+        _tokenGeneratorMock.Setup(t => t.GetMemberToken(It.IsAny<MemberVO>(), It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Returns(("unauthorized-staff-token", "unauthorized-refresh-token"));
+
+        var response = await _client.PostAsJsonAsync(endpoint, new
+        {
+            UserId = staff.Name,
+            UserName = staff.Name,
+            Password = staff.UserId
+        });
+
+        Assert.False(response.IsSuccessStatusCode);
+        var result = JsonConvert.DeserializeObject<ApiResponse<object>>(await response.Content.ReadAsStringAsync());
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCode.UserNotFound, result.ErrorCode);
+        Assert.Null(result.Data);
+        Assert.False(response.Headers.Contains("X-Refresh-Token"));
+    }
+
+    [Theory]
+    [InlineData("Founder")]
+    [InlineData("President")]
+    [InlineData("Minister")]
+    public async Task Login_StaffWithRealStudentPassword_PreservesStaffRole(string role)
+    {
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var student = new StudentDO
+        {
+            UserId = "2021000001",
+            UserName = "测试干部",
+            PasswordHash = DataTool.StringToHash("real-password")
+        };
+        context.Students.Add(student);
+        context.Staffs.Add(new StaffDO { UserId = student.UserId, Name = student.UserName, Identity = role });
+        await context.SaveChangesAsync();
+        var expectedToken = $"verified-{role}-token";
+        _tokenGeneratorMock.Setup(t => t.GetMemberToken(
+                It.Is<MemberVO>(m => m.UserId == student.UserId && m.Identity == role),
+                It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Returns((expectedToken, "verified-refresh-token"));
+
+        var response = await _client.PostAsJsonAsync("/Auth/login", new
+        {
+            UserId = student.UserId,
+            UserName = student.UserName,
+            Password = "real-password"
+        });
+
+        response.EnsureSuccessStatusCode();
+        using var body = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var data = body.RootElement.GetProperty("data");
+        var actualToken = data.GetString();
+        Assert.Equal(expectedToken, actualToken);
+    }
+
     [Fact] 
     public async Task Login_StudentSuccess_ReturnsToken() 
     { 
@@ -274,9 +389,9 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         // 先登录获取token 
         var loginResponse = await _client.PostAsJsonAsync("/Auth/login", loginModel); 
         loginResponse.EnsureSuccessStatusCode(); 
-        
-        // 设置Authorization头 
-        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token); 
+
+        // 登出只允许撤销当前 JWT 对应的会话，因此测试身份必须与被撤销的 userId 一致。
+        _client.DefaultRequestHeaders.Add("X-Test-UserId", student.UserId);
         
         // Act 
         var response = await _client.PostAsync($"/Auth/logout?userId={student.UserId}", null); 
@@ -291,9 +406,30 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.True(result.Data); 
         Assert.Equal("登出成功", result.Message); 
         
-        // 清除Authorization头 
-        _client.DefaultRequestHeaders.Authorization = null; 
     } 
+
+    /// <summary>
+    /// 登出接口的 userId 必须是当前 JWT 用户本人；此前实现直接信任查询参数，
+    /// 任意登录用户都能撤销别人的 Redis 会话。
+    /// </summary>
+    [Fact]
+    public async Task Logout_OtherUsersSession_ReturnsForbidden_AndKeepsTargetSession()
+    {
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        _client.DefaultRequestHeaders.Add("X-Test-UserId", "20210001");
+
+        var response = await _client.PostAsync("/Auth/logout?userId=20210002", null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var result = JsonConvert.DeserializeObject<ApiResponse<bool>>(await response.Content.ReadAsStringAsync());
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCode.InsufficientPermission, result.ErrorCode);
+        // 别人的 user/token/refresh 键一个都不能删
+        _redisDbMock.Verify(d => d.KeyDeleteAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()), Times.Never);
+    }
     
     [Fact] 
     public async Task RefreshToken_ValidRefreshToken_ReturnsNewToken() 
@@ -375,5 +511,81 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(400, result.Code);
         Assert.Equal(ErrorCode.ParameterValidationFailed, result.ErrorCode);
         Assert.Contains("userId", result.Detail ?? "");
+    }
+
+    [Fact]
+    public async Task CheckStudentIdAvailable_UnusedStudentId_ReturnsTrue()
+    {
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        var response = await _client.GetAsync("/Auth/student-id-available?studentId=2021000001");
+
+        response.EnsureSuccessStatusCode();
+        var result = JsonConvert.DeserializeObject<ApiResponse<bool>>(
+            await response.Content.ReadAsStringAsync());
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCode.Success, result.ErrorCode);
+        Assert.True(result.Data);
+    }
+
+    [Fact]
+    public async Task CheckStudentIdAvailable_RegisteredStudent_ReturnsFalse()
+    {
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        context.Students.Add(new StudentDO
+        {
+            UserId = "2021000001",
+            UserName = "测试学生",
+            PasswordHash = DataTool.StringToHash("Password123")
+        });
+        await context.SaveChangesAsync();
+
+        var response = await _client.GetAsync("/Auth/student-id-available?studentId=2021000001");
+
+        response.EnsureSuccessStatusCode();
+        var result = JsonConvert.DeserializeObject<ApiResponse<bool>>(
+            await response.Content.ReadAsStringAsync());
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCode.Success, result.ErrorCode);
+        Assert.False(result.Data);
+    }
+
+    [Fact]
+    public async Task CheckStudentIdAvailable_StaffOnlyId_ReturnsFalse()
+    {
+        // 与 SignUp 的拒绝规则一致：只有 Staffs 行、没有 Students 行的学号同样不能注册。
+        await using var context = new ClubContext(_options);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        context.Staffs.Add(new StaffDO { UserId = "2021000001", Name = "测试干部", Identity = "Founder" });
+        await context.SaveChangesAsync();
+
+        var response = await _client.GetAsync("/Auth/student-id-available?studentId=2021000001");
+
+        response.EnsureSuccessStatusCode();
+        var result = JsonConvert.DeserializeObject<ApiResponse<bool>>(
+            await response.Content.ReadAsStringAsync());
+        Assert.NotNull(result);
+        Assert.Equal(ErrorCode.Success, result.ErrorCode);
+        Assert.False(result.Data);
+    }
+
+    [Theory]
+    [InlineData("LIJIAJUN")]
+    [InlineData("20210001")]
+    public async Task CheckStudentIdAvailable_InvalidFormat_ReturnsParameterError(string studentId)
+    {
+        var response = await _client.GetAsync($"/Auth/student-id-available?studentId={studentId}");
+
+        var result = JsonConvert.DeserializeObject<ApiResponse<bool>>(
+            await response.Content.ReadAsStringAsync());
+        Assert.NotNull(result);
+        Assert.Equal((int)HttpStatusCode.BadRequest, result.Code);
+        Assert.Equal((int)response.StatusCode, result.Code);
+        Assert.Equal(ErrorCode.ParameterFormatError, result.ErrorCode);
     }
 }

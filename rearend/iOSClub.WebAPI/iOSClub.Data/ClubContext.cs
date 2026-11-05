@@ -22,6 +22,7 @@ public sealed class ClubContext(DbContextOptions<ClubContext> options) : DbConte
     public DbSet<ActivityDO> Activities { get; init; }
     public DbSet<ActivityParticipantDO> ActivityParticipants { get; init; }
     public DbSet<ActivityOperationLogDO> ActivityOperationLogs { get; init; }
+    public DbSet<OperationLogDO> OperationLogs { get; init; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -90,6 +91,12 @@ public sealed class ClubContext(DbContextOptions<ClubContext> options) : DbConte
         // ImportHistoryDO 索引：按部门 + 时间倒序拉取导入历史
         modelBuilder.Entity<ImportHistoryDO>()
             .HasIndex(h => new { h.DepartmentName, h.ImportedAt });
+
+        // OperationLogDO 索引：列表按时间倒序，并支持模块/操作人/结果过滤
+        modelBuilder.Entity<OperationLogDO>().HasIndex(l => l.CreatedAt);
+        modelBuilder.Entity<OperationLogDO>().HasIndex(l => new { l.Module, l.CreatedAt });
+        modelBuilder.Entity<OperationLogDO>().HasIndex(l => new { l.OperatorId, l.CreatedAt });
+        modelBuilder.Entity<OperationLogDO>().HasIndex(l => new { l.Success, l.CreatedAt });
 
         // ParadeDB BM25 全文检索索引（pg_search）
         modelBuilder.Entity<ArticleDO>()

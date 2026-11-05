@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick, ref, watch, computed, onBeforeUnmount } from "vue";
 import { useRoute } from "vue-router";
-import { Icon } from "@iconify/vue";
+import Icon from '@/components/Icon.vue'
 
 // Markdown Libraries
 import MarkdownIt from 'markdown-it'
@@ -16,6 +16,7 @@ import markdownItAnchor from 'markdown-it-anchor'
 import markdownItContainer from 'markdown-it-container'
 import markdownItMermaid from '@jsonlee_12138/markdown-it-mermaid';
 import markdownItKatex from 'markdown-it-katex';
+import DOMPurify from 'dompurify';
 
 // KaTeX CSS
 import 'katex/dist/katex.min.css';
@@ -86,11 +87,11 @@ md.use(markdownItKatex, {
 
 // Custom Containers (Alerts) - macOS Style
 const containerOptions = [
-  { name: 'warning', icon: 'lucide:alert-triangle', color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10', border: 'border-amber-200 dark:border-amber-500/20' },
-  { name: 'danger', icon: 'lucide:x-circle', color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-500/10', border: 'border-red-200 dark:border-red-500/20' },
-  { name: 'tip', icon: 'lucide:lightbulb', color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-500/10', border: 'border-blue-200 dark:border-blue-500/20' },
-  { name: 'info', icon: 'lucide:info', color: 'text-sky-500', bg: 'bg-sky-50 dark:bg-sky-500/10', border: 'border-sky-200 dark:border-sky-500/20' },
-  { name: 'note', icon: 'lucide:book', color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10', border: 'border-emerald-200 dark:border-emerald-500/20' }
+  { name: 'warning', icon: 'triangle-alert', color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10', border: 'border-amber-200 dark:border-amber-500/20' },
+  { name: 'danger', icon: 'circle-x', color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-500/10', border: 'border-red-200 dark:border-red-500/20' },
+  { name: 'tip', icon: 'lightbulb', color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-500/10', border: 'border-blue-200 dark:border-blue-500/20' },
+  { name: 'info', icon: 'info', color: 'text-sky-500', bg: 'bg-sky-50 dark:bg-sky-500/10', border: 'border-sky-200 dark:border-sky-500/20' },
+  { name: 'note', icon: 'book', color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10', border: 'border-emerald-200 dark:border-emerald-500/20' }
 ]
 
 containerOptions.forEach(opt => {
@@ -280,7 +281,13 @@ watch(() => props.content, async (newVal) => {
   // This ensures that when we click a hash link, it doesn't go under the header
   rendered = rendered.replace(/<(h[1-6])/g, '<$1 class="scroll-mt-20 group relative"')
 
-  html.value = rendered
+  // 文章正文是 Markdown + 原始 HTML；markdown-it 的 html:true 会原样保留
+  // <script>/<img onerror> 等内容。必须在写入 v-html 前统一净化：
+  // 否则任何能发文章的人都能在 Founder 的浏览器里执行脚本，
+  // 再读走 localStorage 里的 JWT。
+  html.value = DOMPurify.sanitize(rendered, {
+    USE_PROFILES: { html: true, svg: true, svgFilters: true, mathMl: true },
+  })
 
   await nextTick()
   // Add line numbers and copy button to code blocks
@@ -459,7 +466,7 @@ onBeforeUnmount(() => {
         <div class="flex flex-wrap items-center gap-3 text-sm">
           <!-- Date Pill -->
           <div class="flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-            <Icon icon="lucide:calendar" class="h-3.5 w-3.5" />
+            <Icon icon="calendar" class="h-3.5 w-3.5" />
             <time>{{ formattedDate }}</time>
           </div>
 
@@ -529,7 +536,7 @@ onBeforeUnmount(() => {
   <!-- Empty State -->
   <div v-else class="flex h-[60vh] flex-col items-center justify-center text-center">
     <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-100 dark:bg-zinc-800">
-      <Icon icon="lucide:book-open" class="h-8 w-8 text-zinc-400" />
+      <Icon icon="book-open" class="h-8 w-8 text-zinc-400" />
     </div>
     <h3 class="text-lg font-medium text-zinc-900 dark:text-white">暂无内容</h3>
     <p class="mt-1 text-zinc-500 dark:text-zinc-400">请从左侧菜单选择要阅读的文档</p>
@@ -546,13 +553,13 @@ onBeforeUnmount(() => {
       <!-- 控制面板 -->
       <div class="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/70 rounded-full px-4 py-2 flex items-center gap-2 z-10">
         <button @click="handleZoomOut" class="text-white hover:text-blue-300 transition-colors p-1">
-          <Icon icon="lucide:zoom-out" class="h-5 w-5" />
+          <Icon icon="zoom-out" class="h-5 w-5" />
         </button>
         <button @click="handleReset" class="text-white hover:text-blue-300 transition-colors p-1">
-          <Icon icon="lucide:refresh-cw" class="h-5 w-5" />
+          <Icon icon="refresh-cw" class="h-5 w-5" />
         </button>
         <button @click="handleZoomIn" class="text-white hover:text-blue-300 transition-colors p-1">
-          <Icon icon="lucide:zoom-in" class="h-5 w-5" />
+          <Icon icon="zoom-in" class="h-5 w-5" />
         </button>
       </div>
       
@@ -561,7 +568,7 @@ onBeforeUnmount(() => {
         @click="closeImageModal" 
         class="absolute top-4 right-4 bg-black/70 text-white hover:text-red-300 transition-colors p-2 rounded-full"
       >
-        <Icon icon="lucide:x" class="h-6 w-6" />
+        <Icon icon="x" class="h-6 w-6" />
       </button>
       
       <!-- 放大图片 -->

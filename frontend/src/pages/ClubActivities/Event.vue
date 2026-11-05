@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { Icon } from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import appleLogo from '/assets/Centre/AppleLogo.png'
 import PageStart from "../../components/PageStart.vue"; // 确保路径正确
 
@@ -22,28 +22,28 @@ const events = ref<EventItem[]>([
     title: '产品体验',
     content: 'iOS Club 与多家科技企业深度合作。在这里，我们不仅是观察者，更是体验者。第一时间上手最新的 Apple 设备与 Vision Pro 应用。',
     url: '/Article/VisionPro',
-    icon: 'heroicons:device-phone-mobile',
+    icon: 'smartphone',
     bgGradient: 'from-blue-500/10 via-purple-500/5 to-transparent'
   },
   {
     title: '特别发布会',
     content: '见证科技界的「春晚」。iOS Club 组织线下观影活动，在大屏幕前同步见证未来的到来。未来已来，你来不来？',
     url: '/Article/PressConference',
-    icon: 'heroicons:presentation-chart-bar',
+    icon: 'presentation',
     bgGradient: 'from-orange-500/10 via-red-500/5 to-transparent'
   },
   {
     title: 'Today at iOS Club',
     content: '超越课堂，开启沙龙。从基础学习到项目开发，在分享与讨论中带你打破信息差，掌握最前沿的开发知识。',
     url: '/Article/TodayAtiOSClub',
-    icon: 'heroicons:academic-cap',
+    icon: 'graduation-cap',
     bgGradient: 'from-green-500/10 via-teal-500/5 to-transparent'
   },
   {
     title: 'Time to Code',
     content: '不仅仅是学习，用技术治理新世界。同时连接彼此，畅享属于开发者的欢乐时光与创意碰撞。',
     url: '/Article/TimeToCode',
-    icon: 'heroicons:ticket',
+    icon: 'ticket',
     bgGradient: 'from-pink-500/10 via-rose-500/5 to-transparent'
   }
 ])
@@ -114,11 +114,11 @@ onUnmounted(() => {
             <!-- Icon Header -->
             <div class="flex items-center justify-between">
               <div class="p-3 rounded-2xl bg-gray-100/50 dark:bg-white/10 backdrop-blur-md w-fit">
-                <Icon :icon="item.icon || 'heroicons:sparkles'" class="w-8 h-8 text-purple-600 dark:text-purple-400" />
+                <Icon :icon="item.icon || 'sparkles'" class="w-8 h-8 text-purple-600 dark:text-purple-400" />
               </div>
               <!-- 箭头跟随动画 -->
               <div class="opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 ease-out">
-                <Icon icon="heroicons:arrow-right-circle-20-solid" class="w-8 h-8 text-gray-400 dark:text-gray-500 hover:text-purple-500 transition-colors" />
+                <Icon icon="circle-arrow-right" class="w-8 h-8 text-gray-400 dark:text-gray-500 hover:text-purple-500 transition-colors" />
               </div>
             </div>
 
@@ -134,7 +134,7 @@ onUnmounted(() => {
           <!-- 底部链接文字 -->
           <div class="relative z-10 mt-4 pt-4 border-t border-gray-200/50 dark:border-white/10 flex items-center text-sm font-medium text-purple-600 dark:text-purple-400 group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors">
             <span>进一步了解</span>
-            <Icon icon="heroicons:chevron-right" class="w-4 h-4 ml-1 transform group-hover:translate-x-1 transition-transform" />
+            <Icon icon="chevron-right" class="w-4 h-4 ml-1 transform group-hover:translate-x-1 transition-transform" />
           </div>
         </div>
       </div>

@@ -4,10 +4,10 @@ using System.Net;
 using System.Security.Cryptography;
 using FluentValidation.AspNetCore;
 using iOSClub.Data;
-using iOSClub.Data.DataObjects;
 using iOSClub.Data.Mappers;
 using iOSClub.DataApi.Services;
 using iOSClub.WebAPI.Common;
+using iOSClub.WebAPI.Common.Audit;
 using iOSClub.WebAPI.Common.Config;
 using iOSClub.WebAPI.Common.Extensions;
 using iOSClub.WebAPI.Common.Middleware;
@@ -84,6 +84,8 @@ builder.Services.Configure<KestrelServerOptions>(options =>
 var mvcBuilder = builder.Services.AddControllers(options =>
 {
     options.Filters.Add<GlobalAuthorizationFilter>();
+    // 记录后台写操作；资源过滤器在模型绑定前采集请求体、在 action 后落审计行
+    options.Filters.Add<OperationLogFilter>();
     // 统一让 HTTP 状态码跟随响应体里的 code（详见 ApiResponseResultFilter）
     options.Filters.Add<ApiResponseResultFilter>();
 });
@@ -193,10 +195,33 @@ catch (Exception)
     rsaParams = rsa.ExportParameters(false);
 }
 
-// 从RSA密钥中导出公钥的SHA256哈希值作为KeyId，与生成令牌时使用的KeyId保持一致
-var publicKeyBytes = RSA.Create(rsaParams).ExportRSAPublicKey();
-var keyId = Convert.ToBase64String(SHA256.HashData(publicKeyBytes)).Substring(0, 16);
+// kid 与 JWT 签发、JWKS 端点（/.well-known/access-token/jwks）共用同一算法，避免客户端按 kid 取不到钥匙
+string keyId;
+using (var publicKeyForKid = RSA.Create(rsaParams))
+{
+    keyId = RsaKeyManager.ComputeKeyId(publicKeyForKid);
+}
+
 var rsaSecurityKey = new RsaSecurityKey(rsaParams) { KeyId = keyId };
+
+// 轮换前的上一代公钥也要参与验签：轮换后 20 分钟内的在途 token 由旧私钥签发。
+// 拿不到时不影响启动，只是这些 token 会验签失败。
+var jwtSigningKeys = new List<SecurityKey> { rsaSecurityKey };
+try
+{
+    var previousPublicKey = rsaKeyManager.TryLoadPreviousPublicKey();
+    if (previousPublicKey is not null)
+    {
+        jwtSigningKeys.Add(new RsaSecurityKey(previousPublicKey)
+        {
+            KeyId = RsaKeyManager.ComputeKeyId(previousPublicKey)
+        });
+    }
+}
+catch
+{
+    // 上一代公钥不可用属于降级场景，这里不阻断启动
+}
 
 builder.Services.AddAuthentication(options =>
     {
@@ -208,7 +233,9 @@ builder.Services.AddAuthentication(options =>
         options.TokenValidationParameters = new TokenValidationParameters()
         {
             ValidateIssuerSigningKey = true,
+            // 同时保留 IssuerSigningKey：与 JwtService 的默认参数保持一致，兼容只读单 key 的调用方。
             IssuerSigningKey = rsaSecurityKey,
+            IssuerSigningKeys = jwtSigningKeys,
             ValidateIssuer = true,
             ValidIssuer = jwtConfig.Issuer,
             ValidateAudience = true,
@@ -264,18 +291,10 @@ builder.Services.AddAuthentication(options =>
                 await context.Response.WriteAsJsonAsync(body);
             }
         };
-    })
-    .AddCookie("OAuth2", options =>
-    {
-        options.LoginPath = "/OAuth/login";
-        options.LogoutPath = "/OAuth/logout";
-        options.AccessDeniedPath = "/OAuth/access-denied";
-        options.ExpireTimeSpan = TimeSpan.FromMinutes(30);
-        options.SlidingExpiration = true;
-        options.Cookie.HttpOnly = true;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-        options.Cookie.SameSite = SameSiteMode.None;
     });
+    // C21：原 "OAuth2" Cookie 方案没有对应的外部 OAuth 处理器，Challenge 会指回
+    // 自身 LoginPath 形成循环，logout 又使用未注册的 Cookies 方案。
+    // 该入口已整体移除，第三方登录统一走 /SSO。
 
 #endregion
 
@@ -433,6 +452,7 @@ else
 builder.Services.AddHttpClient();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<GlobalAuthorizationFilter>();
+builder.Services.AddScoped<OperationLogFilter>();
 // 注册ITokenGenerator服务
 builder.Services.AddScoped<ITokenGenerator, JwtGenerator>();
 
@@ -539,53 +559,80 @@ using (var scope = app.Services.CreateScope())
             Console.WriteLine("No pending migrations.");
         }
 
-        // 初始化数据
+        // 初始化数据。
+        // 安全约束：不再从 USER 环境变量或固定值推导 Founder 学号，也不使用默认密码。
+        // 公开注册只检查 Students 表，而登录身份来自 Staffs 表；如果这里创建一个
+        // 学号可预测（0000000000）、密码固定的 Founder，任何人都能直接登录，
+        // 或在该账号缺 Student 档案时通过 /Auth/signup 抢注并成为超级管理员。
         if (!await context.Staffs.AnyAsync())
         {
-            var user = Environment.GetEnvironmentVariable("USER", EnvironmentVariableTarget.Process);
-            Console.WriteLine(user);
-            var model = new StaffDO() { Identity = "Founder", Name = "root", UserId = "0000000000" };
-            var users = user?.Split(',');
-            if (!string.IsNullOrEmpty(user) && users != null)
-            {
-                if (users.Length > 0)
-                    model.Name = users[0];
-                if (users.Length > 1)
-                    model.UserId = users[1];
-            }
+            var founderUserId = Environment.GetEnvironmentVariable("FOUNDER_USER_ID");
+            var founderPassword = Environment.GetEnvironmentVariable("FOUNDER_INIT_PASSWORD");
+            var founderName = Environment.GetEnvironmentVariable("FOUNDER_NAME") ?? "root";
 
-            context.Staffs.Add(model);
-            // 先落库，下面的 Founder 查询才会命中（FirstOrDefaultAsync 查数据库，不查变更跟踪器）
-            await context.SaveChangesAsync();
+            if (FounderBootstrap.IsValidUserId(founderUserId) &&
+                FounderBootstrap.IsValidPassword(founderPassword))
+            {
+                // 该学号已有 Student 档案时不能静默覆盖或跳过：来源不明的账号可能已被抢注。
+                // 宁可让部署者人工核对，也不要把一个已有密码的档案直接升成 Founder。
+                if (await context.Students.AnyAsync(x => x.UserId == founderUserId))
+                {
+                    Console.WriteLine($"[SECURITY] 学号 {founderUserId} 已存在 Student 档案，拒绝自动创建 Founder；" +
+                                      "请人工核对该账号归属后再初始化。");
+                }
+                else
+                {
+                    FounderBootstrap.CreateFounder(context, founderName, founderUserId!, founderPassword!);
+                    // Staff 与 Student 同一次 SaveChanges，不存在"只有 Staff"的中间状态。
+                    await context.SaveChangesAsync();
+                    Console.WriteLine($"Founder bootstrapped for user {founderUserId}.");
+                }
+            }
+            else if (app.Environment.IsDevelopment())
+            {
+                // 仅开发环境保留固定的本地默认账号，方便本地起库。
+                // 生产环境绝不回退到固定学号/固定密码。
+                var devPassword = Environment.GetEnvironmentVariable("FOUNDER_PASSWORD");
+                if (string.IsNullOrWhiteSpace(devPassword)) devPassword = "iosclub123";
+
+                if (await context.Students.AnyAsync(x => x.UserId == "0000000000"))
+                {
+                    Console.WriteLine("[SECURITY] 开发环境学号 0000000000 已存在 Student 档案，跳过自动创建 Founder。");
+                }
+                else
+                {
+                    FounderBootstrap.CreateFounder(context, "root", "0000000000", devPassword);
+                    await context.SaveChangesAsync();
+                    Console.WriteLine("Development Founder created (0000000000).");
+                }
+            }
+            else
+            {
+                Console.WriteLine("[SECURITY] 未创建 Founder：请设置 FOUNDER_USER_ID（10 位数字）与 " +
+                                  "FOUNDER_INIT_PASSWORD（至少 12 位，含字母和数字）后重启。");
+            }
         }
 
-        // 开发环境：保证 Founder 同时拥有 Student 档案。
-        // 系统约定 Founder = Staff + Student；缺 Student 时 /User/data 会返回 404，
-        // 前端若把它当成会话失效就会把已登录用户弹回登录页。仅开发环境自动补齐，
-        // 生产环境仍由管理员显式创建，避免写入默认密码。
-        if (app.Environment.IsDevelopment())
+        // 账号模型约定 Founder = Staff + Student；缺 Student 时该账号无法登录。
+        // 开发环境自动补齐；生产环境只告警，绝不写入默认密码。
+        var existingFounder = await context.Staffs.FirstOrDefaultAsync(x => x.Identity == "Founder");
+        if (existingFounder is { UserId: not null and not "" } &&
+            !await context.Students.AnyAsync(x => x.UserId == existingFounder.UserId))
         {
-            var founder = await context.Staffs.FirstOrDefaultAsync(x => x.Identity == "Founder");
-            if (founder is { UserId: not null and not "" } &&
-                !await context.Students.AnyAsync(x => x.UserId == founder.UserId))
+            if (app.Environment.IsDevelopment())
             {
-                var password = Environment.GetEnvironmentVariable("FOUNDER_PASSWORD", EnvironmentVariableTarget.Process);
+                var password = Environment.GetEnvironmentVariable("FOUNDER_PASSWORD");
                 if (string.IsNullOrWhiteSpace(password)) password = "iosclub123";
 
-                Console.WriteLine($"Creating Student profile for Founder: {founder.Name} ({founder.UserId})");
-                context.Students.Add(new StudentDO
-                {
-                    UserId = founder.UserId,
-                    UserName = founder.Name,
-                    Academy = "计算机科学与技术学院",
-                    PoliticalLandscape = "共青团员",
-                    Gender = "男",
-                    ClassName = "计科2301",
-                    PhoneNum = "13800138000",
-                    EMail = "iosclub@example.com",
-                    PasswordHash = DataTool.StringToHash(password),
-                    JoinTime = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
-                });
+                Console.WriteLine($"Creating Student profile for Founder: {existingFounder.Name} ({existingFounder.UserId})");
+                context.Students.Add(FounderBootstrap.CreateStudent(
+                    existingFounder.UserId, existingFounder.Name, password));
+                await context.SaveChangesAsync();
+            }
+            else
+            {
+                Console.WriteLine($"[SECURITY] Founder {existingFounder.UserId} 缺少 Student 档案，将无法登录；" +
+                                  "请由运维显式创建并设置密码。");
             }
         }
 

@@ -13,7 +13,7 @@
       <div class="mb-8 relative group">
         <div class="absolute inset-0 bg-linear-to-br from-blue-100 to-purple-100 dark:from-blue-900/30 dark:to-purple-900/30 rounded-4xl blur-xl opacity-50 group-hover:opacity-70 transition-opacity duration-500"></div>
         <div class="relative flex items-center justify-center w-32 h-32 bg-white/80 dark:bg-white/10 backdrop-blur-2xl border border-white/20 shadow-2xl rounded-4xl transition-transform duration-500 hover:scale-105">
-          <Icon icon="fluent:warning-24-filled" class="w-16 h-16 text-[#0071e3] dark:text-[#2997ff]" />
+          <Icon icon="triangle-alert" class="w-16 h-16 text-[#0071e3] dark:text-[#2997ff]" />
         </div>
       </div>
 
@@ -42,7 +42,7 @@
           @click="goHome"
         >
           <template #icon>
-            <Icon icon="fluent:home-24-regular" />
+            <Icon icon="house" />
           </template>
           返回首页
         </n-button>
@@ -55,7 +55,7 @@
           @click="goBack"
         >
           <template #icon>
-             <Icon icon="fluent:arrow-left-24-regular" />
+             <Icon icon="arrow-left" />
           </template>
           返回上一页
         </n-button>
@@ -67,7 +67,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { NButton } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import { useOsTheme } from 'naive-ui'
 import { computed } from 'vue'
 

@@ -3,7 +3,7 @@ import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NDataTable, NModal, NSelect, NSwitch, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import QRCode from 'qrcode'
 import { ActivityService } from '../../services/ActivityService'
 import { InfoService } from '../../services/InfoService'
@@ -248,7 +248,7 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
     <div class="p-4 space-y-6">
 
       <button class="apple-btn secondary" @click="router.push('/Centre/Activity')">
-        <Icon icon="ion:chevron-back" class="mr-1" />返回活动列表
+        <Icon icon="chevron-left" class="mr-1" />返回活动列表
       </button>
 
       <!-- 活动信息 -->
@@ -260,9 +260,9 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
               <span :class="['inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium', statusClass(activity.status)]">{{ statusLabel(activity.status) }}</span>
             </div>
             <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              <Icon icon="ion:time-outline" class="inline -mt-0.5 mr-1" />{{ fmt(activity.startTime) }} ~ {{ fmt(activity.endTime) }}
+              <Icon icon="clock" class="inline -mt-0.5 mr-1" />{{ fmt(activity.startTime) }} ~ {{ fmt(activity.endTime) }}
               <span class="mx-2">·</span>
-              <Icon icon="ion:location-outline" class="inline -mt-0.5 mr-1" />{{ activity.location }}
+              <Icon icon="map-pin" class="inline -mt-0.5 mr-1" />{{ activity.location }}
             </p>
             <p v-if="activity.description" class="mt-3 text-sm text-gray-600 dark:text-gray-300 whitespace-pre-line">{{ activity.description }}</p>
             <p class="mt-3 text-sm text-gray-500 dark:text-gray-400">已登记人数：<b class="text-gray-900 dark:text-white">{{ activity.status === 'Upcoming' ? '待定' : activity.participantCount }}</b></p>
@@ -277,7 +277,7 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
               <span class="text-sm text-gray-500 dark:text-gray-400">自助登记</span>
               <n-switch :value="activity.selfRegistrationEnabled" @update:value="toggleSelfRegistration" />
             </div>
-            <button class="apple-btn primary" @click="exportExcel"><Icon icon="ion:download-outline" class="mr-1" />导出 Excel</button>
+            <button class="apple-btn primary" @click="exportExcel"><Icon icon="download" class="mr-1" />导出 Excel</button>
           </div>
         </div>
       </div>
@@ -290,8 +290,8 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
           <h3 class="font-semibold text-gray-900 dark:text-white mb-1">自助登记二维码</h3>
           <p class="text-sm text-gray-500 dark:text-gray-400 break-all mb-4">{{ registerUrl }}</p>
           <div class="flex gap-3 justify-center sm:justify-start">
-            <button class="apple-btn secondary" @click="copyRegisterUrl"><Icon icon="ion:copy-outline" class="mr-1" />复制链接</button>
-            <a :href="qrDataUrl" :download="`${activity.name}_自助登记二维码.png`" class="apple-btn secondary"><Icon icon="ion:download-outline" class="mr-1" />下载二维码</a>
+            <button class="apple-btn secondary" @click="copyRegisterUrl"><Icon icon="copy" class="mr-1" />复制链接</button>
+            <a :href="qrDataUrl" :download="`${activity.name}_自助登记二维码.png`" class="apple-btn secondary"><Icon icon="download" class="mr-1" />下载二维码</a>
           </div>
         </div>
       </div>
@@ -304,9 +304,9 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
       <div class="apple-sub-card p-6">
         <h3 class="font-semibold text-gray-900 dark:text-white mb-4">Excel 导入参与者</h3>
         <div class="flex flex-wrap items-center gap-3">
-          <button class="apple-btn secondary" @click="downloadTemplate"><Icon icon="ion:document-outline" class="mr-1" />下载模板</button>
+          <button class="apple-btn secondary" @click="downloadTemplate"><Icon icon="file" class="mr-1" />下载模板</button>
           <input ref="fileInput" type="file" accept=".xlsx,.xls" class="hidden" @change="onFileChange" />
-          <button class="apple-btn secondary" @click="pickFile"><Icon icon="ion:folder-open-outline" class="mr-1" />选择文件</button>
+          <button class="apple-btn secondary" @click="pickFile"><Icon icon="folder-open" class="mr-1" />选择文件</button>
           <span class="text-sm text-gray-500 dark:text-gray-400 max-w-[240px] truncate">{{ selectedFile ? selectedFile.name : '未选择文件' }}</span>
           <button class="apple-btn secondary" :disabled="importing || !selectedFile" @click="doImport(true)">预览</button>
           <button class="apple-btn primary" :disabled="importing || !previewOk" @click="doImport(false)">确认导入</button>
@@ -324,7 +324,7 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
       <div class="apple-sub-card overflow-hidden">
         <div class="p-4 flex flex-col md:flex-row md:items-center gap-3 border-b border-black/5 dark:border-white/5">
           <div class="flex-1 relative">
-            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Icon icon="ion:search" class="text-gray-400" /></div>
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Icon icon="search" class="text-gray-400" /></div>
             <input v-model="search" type="text" placeholder="搜索姓名或学号..."
                 class="w-full pl-10 pr-4 py-2.5 bg-gray-100 dark:bg-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 @keyup.enter="loadParticipants(1)" />
@@ -335,7 +335,7 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
           <div class="flex items-center gap-3 shrink-0">
             <span class="text-sm text-gray-500 dark:text-gray-400">共 <b class="text-gray-900 dark:text-white">{{ participants.total }}</b> 人</span>
             <button v-if="selectedIds.length" class="apple-btn secondary" @click="bulkDelete">批量删除（{{ selectedIds.length }}）</button>
-            <button class="apple-btn primary" @click="openAdd"><Icon icon="ion:add-circle-outline" class="mr-1" />添加参与者</button>
+            <button class="apple-btn primary" @click="openAdd"><Icon icon="circle-plus" class="mr-1" />添加参与者</button>
           </div>
         </div>
         <div class="p-4 overflow-x-auto">
@@ -349,7 +349,7 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
       <!-- 操作日志 -->
       <div class="apple-sub-card p-4">
         <button class="flex items-center text-sm text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200" @click="showLogs = !showLogs">
-          <Icon :icon="showLogs ? 'ion:chevron-down' : 'ion:chevron-forward'" class="mr-1" />操作日志（{{ logs.length }}）
+          <Icon :icon="showLogs ? 'chevron-down' : 'chevron-right'" morph class="mr-1" />操作日志（{{ logs.length }}）
         </button>
         <div v-if="showLogs" class="mt-4 overflow-x-auto">
           <table class="w-full text-sm">

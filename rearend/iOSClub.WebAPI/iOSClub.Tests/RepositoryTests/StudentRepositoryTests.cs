@@ -272,8 +272,9 @@ public class StudentRepositoryTests
         var result = await _studentRepository.UpdateManyAsync(students);
         var allStudents = await _studentRepository.GetAll();
 
-        // Assert
-        Assert.True(result);
+        // Assert：返回值改为逐行结果，两名新学生都计入新增
+        Assert.Equal(2, result.Created);
+        Assert.Equal(0, result.Updated);
         Assert.Equal(2, allStudents.Count);
     }
 
@@ -310,13 +311,13 @@ public class StudentRepositoryTests
         // 使用Bogus生成学生，并确保有两个学生的Academy是"Computer Science"
         var students = new List<StudentDO>
         {
-            BogusDataGenerator.StudentFaker
+            BogusDataGenerator.StudentFaker.Clone()
                 .RuleFor(s => s.Academy, "Computer Science")
                 .Generate(),
-            BogusDataGenerator.StudentFaker
+            BogusDataGenerator.StudentFaker.Clone()
                 .RuleFor(s => s.Academy, "Mathematics")
                 .Generate(),
-            BogusDataGenerator.StudentFaker
+            BogusDataGenerator.StudentFaker.Clone()
                 .RuleFor(s => s.Academy, "Computer Science")
                 .Generate()
         };
@@ -345,7 +346,7 @@ public class StudentRepositoryTests
         await context.Students.AddAsync(student);
 
         // 使用Bogus生成员工
-        var staff = BogusDataGenerator.StaffFaker
+        var staff = BogusDataGenerator.StaffFaker.Clone()
             .RuleFor(s => s.UserId, student.UserId)
             .RuleFor(s => s.Identity, "President")
             .Generate();

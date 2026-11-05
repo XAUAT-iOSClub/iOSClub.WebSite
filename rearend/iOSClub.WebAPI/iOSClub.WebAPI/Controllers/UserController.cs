@@ -14,7 +14,6 @@ namespace iOSClub.WebAPI.Controllers;
 [Route("[controller]")]
 public class UserController(
     IStudentRepository studentRepository,
-    IStaffRepository staffRepository,
     IHttpContextAccessor httpContextAccessor)
     : ControllerBase
 {
@@ -26,35 +25,15 @@ public class UserController(
         if (member == null)
             return Ok(ApiResponse<MemberVO>.Fail(ErrorCode.Unauthorized, "用户未认证"));
 
-        // 优先返回学生档案（含姓名、学院、班级等完整信息）
+        // 账号模型约定：每个可用账号都必须有 Student 档案（Staff 只承载身份和部门）。
+        // 产品已决定不再支持只有 Staff 的账号，因此这里不回退到 Staff 信息。
         var student = await studentRepository.GetByIdAsync(member.UserId);
-        if (student != null)
-        {
-            var result = student.Adapt<MemberVO>();
-            result.Identity = member.Identity;
-            return Ok(ApiResponse<MemberVO>.Success(result, "获取用户信息成功"));
-        }
+        if (student == null)
+            return Ok(ApiResponse<MemberVO>.Fail(ErrorCode.UserNotFound, "用户不存在或没有学生档案"));
 
-        // 没有学生档案的账号（例如创始人 / 干部 Staff）：回退到 Staff 信息。
-        // 至少要能返回 UserId、姓名和身份，否则概览页拿不到资料会清空令牌把用户踢出去。
-        var staff = await staffRepository.GetStaffByIdWithoutOtherData(member.UserId);
-        if (staff != null)
-        {
-            return Ok(ApiResponse<MemberVO>.Success(new MemberVO
-            {
-                UserId = staff.UserId,
-                UserName = staff.Name,
-                Identity = staff.Identity,
-                Academy = "",
-                PoliticalLandscape = "",
-                Gender = "",
-                ClassName = "",
-                PhoneNum = "",
-                JoinTime = DateTime.UtcNow
-            }, "获取用户信息成功"));
-        }
-
-        return Ok(ApiResponse<MemberVO>.Fail(ErrorCode.UserNotFound, "用户不存在"));
+        var result = student.Adapt<MemberVO>();
+        result.Identity = member.Identity;
+        return Ok(ApiResponse<MemberVO>.Success(result, "获取用户信息成功"));
     }
 
     [Authorize]

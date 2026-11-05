@@ -16,18 +16,22 @@ namespace iOSClub.WebAPI.Controllers;
 public class ArticleController(
     IArticleRepository articleRepository,
     IStaffRepository staffRepository,
-    IDepartmentRepository departmentRepository)
+    IDepartmentRepository departmentRepository,
+    ICategoryRepository categoryRepository)
     : ControllerBase
 {
     /// <summary>
-    /// 获取所有文章（公开访问）
+    /// 获取当前用户可见的文章列表
     /// </summary>
     [Authorize(Roles = "Founder,President,Minister,Department")]
     [HttpGet]
     public async Task<ActionResult<ApiResponse<IEnumerable<ArticleListItemVO>>>> GetArticles()
     {
-        var articles = await articleRepository.GetAll();
-        return Ok(ApiResponse<IEnumerable<ArticleListItemVO>>.Success(articles.Adapt<List<ArticleListItemVO>>().OrderByDescending(x => x.LastWriteTime)));
+        var accessScope = await GetAccessScope();
+        var articles = (await articleRepository.GetAll())
+            .Where(article => ArticleAccessPolicy.CanAccess(accessScope, article));
+        return Ok(ApiResponse<IEnumerable<ArticleListItemVO>>.Success(articles.Adapt<List<ArticleListItemVO>>()
+            .OrderByDescending(x => x.LastWriteTime)));
     }
 
     /// <summary>
@@ -62,6 +66,19 @@ public class ArticleController(
             return Ok(ApiResponse<ArticleVO>.Fail(ErrorCode.ParameterValidationFailed, errorMessage));
         }
 
+        if (!ArticleAccessPolicy.IsKnownIdentity(createDto.Identity))
+        {
+            return Ok(ApiResponse<ArticleVO>.Fail(ErrorCode.ParameterValidationFailed,
+                "访问权限取值无效，允许的值为 Founder、President、Minister、Department、Member 或留空"));
+        }
+
+        var accessScope = await GetAccessScope();
+        if (!ArticleAccessPolicy.CanAssignIdentity(accessScope, createDto.Identity))
+        {
+            return Ok(ApiResponse<ArticleVO>.Fail(ErrorCode.InsufficientPermission,
+                "不能将文章访问权限设置为高于自己的职级"));
+        }
+
         var visibleToDepartment = NormalizeDepartment(createDto.VisibleToDepartment);
         if (visibleToDepartment != null &&
             !await departmentRepository.DepartmentExistsAsync(visibleToDepartment))
@@ -76,6 +93,13 @@ public class ArticleController(
         {
             return Ok(ApiResponse<ArticleVO>.Fail(ErrorCode.ResourceAlreadyExists,
                 $"路径 '{createDto.Path}' 已存在"));
+        }
+
+        // 文章写入只允许 Founder/President 顺带创建分类，规则与分类写接口一致
+        var categoryError = await GetCategoryWriteErrorAsync(createDto.Category);
+        if (categoryError != null)
+        {
+            return Ok(ApiResponse<ArticleVO>.Fail(ErrorCode.InsufficientPermission, categoryError));
         }
 
         var articleModel = new ArticleDO
@@ -128,6 +152,19 @@ public class ArticleController(
             return Ok(ApiResponse.Fail(ErrorCode.ParameterValidationFailed, errorMessage));
         }
 
+        if (!ArticleAccessPolicy.IsKnownIdentity(updateDto.Identity))
+        {
+            return Ok(ApiResponse.Fail(ErrorCode.ParameterValidationFailed,
+                "访问权限取值无效，允许的值为 Founder、President、Minister、Department、Member 或留空"));
+        }
+
+        var accessScope = await GetAccessScope();
+        if (!ArticleAccessPolicy.CanAssignIdentity(accessScope, updateDto.Identity))
+        {
+            return Ok(ApiResponse.Fail(ErrorCode.InsufficientPermission,
+                "不能将文章访问权限设置为高于自己的职级"));
+        }
+
         var visibleToDepartment = NormalizeDepartment(updateDto.VisibleToDepartment);
         if (visibleToDepartment != null &&
             !await departmentRepository.DepartmentExistsAsync(visibleToDepartment))
@@ -136,11 +173,23 @@ public class ArticleController(
                 $"部门 '{visibleToDepartment}' 不存在"));
         }
 
-        // 检查文章是否存在
+        // 检查文章是否存在，且当前用户是否有权修改
         var existingArticle = await articleRepository.GetFromPath(path);
         if (existingArticle == null)
         {
             return Ok(ApiResponse.Fail(ErrorCode.ArticleNotFound, $"未找到路径为 '{path}' 的文章"));
+        }
+
+        if (!ArticleAccessPolicy.CanAccess(accessScope, existingArticle))
+        {
+            return Ok(ApiResponse.Fail(ErrorCode.InsufficientPermission, "无权修改该文章"));
+        }
+
+        // 更新路径与创建路径使用同一条分类写权限规则
+        var categoryError = await GetCategoryWriteErrorAsync(updateDto.Category);
+        if (categoryError != null)
+        {
+            return Ok(ApiResponse.Fail(ErrorCode.InsufficientPermission, categoryError));
         }
 
         // 更新文章信息
@@ -172,11 +221,16 @@ public class ArticleController(
             return Ok(ApiResponse.Fail(ErrorCode.ParameterEmpty, "路径不能为空"));
         }
 
-        // 检查文章是否存在
+        // 检查文章是否存在，且当前用户是否有权删除
         var existingArticle = await articleRepository.GetFromPath(path);
         if (existingArticle == null)
         {
             return Ok(ApiResponse.Fail(ErrorCode.ArticleNotFound, $"未找到路径为 '{path}' 的文章"));
+        }
+
+        if (!ArticleAccessPolicy.CanAccess(await GetAccessScope(), existingArticle))
+        {
+            return Ok(ApiResponse.Fail(ErrorCode.InsufficientPermission, "无权删除该文章"));
         }
 
         var success = await articleRepository.Delete(path);
@@ -227,13 +281,20 @@ public class ArticleController(
             return Ok(ApiResponse.Fail(ErrorCode.ParameterEmpty, "文章顺序字典不能为空"));
         }
 
-        var success = await articleRepository.UpdateArticleOrders(articleOrders);
-        if (success)
+        // 顺序调整也是一种修改：只能操作自己可见的文章
+        var accessScope = await GetAccessScope();
+        var accessiblePaths = (await articleRepository.GetAll())
+            .Where(article => ArticleAccessPolicy.CanAccess(accessScope, article))
+            .Select(article => article.Path)
+            .ToHashSet(StringComparer.Ordinal);
+
+        if (articleOrders.Keys.Any(path => !accessiblePaths.Contains(path)))
         {
-            return Ok(ApiResponse.Success("文章顺序更新成功"));
+            return Ok(ApiResponse.Fail(ErrorCode.InsufficientPermission, "无权调整未授权文章的顺序"));
         }
 
-        return Ok(ApiResponse.Fail(ErrorCode.OperationFailed, "文章顺序更新失败"));
+        var success = await articleRepository.UpdateArticleOrders(articleOrders);
+        return Ok(success ? ApiResponse.Success("文章顺序更新成功") : ApiResponse.Fail(ErrorCode.OperationFailed, "文章顺序更新失败"));
     }
 
     private async Task<ArticleAccessScope> GetAccessScope()
@@ -247,6 +308,31 @@ public class ArticleController(
 
         var staff = await staffRepository.GetStaffByIdAsync(user.UserId);
         return new ArticleAccessScope(user.Identity, staff?.Department?.Name);
+    }
+
+    /// <summary>
+    /// 文章写入时分类的权限校验。
+    /// <para>
+    /// 显式分类写入只对 Founder/President 开放（见 <c>CategoryController.CreateOrUpdate</c> 的角色授权），
+    /// 因此文章写入顺带创建缺失分类也沿用同一规则：只有 Founder/President 可以自动建分类；
+    /// 其他职级引用不存在的分类时返回业务错误，且不会创建任何分类。
+    /// </para>
+    /// </summary>
+    /// <param name="categoryName">文章提交的分类名称</param>
+    /// <returns>错误消息；允许写入时返回 null</returns>
+    private async Task<string?> GetCategoryWriteErrorAsync(string? categoryName)
+    {
+        if (string.IsNullOrEmpty(categoryName))
+            return null;
+
+        if (await categoryRepository.GetByName(categoryName) != null)
+            return null;
+
+        var identity = HttpContext.User.GetUser()?.Identity;
+        if (identity is "Founder" or "President")
+            return null;
+
+        return $"分类 '{categoryName}' 不存在，仅创始人（Founder）或社长（President）可以创建新分类";
     }
 
     private static string? NormalizeDepartment(string? departmentName)

@@ -40,8 +40,8 @@ public interface IResourceRepository
     /// 添加资源
     /// </summary>
     /// <param name="resource">资源模型</param>
-    /// <returns>是否添加成功</returns>
-    Task<bool> AddResourceAsync(ResourceDO resource);
+    /// <returns>持久化后的资源模型（包含服务端生成的 ID）；失败时返回 null</returns>
+    Task<ResourceDO?> AddResourceAsync(ResourceDO resource);
     
     /// <summary>
     /// 更新资源
@@ -123,20 +123,22 @@ public class ResourceRepository(IDbContextFactory<ClubContext> factory) : IResou
     /// <summary>
     /// 添加资源
     /// </summary>
-    public async Task<bool> AddResourceAsync(ResourceDO resource)
+    /// <returns>持久化后的资源模型（包含服务端生成的 ID）；失败时返回 null</returns>
+    public async Task<ResourceDO?> AddResourceAsync(ResourceDO resource)
     {
         await using var context = await factory.CreateDbContextAsync();
         try
         {
-            // 生成唯一ID
+            // 生成唯一ID。ID 在此处生成，因此必须把持久化后的 DO 返回给调用方，
+            // 否则控制器只能使用请求 DTO 里的空 ID 组装响应。
             resource.Id = Guid.NewGuid().ToString("N");
             await context.Resources.AddAsync(resource);
             await context.SaveChangesAsync();
-            return true;
+            return resource;
         }
         catch
         {
-            return false;
+            return null;
         }
     }
 

@@ -3,7 +3,7 @@ import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { NDataTable, NModal, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
-import { Icon } from '@iconify/vue'
+import Icon from '@/components/Icon.vue'
 import { ActivityService } from '../../services/ActivityService'
 import { useLayoutStore } from '../../stores/LayoutStore'
 import type { ActivityModel, ActivityCreateDto } from '../../models'
@@ -180,7 +180,7 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
         <!-- 搜索 -->
         <div class="flex-1 relative">
           <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Icon icon="ion:search" class="text-gray-400" />
+            <Icon icon="search" class="text-gray-400" />
           </div>
           <input v-model="keyword" type="text" placeholder="搜索活动名称..."
               class="w-full pl-10 pr-4 py-2.5 bg-gray-100 dark:bg-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
@@ -188,8 +188,8 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
         </div>
 
         <div class="flex items-center gap-3 shrink-0">
-          <button @click="load" class="apple-btn secondary"><Icon icon="ion:refresh" class="mr-1" />刷新</button>
-          <button @click="openCreate" class="apple-btn primary"><Icon icon="ion:add-circle-outline" class="mr-1" />新建活动</button>
+          <button @click="load" class="apple-btn secondary"><Icon icon="refresh-cw" class="mr-1" />刷新</button>
+          <button @click="openCreate" class="apple-btn primary"><Icon icon="circle-plus" class="mr-1" />新建活动</button>
         </div>
       </div>
 

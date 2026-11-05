@@ -4,7 +4,7 @@
       <!-- 标题栏 -->
       <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
         <h2 class="text-xl font-semibold text-gray-900 dark:text-white flex items-center">
-          <Icon icon="ion:help-circle-outline" class="mr-2" width="24" height="24"/>
+          <Icon icon="circle-question-mark" class="mr-2" width="24" height="24"/>
           {{ title }}
         </h2>
         <button 
@@ -12,7 +12,7 @@
           class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
           aria-label="关闭"
         >
-          <Icon icon="ion:close" width="20" height="20" class="text-gray-500 dark:text-gray-400"/>
+          <Icon icon="x" width="20" height="20" class="text-gray-500 dark:text-gray-400"/>
         </button>
       </div>
 
@@ -37,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { Icon } from '@iconify/vue';
+import Icon from '@/components/Icon.vue'
 
 interface Props {
   title: string;

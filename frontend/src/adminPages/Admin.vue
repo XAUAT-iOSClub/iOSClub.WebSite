@@ -63,7 +63,7 @@
           <div class="flex items-start justify-between mb-4">
             <div class="flex items-center gap-2">
               <div class="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
-                <Icon icon="ion:server" class="w-5 h-5 text-blue-600 dark:text-blue-400"/>
+                <Icon icon="server" class="w-5 h-5 text-blue-600 dark:text-blue-400"/>
               </div>
               <h3 class="text-lg font-semibold text-gray-900 dark:text-white">请求指标</h3>
             </div>
@@ -79,9 +79,10 @@
               </span>
             </div>
             <div class="space-y-1">
-              <span class="text-xs text-gray-500 dark:text-gray-400">每秒请求数</span>
+              <!-- 标签必须写明固定统计窗口，避免把窗口累计平均误解为瞬时 QPS。 -->
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ httpWindowLabel }}</span>
               <span class="text-2xl font-bold text-gray-900 dark:text-white">
-                {{ monitoringData.http.requestsPerSecond.toFixed(2) }}
+                {{ monitoringData.http.averageRequestsPerSecond.toFixed(2) }}
               </span>
             </div>
             <div class="space-y-1">
@@ -108,8 +109,8 @@
 
 <script setup lang="ts">
 import {ref, computed, onMounted, onBeforeUnmount, defineComponent, h} from 'vue'
-import {useMessage, useDialog} from 'naive-ui'
-import {Icon} from '@iconify/vue'
+import {useMessage} from 'naive-ui'
+import Icon from '@/components/Icon.vue'
 import {DataCentreService} from '../services/DataCentreService'
 import {MonitoringService} from '../services/MonitoringService'
 import {useAuthorizationStore} from '../stores/Authorization'
@@ -126,7 +127,6 @@ interface StatItemConfig {
 
 // Stores & Utils
 const message = useMessage()
-const dialog = useDialog()
 const authorizationStore = useAuthorizationStore()
 const layoutStore = useLayoutStore()
 
@@ -146,12 +146,27 @@ const statistics = ref({
 const monitoringData = ref({
   http: {
     totalRequests: 0,
-    requestsPerSecond: 0,
+    // 后端固定 3600 秒统计窗口；平均每秒请求数 = 窗口内请求数 / windowSeconds。
+    windowSeconds: 3600,
+    averageRequestsPerSecond: 0,
     errorRate: 0,
     averageResponseTime: 0
   },
   timestamp: null as Date | null
 })
+
+// 把统计窗口格式化成“1 小时 / 5 分钟 / 30 秒”，用于说明指标含义。
+const formatMonitoringWindow = (seconds: number | undefined): string => {
+  const total = typeof seconds === 'number' && Number.isFinite(seconds) && seconds > 0
+      ? Math.round(seconds)
+      : 3600
+  if (total % 3600 === 0) return `${total / 3600} 小时`
+  if (total % 60 === 0) return `${total / 60} 分钟`
+  return `${total} 秒`
+}
+
+const httpWindowLabel = computed(() =>
+    `近 ${formatMonitoringWindow(monitoringData.value.http.windowSeconds)}平均每秒请求数`)
 
 // Helper: Format numbers nicely (e.g. 1,000)
 const formatNumber = (num: number) => {
@@ -176,28 +191,28 @@ const statItems = computed<StatItemConfig[]>(() => [
   {
     key: 'members',
     label: '社员总数',
-    icon: 'ion:people',
+    icon: 'users',
     bgClass: 'bg-blue-100 dark:bg-blue-900/40',
     textClass: 'text-blue-600 dark:text-blue-400'
   },
   {
     key: 'staffs',
     label: '部员人数',
-    icon: 'material-symbols:badge',
+    icon: 'badge',
     bgClass: 'bg-green-100 dark:bg-green-900/40',
     textClass: 'text-green-600 dark:text-green-400'
   },
   {
     key: 'resources',
     label: '资源池',
-    icon: 'material-symbols:folder-open',
+    icon: 'folder-open',
     bgClass: 'bg-pink-100 dark:bg-pink-900/40',
     textClass: 'text-pink-600 dark:text-pink-400'
   },
   {
     key: 'departments',
     label: '部门架构',
-    icon: 'material-symbols:groups',
+    icon: 'users-round',
     bgClass: 'bg-indigo-100 dark:bg-indigo-900/40',
     textClass: 'text-indigo-600 dark:text-indigo-400'
   }
@@ -235,57 +250,24 @@ const uploadFiles = async (event: Event) => {
 }
 
 const downloadAllData = async () => {
-  const token = localStorage.getItem('Authorization')
-  if (!token) return message.error('未授权')
-
+  // DataCentreService.exportJson 自己携带 AuthService 的 accessToken，
+  // 不再依赖历史遗留的 localStorage.Authorization 键。
   try {
     const blob = await DataCentreService.exportJson()
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `backup-${new Date().toISOString().split('T')[0]}.json`
+    a.download = `partial-export-${new Date().toISOString().split('T')[0]}.json`
     document.body.appendChild(a)
     a.click()
     setTimeout(() => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url)
     }, 100)
-    message.success('备份已导出')
+    message.success('部分数据已导出（不能用于完整还原）')
   } catch {
     message.error('导出失败')
   }
-}
-
-const removeAllData = () => {
-  const d = dialog.warning({
-    title: '抹除所有数据',
-    content: '此操作将清空数据库且无法撤销。请确保已备份数据。',
-    positiveText: '确认抹除',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      d.loading = true
-      try {
-        const token = localStorage.getItem('Authorization')
-        if (!token) throw new Error('No Token')
-
-        const res = await fetch('https://www.xauat.site/api/Admin/RemoveAllData', {
-          method: 'DELETE',
-          headers: {'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json'}
-        })
-
-        if (res.ok) {
-          message.success('数据已重置')
-          await fetchData()
-        } else {
-          throw new Error('API Error')
-        }
-      } catch {
-        message.error('重置失败')
-      } finally {
-        d.loading = false
-      }
-    }
-  })
 }
 
 const fetchMonitoringData = async () => {
@@ -294,12 +276,14 @@ const fetchMonitoringData = async () => {
     const performanceData = await MonitoringService.getPerformanceMetrics()
     monitoringData.value = {
       http: {
-        totalRequests: performanceData.http?.totalRequests ?? 0,
-        requestsPerSecond: performanceData.http?.requestsPerSecond ?? 0,
-        errorRate: performanceData.http?.errorRate ?? 0,
-        averageResponseTime: performanceData.http?.averageResponseTime ?? 0
+        totalRequests: performanceData?.http?.totalRequests ?? 0,
+        windowSeconds: performanceData?.http?.windowSeconds ?? 3600,
+        // 后端已改名为 averageRequestsPerSecond（固定窗口内的平均值）。
+        averageRequestsPerSecond: performanceData?.http?.averageRequestsPerSecond ?? 0,
+        errorRate: performanceData?.http?.errorRate ?? 0,
+        averageResponseTime: performanceData?.http?.averageResponseTime ?? 0
       },
-      timestamp: performanceData.timestamp ? new Date(performanceData.timestamp) : null
+      timestamp: performanceData?.timestamp ? new Date(performanceData.timestamp) : null
     }
   } catch (e) {
     console.error('Failed to fetch monitoring data:', e)
@@ -348,7 +332,7 @@ const ActionsComponent = defineComponent({
         class: 'flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors shadow-sm active:scale-95 duration-200',
         onClick: triggerFileInput
       }, [
-        h(Icon, {icon: 'ion:cloud-upload', class: 'w-4 h-4'}),
+        h(Icon, {icon: 'cloud-upload', class: 'w-4 h-4'}),
         h('span', '导入数据')
       ]),
 
@@ -360,7 +344,7 @@ const ActionsComponent = defineComponent({
           },
           class: `w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-200 ${isOpen.value ? 'bg-gray-200 dark:bg-gray-700' : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'}`
         }, [
-          h(Icon, {icon: 'ion:ellipsis-horizontal', class: 'text-gray-600 dark:text-gray-300'})
+          h(Icon, {icon: 'ellipsis', class: 'text-gray-600 dark:text-gray-300'})
         ]),
 
         h('div', {
@@ -372,22 +356,12 @@ const ActionsComponent = defineComponent({
                 isOpen.value = false;
                 downloadAllData()
               },
+              title: '仅导出部分实体，不能作为完整备份或完整还原依据',
               class: 'w-full text-left px-3 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 transition-colors flex items-center gap-2'
             }, [
-              h(Icon, {icon: 'ion:download-outline', class: 'w-4 h-4'}),
-              h('span', '导出备份')
+              h(Icon, {icon: 'download', class: 'w-4 h-4'}),
+              h('span', '导出部分数据')
             ]),
-            h('div', {class: 'h-px bg-gray-100 dark:bg-gray-700 my-1 mx-2'}),
-            h('button', {
-              onClick: () => {
-                isOpen.value = false;
-                removeAllData()
-              },
-              class: 'w-full text-left px-3 py-2 text-sm rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2'
-            }, [
-              h(Icon, {icon: 'ion:trash-outline', class: 'w-4 h-4'}),
-              h('span', '清空数据')
-            ])
           ])
         ])
       ])
