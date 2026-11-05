@@ -1,0 +1,14 @@
+[Unit]
+Description=Daily check for iOSClub PostgreSQL backup (actual interval controlled by BACKUP_INTERVAL_DAYS, default 30)
+
+[Timer]
+# 每天 UTC 03:30 触发一次检查（低峰期）。
+# 是否真正执行 pg_dump 由 backup.sh 按 BACKUP_INTERVAL_DAYS（默认 30 天）判断，
+# 因此实际备份频率是 30 天一次；每日触发也让机器关机/重启后能自动补跑。
+OnCalendar=*-*-* 03:30:00 UTC
+RandomizedDelaySec=300
+Persistent=true
+Unit=iosclub-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,164 @@
+西建大 iOSClub.WebSite 数据库备份与恢复说明
+================================================
+
+适用范围
+--------
+本方案只备份 PostgreSQL 业务库，产物为 pg_dump custom 格式的 .dump 文件。
+当后端未配置 SQL 环境变量时会退化为本地 SQLite（Data.db），此时 pg_dump 不适用，
+需要改用 sqlite3 .backup 或直接复制 Data.db，脚本不在本方案覆盖范围内。
+
+备份链路
+--------
+systemd timer
+  -> deploy/backup/backup.sh
+  -> pg_dump -Fc
+  -> pg_restore --list 校验
+  -> 计算 SHA-256 / 大小
+  -> 上传 Cloudflare R2（私有 Bucket）
+  -> head-object 校验大小
+  -> 更新 metadata/latest.json
+  -> 保留近期本地副本，删除过期本地文件
+
+备份频率
+--------
+systemd timer 每天 UTC 03:30 触发一次检查，但 backup.sh 只有在距离上次成功备份
+超过 BACKUP_INTERVAL_DAYS（默认 30 天）时才真正执行 pg_dump，因此实际是
+30 天自动备份一次。成功后会写入 $BACKUP_DIR/.last-success 作为周期判断依据。
+需要立即手动备份时设置 BACKUP_FORCE=1 即可跳过周期判断。
+
+WebAPI 只做两件事：
+  1. GET /AdminBackups/status                       读取 latest.json 元数据
+  2. GET /AdminBackups/latest/download-url          生成单对象短时预签名下载链接
+WebAPI 不执行 pg_dump，不持有数据库备份账号，也不需要 R2 删除权限。
+
+权限
+----
+两个接口都要求 Founder / President / Minister（即“部长及其以上”）。
+前端按钮仅做展示控制，真正的安全边界在服务端 [Authorize]。
+
+================================================
+一、准备 R2
+================================================
+1. 创建私有 Bucket，例如 iosclub-private-backups，不启用公开访问。
+2. 为备份执行器创建只能写该 Bucket 的 R2 凭据。
+3. 为 WebAPI 创建只读 R2 凭据（如果账户权限支持）。
+4. 记录：
+   - Endpoint：https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+   - Bucket、Prefix、latest.json 的 Key
+5. 用无敏感信息的测试文件验证上传、下载、head-object 和预签名 URL。
+
+生命周期建议只作用于 backups/postgresql/ 前缀，不要匹配 metadata/latest.json。
+
+================================================
+二、配置备份执行器
+================================================
+1. 安装与远程 PostgreSQL 版本兼容的 pg_dump / pg_restore，以及 AWS CLI v2。
+2. 创建专用低权限系统账号：
+     useradd --system --no-create-home --shell /usr/sbin/nologin iosclub-backup
+3. 创建目录与配置：
+     install -d -o iosclub-backup -g iosclub-backup -m 750 /var/backups/iosclub
+     install -d -m 750 /etc/iosclub-backup
+     install -m 600 deploy/backup/backup.env.example /etc/iosclub-backup/backup.env
+     install -m 600 /dev/null /etc/iosclub-backup/pgpass
+4. 编辑 backup.env，填入真实配置。
+5. 写入 pgpass（格式 host:port:database:user:password），保持 600：
+     chown iosclub-backup:iosclub-backup /etc/iosclub-backup/pgpass
+6. 安装脚本与 systemd unit：
+     install -m 750 deploy/backup/backup.sh /usr/local/bin/iosclub-backup.sh
+     install -m 644 deploy/backup/iosclub-backup.service /etc/systemd/system/
+     install -m 644 deploy/backup/iosclub-backup.timer   /etc/systemd/system/
+7. 手动验证一次（会真正上传）：
+     sudo -u iosclub-backup BACKUP_ENV_FILE=/etc/iosclub-backup/backup.env \
+       /usr/local/bin/iosclub-backup.sh
+8. 启用定时器：
+     systemctl daemon-reload
+     systemctl enable --now iosclub-backup.timer
+     systemctl list-timers iosclub-backup.timer
+9. 查看日志：
+     journalctl -u iosclub-backup.service -n 100 --no-pager
+
+备份账号建议使用只读角色：
+     CREATE ROLE iosclub_backup LOGIN PASSWORD '...';
+     GRANT pg_read_all_data TO iosclub_backup;   -- PostgreSQL 14+
+或按 schema/table 授予 SELECT。
+
+================================================
+三、配置 WebAPI（只读）
+================================================
+在 WebAPI 的部署环境（平台 Secret / 环境变量 / .env）中配置：
+  BACKUP_FEATURE_ENABLED=true
+  R2_ENDPOINT_URL=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+  R2_REGION=auto
+  R2_BUCKET=iosclub-private-backups
+  R2_PREFIX=backups/postgresql/
+  R2_LATEST_MANIFEST_KEY=metadata/latest.json
+  BACKUP_DOWNLOAD_URL_EXPIRY_MINUTES=5
+  AWS_ACCESS_KEY_ID=<只读凭据>
+  AWS_SECRET_ACCESS_KEY=<只读密钥>
+
+注意：
+- 不要把 backup.env 里的写凭据复用给 WebAPI。
+- 不要把任何凭据写进前端或 Git。
+- 日志只记录用户、文件名、大小、objectKey，不记录预签名 URL。
+
+================================================
+四、恢复流程
+================================================
+1. 从 R2 下载目标 .dump（管理页“数据库备份”按钮，或人工下载）。
+2. 核对 createdAt、sizeBytes、sha256：
+     sha256sum iosclub_YYYY-MM-DDTHHMMSSZ.dump
+3. 检查归档结构：
+     pg_restore --list iosclub_YYYY-MM-DDTHHMMSSZ.dump | head
+4. 先恢复到隔离的测试库，不要直接覆盖生产库：
+     createdb -h <host> -U <admin> iosclub_restore_test
+     pg_restore -h <host> -U <admin> -d iosclub_restore_test \
+       --no-owner --no-acl iosclub_YYYY-MM-DDTHHMMSSZ.dump
+5. 校验关键表与数据量（Students / Staffs / Articles / Departments 等）。
+6. 由负责人确认后，再制定生产恢复或切换步骤。
+
+注意：
+- pg_dump 只备份单个数据库，不包含 PostgreSQL 全局角色、表空间等集群级对象。
+- 恢复后如应用使用文件系统中的密钥，需要一并恢复（见下节）。
+
+================================================
+五、不在数据库备份内的文件（必须单独备份）
+================================================
+以下文件不在 .dump 中，丢失会导致登录 / SSO 令牌失效：
+- JWT 签名密钥：./app/keys/rsa_private.pem、rsa_public.pem
+  （可用 JWT_RSA_PRIVATE_KEY_PATH / JWT_RSA_PUBLIC_KEY_PATH 覆盖）
+- OIDC/SSO 签名密钥：工作目录下 rsa-key.xml
+- SQLite 模式下的 DataProtection keys：./keys/
+建议将这些文件纳入独立的加密备份，并限制访问权限。
+
+Redis 中的 SSO 会话与缓存属易失数据，不需要纳入数据库备份。
+
+================================================
+六、故障处理
+================================================
+- pg_dump 失败：不更新 latest.json，临时文件清理，退出码非 0，journalctl 可查。
+- 归档校验失败：同上，不会把不完整文件标记为成功。
+- R2 上传失败：已通过校验的 .dump 会保留在 $BACKUP_DIR/failed/ 便于诊断；
+  latest.json 不更新。
+- R2 对象大小不一致：视为失败，不更新 latest.json。
+- 磁盘空间不足：任务开始前退出，退出码 3。
+- 并发执行：flock 生效，第二个任务退出码 75。
+- WebAPI 返回“暂无可下载的数据库备份”：R2 中没有成功的 latest.json。
+- WebAPI 返回“数据库备份服务未配置”：检查 R2_* 与 AWS_* 环境变量。
+
+================================================
+七、验证清单（上线前）
+================================================
+[ ] pg_dump 退出码 0，pg_restore --list 可读。
+[ ] 记录并核对 sizeBytes 与 sha256。
+[ ] R2 对象存在，head-object 大小与本地一致。
+[ ] latest.json 只在成功后更新。
+[ ] 隔离库恢复成功，关键表数据正常。
+[ ] systemctl start iosclub-backup.service 成功。
+[ ] timer 时间、时区、Persistent 行为正确。
+[ ] 并发触发不会产生两个任务。
+[ ] Founder / President / Minister 可下载，更低角色 403。
+[ ] 未登录 401。
+[ ] 无备份时提示明确，不产生空文件。
+[ ] 修改对象路径无法下载其他对象。
+[ ] 点击“数据库备份”不会触发新的 pg_dump。
+[ ] 备份失败时网站其他功能正常。

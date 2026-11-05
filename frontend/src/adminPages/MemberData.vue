@@ -17,6 +17,7 @@ import {
 import {Icon} from '@iconify/vue'
 import {MemberQueryService} from '../services/MemberQueryService'
 import {MemberManagementService} from '../services/MemberManagementService'
+import {AdminBackupService} from '../services/AdminBackupService'
 import {InfoService} from '../services/InfoService'
 import {
   DataCentreService
@@ -31,6 +32,7 @@ import type {
 } from '../services/DataCentreService'
 import * as echarts from 'echarts'
 import {useLayoutStore} from '../stores/LayoutStore';
+import {useAuthorizationStore} from '../stores/Authorization';
 import {filterInSchool} from '../lib/memberFilter';
 import {TableColumn} from "naive-ui/es/data-table/src/interface";
 
@@ -39,6 +41,13 @@ import {TableColumn} from "naive-ui/es/data-table/src/interface";
 const dialog = useDialog()
 const message = useMessage()
 const layoutStore = useLayoutStore()
+const authorizationStore = useAuthorizationStore()
+
+// 数据库备份按钮仅对“部长及其以上”显示（服务端仍会再次校验）
+const canDownloadBackup = computed(() =>
+  ['Founder', 'President', 'Minister'].includes(authorizationStore.getRole || '')
+)
+const backupDownloading = ref(false)
 
 // --- State ---
 const showModal = ref(false)
@@ -556,6 +565,32 @@ const downloadBlob = (blob: Blob, filename: string) => {
   URL.revokeObjectURL(url)
 }
 
+// 下载最近一次已成功上传到 R2 的数据库备份（不在网页触发新的 pg_dump）
+const downloadLatestDatabaseBackup = async () => {
+  if (backupDownloading.value) return
+  backupDownloading.value = true
+  try {
+    const info = await AdminBackupService.getLatestDownloadUrl()
+    if (!info?.downloadUrl) {
+      message.warning('暂无可下载的数据库备份')
+      return
+    }
+
+    const link = document.createElement('a')
+    link.href = info.downloadUrl
+    link.rel = 'noopener'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+
+    message.success(`已开始下载 ${info.fileName}`)
+  } catch (e: any) {
+    message.error(e?.message || '下载数据库备份失败')
+  } finally {
+    backupDownloading.value = false
+  }
+}
+
 // --- Password ---
 const showPasswordModalFn = (member: MemberVO) => {
   currentMember.value = {...member}
@@ -599,6 +634,18 @@ onMounted(() => {
   const ActionsComponent = defineComponent({
     setup() {
       return () => h('div', {class: 'flex items-center gap-3'}, [
+        canDownloadBackup.value ? h('button', {
+          class: 'bg-white dark:bg-[#2C2C2E] text-[#1d1d1f] dark:text-white font-medium rounded-full border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-[#3A3A3C] transition-all duration-200 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center h-9 px-4 text-[14px]',
+          disabled: backupDownloading.value,
+          onClick: downloadLatestDatabaseBackup
+        }, [
+          h(Icon, {
+            icon: backupDownloading.value ? 'eos-icons:loading' : 'ion:server-outline',
+            class: ['w-5 h-5 mr-1', backupDownloading.value ? 'animate-spin' : '']
+          }),
+          '数据库备份'
+        ]) : null,
+
         h('button', {
           class: 'bg-white dark:bg-[#2C2C2E] text-[#1d1d1f] dark:text-white font-medium rounded-full border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-[#3A3A3C] transition-all duration-200 active:scale-95 flex items-center justify-center h-9 px-4 text-[14px]',
           onClick: () => dropdownOpen.value = !dropdownOpen.value

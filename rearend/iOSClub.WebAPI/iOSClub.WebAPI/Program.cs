@@ -13,6 +13,7 @@ using iOSClub.WebAPI.Common.Extensions;
 using iOSClub.WebAPI.Common.Middleware;
 using iOSClub.WebAPI.Common.Security;
 using iOSClub.WebAPI.IdentityModels;
+using iOSClub.WebAPI.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
@@ -434,6 +435,10 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<GlobalAuthorizationFilter>();
 // 注册ITokenGenerator服务
 builder.Services.AddScoped<ITokenGenerator, JwtGenerator>();
+
+// 数据库备份只读访问（读取 R2 latest.json、生成短时下载链接）
+builder.Services.AddSingleton(BackupStorageOptions.FromEnvironment());
+builder.Services.AddSingleton<IR2BackupMetadataService, R2BackupMetadataService>();
 
 // 使用扩展方法注册服务
 builder.Services.RegisterRepositoriesAndServices();

@@ -1,0 +1,35 @@
+[Unit]
+Description=iOSClub PostgreSQL logical backup to Cloudflare R2
+Documentation=file:/usr/local/share/doc/iosclub/database-backup-restore.txt
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=iosclub-backup
+Group=iosclub-backup
+EnvironmentFile=/etc/iosclub-backup/backup.env
+Environment=AWS_CONFIG_FILE=/dev/null
+Environment=AWS_SHARED_CREDENTIALS_FILE=/dev/null
+Environment=AWS_EC2_METADATA_DISABLED=true
+ExecStart=/usr/local/bin/iosclub-backup.sh
+
+# 低峰期后台执行，降低对数据库和磁盘的影响。
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=2h
+
+# 安全加固
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+ReadWritePaths=/var/backups/iosclub
