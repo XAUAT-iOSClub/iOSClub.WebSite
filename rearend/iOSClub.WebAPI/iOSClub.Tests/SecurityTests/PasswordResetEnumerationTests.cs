@@ -26,11 +26,26 @@ public class PasswordResetEnumerationTests
             loginService.Object,
             Mock.Of<ITokenGenerator>());
 
-        var result = await controller.RequestPasswordReset("2024000001");
+        var result = await controller.RequestPasswordReset(new PasswordResetRequest("2024000001"));
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var body = Assert.IsType<ApiResponse<bool>>(ok.Value);
         Assert.Equal(0, body.ErrorCode);
         Assert.Equal("如果该账号已绑定邮箱，验证码已发送", body.Message);
+    }
+    [Fact]
+    public async Task ResetPassword_ForwardsBodyValuesWithoutChangingSpecialCharacters()
+    {
+        const string password = "Password123&+#?";
+        var loginService = new Mock<ILoginService>();
+        loginService.Setup(s => s.ResetPasswordWithCode("2024000001", "123456", password)).ReturnsAsync(true);
+        var controller = new AuthController(Mock.Of<IStudentRepository>(), Mock.Of<IStaffRepository>(),
+            loginService.Object, Mock.Of<ITokenGenerator>());
+
+        var result = await controller.ResetPassword(new PasswordResetConfirmation("2024000001", "123456", password));
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.True(Assert.IsType<ApiResponse<bool>>(ok.Value).Data);
+        loginService.Verify(s => s.ResetPasswordWithCode("2024000001", "123456", password), Times.Once);
     }
 }

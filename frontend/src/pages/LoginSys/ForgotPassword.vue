@@ -61,6 +61,8 @@
             />
           </n-form-item>
 
+          <p class="text-xs subtitle-text mb-3">密码至少8个字符，包含一个大写字母和一个数字</p>
+
           <n-form-item path="newPassword">
             <n-input
                 v-model:value="formStep2.newPassword"
@@ -143,7 +145,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { NForm, NFormItem, NInput, NButton, NInputOtp } from 'naive-ui'
+import { NForm, NFormItem, NInput, NButton, NInputOtp, type FormRules } from 'naive-ui'
 import Icon from '@/components/Icon.vue'
 
 // 假设这里的 Service 路径保持不变
@@ -164,7 +166,7 @@ interface FormStep1State {
 
 interface FormStep2State {
   studentId: string
-  verificationCode: string[] // 改为 string 类型更符合 Naive UI OTP 默认行为
+  verificationCode: string[]
   newPassword: string
   confirmPassword: string
 }
@@ -189,21 +191,19 @@ const rulesStep1 = {
   }
 }
 
-const rulesStep2 = {
+const rulesStep2: FormRules = {
   verificationCode: {
     required: true,
-    message: '请输入完整验证码',
     trigger: ['input', 'blur'],
-    validator: (_: any, value: string[]) => {
+    validator: (_, value: string[]) => {
       if (value && value.length === 6 && value.every(v => v !== '')) return true
       return new Error('请输入完整验证码')
     }
   },
   newPassword: {
     required: true,
-    message: '请输入新密码',
     trigger: ['input', 'blur'],
-    validator: (_: any, value: string) => {
+    validator: (_, value: string) => {
       if (!value) return new Error('请输入新密码')
       // 密码至少8个字符，包含一个大写字母和一个数字
       const passwordReg = /^(?=.*[A-Z])(?=.*\d).{8,}$/
@@ -213,9 +213,8 @@ const rulesStep2 = {
   },
   confirmPassword: {
     required: true,
-    message: '请确认新密码',
     trigger: ['input', 'blur'],
-    validator: (_: any, value: string) => {
+    validator: (_, value: string) => {
       if (!value) return new Error('请再次输入密码')
       if (value !== formStep2.newPassword) {
         return new Error('两次输入的密码不一致')
@@ -225,61 +224,64 @@ const rulesStep2 = {
   }
 }
 
-const handleSubmit = () => {
+const handleSubmit = async () => {
   if (loading.value) return
   errorMsg.value = ''
   successMsg.value = ''
 
+  const form = step.value === 1 ? formStep1Ref.value : formStep2Ref.value
+  if (!form) return
+  try {
+    await form.validate()
+  } catch {
+    errorMsg.value = '请检查表单中的提示后重试'
+    return
+  }
+
   if (step.value === 1) {
-    formStep1Ref.value?.validate(async (errors) => {
-      if (!errors) {
-        loading.value = true
-        try {
-          await AuthService.requestPasswordReset(formStep1.studentId);
-          // 后端不再区分"用户不存在/没有邮箱"，前端也保持同样的模糊提示，
-          // 避免通过界面反馈枚举学号。
-          successMsg.value = '如果该账号已绑定邮箱，验证码已发送，请查收'
 
-          // 迁移数据并切换步骤
-          formStep2.studentId = formStep1.studentId
-          formStep2.verificationCode = []
+    loading.value = true
+    try {
+      await AuthService.requestPasswordReset(formStep1.studentId);
+      // 后端不再区分"用户不存在/没有邮箱"，前端也保持同样的模糊提示，
+      // 避免通过界面反馈枚举学号。
+      successMsg.value = '如果该账号已绑定邮箱，验证码已发送，请查收'
 
-          setTimeout(() => {
-            step.value = 2
-            successMsg.value = ''
-          }, 1500)
-        } catch (err: any) {
-          errorMsg.value = err.message || '请求失败，请稍后重试'
-        } finally {
-          loading.value = false
-        }
-      }
-    })
+      // 迁移数据并切换步骤
+      formStep2.studentId = formStep1.studentId
+      formStep2.verificationCode = []
+
+      setTimeout(() => {
+        step.value = 2
+        successMsg.value = ''
+      }, 1500)
+    } catch (err: unknown) {
+      errorMsg.value = err instanceof Error ? err.message : '请求失败，请稍后重试'
+    } finally {
+      loading.value = false
+    }
   } else {
-    formStep2Ref.value?.validate(async (errors) => {
-      if (!errors) {
-        loading.value = true
-        try {
-          // Join the verificationCode array into a string for the API call
-          const verificationCodeString = formStep2.verificationCode.join('')
-          
-          await AuthService.resetPassword(
-              formStep2.studentId,
-              verificationCodeString,
-              formStep2.newPassword
-          );
 
-          successMsg.value = '密码重置成功，准备跳转...'
-          setTimeout(() => {
-            router.push('/Login')
-          }, 2000)
-        } catch (err: any) {
-          errorMsg.value = err.message || '重置失败，请检查验证码'
-        } finally {
-          loading.value = false
-        }
-      }
-    })
+    loading.value = true
+    try {
+      // Join the verificationCode array into a string for the API call
+      const verificationCodeString = formStep2.verificationCode.join('')
+
+      await AuthService.resetPassword(
+          formStep2.studentId,
+          verificationCodeString,
+          formStep2.newPassword
+      );
+
+      successMsg.value = '密码重置成功，准备跳转...'
+      setTimeout(() => {
+        router.push('/Login')
+      }, 2000)
+    } catch (err: unknown) {
+      errorMsg.value = err instanceof Error ? err.message : '重置失败，请检查验证码'
+    } finally {
+      loading.value = false
+    }
   }
 }
 </script>

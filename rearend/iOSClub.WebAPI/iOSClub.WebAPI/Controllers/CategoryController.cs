@@ -98,7 +98,7 @@ public class CategoryController(
     /// 删除分类（需要管理员身份）
     /// </summary>
     [Authorize(Roles = "Founder, President")]
-    [HttpGet("Delete/{name}")]
+    [HttpDelete("Delete/{name}")]
     public async Task<ActionResult<ApiResponse<string>>> DeleteCategory(string name)
     {
         if (string.IsNullOrWhiteSpace(name))

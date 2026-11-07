@@ -66,7 +66,7 @@ public class ClientAppController(
 
     /// <summary>
     /// 查看客户端应用的可恢复密钥。仅 Founder/President 可用；
-    /// 该 GET 会写操作日志（见 OperationLogCatalog 的 MutatingGetActions）。
+    /// 该 GET 会写操作日志（见 OperationLogCatalog 的 AuditedReadActions）。
     /// </summary>
     [Authorize(Roles = "Founder, President")]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]

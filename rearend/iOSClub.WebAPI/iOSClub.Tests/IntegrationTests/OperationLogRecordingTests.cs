@@ -18,7 +18,7 @@ namespace iOSClub.Tests.IntegrationTests;
 
 /// <summary>
 /// 操作日志写入回归：成功/失败/畸形 JSON、脱敏、读取与认证端点不记录、
-/// 3 个 GET 删除特例、multipart 元数据。
+/// 3 个 DELETE 删除接口、multipart 元数据。
 /// </summary>
 public class OperationLogRecordingTests : IClassFixture<WebApplicationFactory<Program>>, IDisposable
 {
@@ -196,14 +196,14 @@ public class OperationLogRecordingTests : IClassFixture<WebApplicationFactory<Pr
     }
 
     [Fact]
-    public async Task MutatingGetDeletes_AreRecorded()
+    public async Task Deletes_AreRecorded()
     {
         await ClearLogsAsync();
 
         SetIdentity("Founder", "0000000000");
-        await _client.GetAsync("/Category/Delete/no-such-category");
-        await _client.GetAsync("/Department/Delete/no-such-department");
-        await _client.GetAsync("/Staff/Delete/9999999999");
+        await _client.DeleteAsync("/Category/Delete/no-such-category");
+        await _client.DeleteAsync("/Department/Delete/no-such-department");
+        await _client.DeleteAsync("/Staff/Delete/9999999999");
 
         var page = await GetLogsDataAsync();
         Assert.Equal(3, page.GetProperty("totalCount").GetInt32());
@@ -215,7 +215,7 @@ public class OperationLogRecordingTests : IClassFixture<WebApplicationFactory<Pr
         Assert.Contains("删除部门", actions);
         Assert.Contains("删除员工", actions);
         Assert.All(page.GetProperty("items").EnumerateArray(),
-            x => Assert.Equal("GET", x.GetProperty("method").GetString()));
+            x => Assert.Equal("DELETE", x.GetProperty("method").GetString()));
     }
 
     [Fact]

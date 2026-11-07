@@ -73,8 +73,8 @@ export class CategoryService {
      */
     static async deleteCategory(name: string): Promise<void> {
         await apiRequest<void>({
-            url: `${url}/Category/Delete/${name}`,
-            method: 'GET'
+            url: `${url}/Category/Delete/${encodeURIComponent(name)}`,
+            method: 'DELETE'
         });
     }
 

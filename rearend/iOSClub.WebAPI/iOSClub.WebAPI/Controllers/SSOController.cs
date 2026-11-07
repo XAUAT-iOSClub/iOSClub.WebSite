@@ -1480,13 +1480,11 @@ public class SSOController(
     /// <summary>
     /// 从主站JWT获取会话
     /// </summary>
-    /// <param name="clientId">客户端 ID</param>
-    /// <param name="scope">权限类别</param>
-    /// <returns>重定向</returns>
-    [HttpGet("from_main_jwt")]
+    /// <param name="request">客户端和权限范围</param>
+    /// <returns>第三方登录令牌</returns>
+    [HttpPost("from_main_jwt")]
     [Authorize]
-    public async Task<IActionResult> FromMainJwt([FromQuery(Name = "client_id")] string clientId,
-        [FromQuery] string scope)
+    public async Task<IActionResult> FromMainJwt([FromBody] MainJwtSessionRequest request)
     {
         var jwt = HttpContext.GetJwt();
         if (string.IsNullOrEmpty(jwt))
@@ -1513,7 +1511,7 @@ public class SSOController(
         // logger.LogInformation("From main JWT request received for user {UserId} and client {ClientId}", user.UserId,
         //     clientId);
 
-        var token = await loginService.LoginThirdPartyFromMainJwt(user.UserId, clientId, jwt, scope);
+        var token = await loginService.LoginThirdPartyFromMainJwt(user.UserId, request.ClientId, jwt, request.Scope);
 
         if (!string.IsNullOrEmpty(token))
         {
@@ -1587,3 +1585,6 @@ public class SSOController(
         public string Nonce { get; set; } = ""; // 添加Nonce支持
     }
 }
+public record MainJwtSessionRequest(
+    [System.ComponentModel.DataAnnotations.Required] string ClientId,
+    string Scope = "profile openid role");

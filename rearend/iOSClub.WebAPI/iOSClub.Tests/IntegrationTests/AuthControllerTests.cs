@@ -93,9 +93,7 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
             }); 
         }).CreateClient(); 
     } 
-    
-    // 注册功能暂停期间保留此测试，恢复注册后重新启用。
-    /*
+
     [Fact] 
     public async Task Register_Success_ReturnsToken() 
     { 
@@ -136,7 +134,6 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal("注册成功", result.Message);
     }
 
-    */
     /// <summary>
     /// 非法姓名/学号必须在进入 action 之前被 DataAnnotations 拦下，返回统一信封的 400。
     /// </summary>
@@ -455,7 +452,7 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         _tokenGeneratorMock.Setup(t => t.GetMemberToken(It.IsAny<MemberVO>(), It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<string>())).Returns((newAccessToken, refreshToken)); 
         
         // Act 
-        var response = await _client.PostAsync($"/Auth/refresh-token?userId={userId}&refreshToken={refreshToken}", null); 
+        var response = await _client.PostAsJsonAsync("/Auth/refresh-token", new { userId, refreshToken });
         
         // Assert 
         response.EnsureSuccessStatusCode(); // 200 OK 
@@ -478,7 +475,7 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         _redisDbMock.Setup(r => r.StringGetAsync(It.Is<RedisKey>(k => k.ToString() == $"refresh:{userId}"), It.IsAny<CommandFlags>())).ReturnsAsync(RedisValue.Null); 
         
         // Act 
-        var response = await _client.PostAsync($"/Auth/refresh-token?userId={userId}&refreshToken={invalidRefreshToken}", null); 
+        var response = await _client.PostAsJsonAsync("/Auth/refresh-token", new { userId, refreshToken = invalidRefreshToken });
         
         // Assert 
         // 新契约：HTTP 状态码恒等于响应体里的 code，失败响应不再是 HTTP 200，
@@ -496,10 +493,10 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
     public async Task RefreshToken_MissingParameters_ReturnsError()
     {
         // Act - 缺少userId和refreshToken参数
-        var response = await _client.PostAsync("/Auth/refresh-token", null);
+        var response = await _client.PostAsJsonAsync("/Auth/refresh-token", new { });
 
         // Assert
-        // userId / refreshToken 是非空查询参数，[ApiController] 会在进入 action 之前
+        // 请求体中的 UserId / RefreshToken 为必填字段，[ApiController] 会在进入 action 之前
         // 就判定模型无效并返回统一信封（errorCode 1003 / HTTP 400）。
         // action 里那句 "用户ID和刷新令牌不能为空" 对"完全不传"的情况因此永远走不到。
         var content = await response.Content.ReadAsStringAsync();
@@ -510,7 +507,7 @@ public class AuthControllerTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(result.Code, (int)response.StatusCode);
         Assert.Equal(400, result.Code);
         Assert.Equal(ErrorCode.ParameterValidationFailed, result.ErrorCode);
-        Assert.Contains("userId", result.Detail ?? "");
+        Assert.Contains("UserId", result.Detail ?? "");
     }
 
     [Fact]

@@ -1,0 +1,32 @@
+import {test, expect} from '@playwright/test'
+
+test('password reset explains validation failures and submits corrected values', async ({page}) => {
+    const errors: string[] = []
+    page.on('pageerror', error => errors.push(error.message))
+    await page.route('**/Auth/request-password-reset', route => route.fulfill({json: {code: 200, errorCode: 0, data: true, message: 'ok'}}))
+    await page.route('**/Auth/reset-password', route => route.fulfill({json: {code: 200, errorCode: 0, data: true, message: 'ok'}}))
+    await page.goto('/ForgotPassword')
+    await page.getByPlaceholder('学号', {exact: true}).fill('1234567890')
+    await page.getByRole('button', {name: '继续', exact: true}).click()
+    await expect(page.getByRole('heading', {name: '设置新密码'})).toBeVisible()
+    const otp = page.locator('.apple-otp input')
+    for (let i = 0; i < 6; i++) await otp.nth(i).fill(String(i + 1))
+    await page.getByPlaceholder('新密码', {exact: true}).fill('password123')
+    await page.getByPlaceholder('确认新密码', {exact: true}).fill('password123')
+    await page.getByRole('button', {name: '重置密码', exact: true}).click()
+    await expect(page.getByText('密码至少8个字符，包含一个大写字母和一个数字', {exact: true}).first()).toBeVisible()
+    await expect(page.getByText('请输入新密码', {exact: true})).toHaveCount(0)
+    await page.getByPlaceholder('新密码', {exact: true}).fill('Password123&+#?')
+    await page.getByPlaceholder('确认新密码', {exact: true}).fill('different')
+    await page.getByRole('button', {name: '重置密码', exact: true}).click()
+    await expect(page.getByText('两次输入的密码不一致', {exact: true}).first()).toBeVisible()
+    await page.getByPlaceholder('确认新密码', {exact: true}).fill('Password123&+#?')
+    const request = page.waitForRequest('**/Auth/reset-password')
+    await page.getByRole('button', {name: '重置密码', exact: true}).click()
+    const submitted = await request
+    expect(submitted.method()).toBe('POST')
+    expect(new URL(submitted.url()).search).toBe('')
+    expect(submitted.postDataJSON()).toEqual({userId: '1234567890', code: '123456', newPassword: 'Password123&+#?'})
+    await expect(page.getByText('密码重置成功，准备跳转...')).toBeVisible()
+    expect(errors).toEqual([])
+})
