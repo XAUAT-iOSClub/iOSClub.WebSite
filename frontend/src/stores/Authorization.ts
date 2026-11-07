@@ -61,12 +61,6 @@ export const useAuthorizationStore = defineStore('AuthorizationId', {
             localStorage.setItem('UserId', user.userId);
             return true;
         },
-        async oauthLogin(user: LoginModel, clientId: string | null | undefined = '', scope: string | null | undefined = ''): Promise<string> {
-            const { accessToken } = await AuthService.login(user, clientId, scope);
-            this.Authorization = accessToken;
-            localStorage.setItem('UserId', user.userId);
-            return accessToken;
-        },
         async validate(): Promise<boolean> {
             const id = localStorage.getItem('UserId');
             if (id === null || id === '') return false;

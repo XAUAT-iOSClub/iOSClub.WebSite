@@ -28,6 +28,17 @@ export class AuthService {
      * @returns Promise<{ accessToken: string, refreshToken: string }> 访问令牌和刷新令牌
      */
     static async login(loginModel: LoginModel, clientId: string | null | undefined = '', scope: string | null | undefined = ''): Promise<{ accessToken: string, refreshToken: string }> {
+        const tokens = await this.requestLogin(loginModel, clientId, scope);
+        this.saveTokens(tokens.accessToken, tokens.refreshToken);
+        return tokens;
+    }
+
+    static async loginForSso(loginModel: LoginModel, clientId: string, scope: string): Promise<string> {
+        const {accessToken} = await this.requestLogin(loginModel, clientId, scope);
+        return accessToken;
+    }
+
+    private static async requestLogin(loginModel: LoginModel, clientId: string | null | undefined, scope: string | null | undefined): Promise<{ accessToken: string, refreshToken: string }> {
         // 直接使用fetch获取完整响应，以便获取响应头中的刷新令牌；
         // 响应体解析复用 readApiResponse，与 apiRequest 保持同一套判据。
         const response = await fetch(`${url}/Auth/login?clientId=${clientId}&scope=${scope}`, {
@@ -49,7 +60,6 @@ export class AuthService {
         // 从响应头中获取刷新令牌
         const refreshToken = response.headers.get('X-Refresh-Token') || '';
 
-        this.saveTokens(accessToken, refreshToken);
         return { accessToken, refreshToken };
     }
 
