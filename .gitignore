@@ -6,3 +6,11 @@ frontend/test-results/
 frontend/playwright-report/
 frontend/blob-report/
 frontend/playwright/.cache/
+
+# 财务模块运行期文件（发票原件、生成表单、模板）
+**/App_Data/finance/
+rearend/iOSClub.WebAPI/iOSClub.WebAPI/App_Data/
+tools/paddle-ocr/models/
+tools/paddle-ocr/.venv/
+tools/paddle-ocr/__pycache__/
+tools/paddle-ocr/paddlex-cache/

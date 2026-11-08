@@ -23,6 +23,14 @@ public sealed class ClubContext(DbContextOptions<ClubContext> options) : DbConte
     public DbSet<ActivityParticipantDO> ActivityParticipants { get; init; }
     public DbSet<ActivityOperationLogDO> ActivityOperationLogs { get; init; }
 
+    // ---- 财务模块（仅新增，不改动现有实体与关系）----
+    public DbSet<FinanceMaterialDO> FinanceMaterials { get; init; }
+    public DbSet<FinanceInvoiceDO> FinanceInvoices { get; init; }
+    public DbSet<FinanceAccountDO> FinanceAccounts { get; init; }
+    public DbSet<FinanceFlowDO> FinanceFlows { get; init; }
+    public DbSet<FinanceLogDO> FinanceLogs { get; init; }
+    public DbSet<FinanceTemplateDO> FinanceTemplates { get; init; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<DepartmentDO>()
@@ -90,6 +98,47 @@ public sealed class ClubContext(DbContextOptions<ClubContext> options) : DbConte
         // ImportHistoryDO 索引：按部门 + 时间倒序拉取导入历史
         modelBuilder.Entity<ImportHistoryDO>()
             .HasIndex(h => new { h.DepartmentName, h.ImportedAt });
+
+        // ---- 财务模块索引 ----
+        modelBuilder.Entity<FinanceMaterialDO>()
+            .HasIndex(m => new { m.Status, m.AcademicYear });
+        modelBuilder.Entity<FinanceMaterialDO>()
+            .HasIndex(m => m.CreatedAt);
+
+        modelBuilder.Entity<FinanceMaterialDO>()
+            .HasMany(m => m.Invoices)
+            .WithOne(i => i.Material)
+            .HasForeignKey(i => i.MaterialId)
+            .OnDelete(DeleteBehavior.SetNull)
+            .IsRequired(false);
+
+        modelBuilder.Entity<FinanceInvoiceDO>()
+            .HasIndex(i => new { i.MaterialId, i.IsDeleted });
+        modelBuilder.Entity<FinanceInvoiceDO>()
+            .HasIndex(i => new { i.Code, i.Number });
+        modelBuilder.Entity<FinanceInvoiceDO>()
+            .HasIndex(i => i.Status);
+
+        modelBuilder.Entity<FinanceAccountDO>()
+            .HasIndex(a => a.AcademicYear)
+            .IsUnique();
+
+        modelBuilder.Entity<FinanceFlowDO>()
+            .HasIndex(f => new { f.AcademicYear, f.CreatedAt });
+        modelBuilder.Entity<FinanceFlowDO>()
+            .HasIndex(f => f.MaterialId);
+        modelBuilder.Entity<FinanceFlowDO>()
+            .HasIndex(f => new { f.Status, f.Type });
+
+        modelBuilder.Entity<FinanceLogDO>()
+            .HasIndex(l => l.CreatedAt);
+        modelBuilder.Entity<FinanceLogDO>()
+            .HasIndex(l => new { l.TargetType, l.TargetId });
+        modelBuilder.Entity<FinanceLogDO>()
+            .HasIndex(l => l.Action);
+
+        modelBuilder.Entity<FinanceTemplateDO>()
+            .HasIndex(t => new { t.Kind, t.Enabled });
 
         // ParadeDB BM25 全文检索索引（pg_search）
         modelBuilder.Entity<ArticleDO>()

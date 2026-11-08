@@ -32,6 +32,15 @@ public static class ServiceCollectionExtensions
             services.AddScoped<IDepartmentImportService, DepartmentImportService>();
             services.AddScoped<IActivityExcelService, ActivityExcelService>();
             services.AddHostedService<ActivityAutoStatusService>();
+
+            // 财务模块
+            services.AddScoped<IFinanceRepository, FinanceRepository>();
+            services.AddScoped<IFinanceStorage, FinanceStorage>();
+            services.AddScoped<IFinanceOcrService, FinanceOcrService>();
+            services.AddHttpClient<IFinanceOcrService, FinanceOcrService>();
+            services.AddScoped<IFinanceDocumentService, FinanceDocumentService>();
+            services.AddScoped<FinanceService>();
+            services.AddScoped<FinanceAuditService>();
         }
 
         /// <summary>

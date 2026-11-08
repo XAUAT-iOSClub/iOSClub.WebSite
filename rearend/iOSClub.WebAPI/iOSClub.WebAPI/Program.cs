@@ -61,6 +61,23 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 // 配置Mapster全局映射
 MapperConfig.Configure();
 
+// 财务模块配置：存储目录落到内容根目录下的 App_Data/finance，可通过 Finance__StorageRoot 覆盖。
+var financeStorageRoot = builder.Configuration["Finance:StorageRoot"];
+if (string.IsNullOrWhiteSpace(financeStorageRoot))
+{
+    financeStorageRoot = Path.Combine(builder.Environment.ContentRootPath, "App_Data", "finance");
+}
+else if (!Path.IsPathRooted(financeStorageRoot))
+{
+    financeStorageRoot = Path.Combine(builder.Environment.ContentRootPath, financeStorageRoot);
+}
+
+builder.Services.Configure<FinanceOptions>(options =>
+{
+    builder.Configuration.GetSection("Finance").Bind(options);
+    options.StorageRoot = financeStorageRoot;
+});
+
 #region 控制器基本设置
 
 // 配置请求大小限制
@@ -605,6 +622,8 @@ app.UseHttpsRedirection();
 // CORS 必须在认证/授权之前运行，才能正确处理携带 Authorization 的跨域预检请求。
 app.UseCors();
 app.UseAuthentication(); // 添加这行以启用身份验证中间件
+// 财务模块角色准入与越权留痕：必须在认证之后、授权之前。
+app.UseMiddleware<FinanceAccessGuardMiddleware>();
 app.UseAuthorization();
 
 // 添加 Prometheus HTTP 请求指标收集中间件

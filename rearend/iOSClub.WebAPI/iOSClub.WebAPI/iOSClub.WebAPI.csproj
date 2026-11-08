@@ -33,6 +33,10 @@
     </ItemGroup>
 
     <ItemGroup>
+      <None Update="FinanceTemplates\*.docx" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+
+    <ItemGroup>
       <Content Include="..\.dockerignore">
         <Link>.dockerignore</Link>
       </Content>

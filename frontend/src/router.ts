@@ -241,6 +241,42 @@ const routes = [
                 meta: { title: "活动详情 - 西建大 iOS Club", requiresAuth: true },
                 component: () => import('./adminPages/Activity/ActivityDetail.vue'),
             },
+            {
+                path: 'Finance',
+                name: 'FinanceDashboard',
+                meta: { title: "财务管理 - 西建大 iOS Club", requiresAuth: true, financeOnly: true },
+                component: () => import('./adminPages/Finance/FinanceDashboard.vue'),
+            },
+            {
+                path: 'Finance/Invoices',
+                name: 'FinanceInvoices',
+                meta: { title: "发票库 - 西建大 iOS Club", requiresAuth: true, financeOnly: true },
+                component: () => import('./adminPages/Finance/FinanceInvoices.vue'),
+            },
+            {
+                path: 'Finance/Materials',
+                name: 'FinanceMaterials',
+                meta: { title: "报销材料 - 西建大 iOS Club", requiresAuth: true, financeOnly: true },
+                component: () => import('./adminPages/Finance/FinanceMaterials.vue'),
+            },
+            {
+                path: 'Finance/Materials/:id',
+                name: 'FinanceMaterialDetail',
+                meta: { title: "材料详情 - 西建大 iOS Club", requiresAuth: true, financeOnly: true },
+                component: () => import('./adminPages/Finance/FinanceMaterialDetail.vue'),
+            },
+            {
+                path: 'Finance/Flows',
+                name: 'FinanceFlows',
+                meta: { title: "经费流水 - 西建大 iOS Club", requiresAuth: true, financeOnly: true },
+                component: () => import('./adminPages/Finance/FinanceFlows.vue'),
+            },
+            {
+                path: 'Finance/Logs',
+                name: 'FinanceLogs',
+                meta: { title: "财务操作日志 - 西建大 iOS Club", requiresAuth: true, financeOnly: true },
+                component: () => import('./adminPages/Finance/FinanceLogs.vue'),
+            },
         ]
     }
 ];
@@ -263,6 +299,7 @@ router.beforeEach((to, _from, next) => {
 
     const role = authorizationStore.getRole;
     const canWriteCategories = role === 'Founder' || role === 'President';
+    const canUseFinance = role === 'Founder' || role === 'President' || role === 'Minister';
 
     // Check if route requires authentication — also validate JWT expiry
     if (to.meta.requiresAuth && !authorizationStore.isTokenValid) {
@@ -272,6 +309,9 @@ router.beforeEach((to, _from, next) => {
     } else if (to.meta.categoryWriteOnly && !canWriteCategories) {
         // Menu hiding is not the permission boundary: block direct navigation.
         // The API still enforces this server-side.
+        next('/access-denied');
+    } else if (to.meta.financeOnly && !canUseFinance) {
+        // 财务模块与服务端 [Authorize(Roles = "Founder,President,Minister")] 保持一致。
         next('/access-denied');
     } else {
         next();
