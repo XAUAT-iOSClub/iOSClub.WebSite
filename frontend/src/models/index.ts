@@ -1,4 +1,5 @@
 // 导出所有模型的入口文件
+export * from './AdminBackupModel';
 export * from './ArticleModel';
 export * from './AuthModel';
 export * from './ClientAppModel';
