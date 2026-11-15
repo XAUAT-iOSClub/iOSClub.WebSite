@@ -1,11 +1,17 @@
-name: Build Finance PaddleOCR
+name: Build Finance OCR (NativeAOT)
 
 on:
   workflow_dispatch:
-  push:
+  pull_request:
+    branches: [master]
     paths:
-      - "tools/paddle-ocr/**"
-      - ".github/workflows/paddle-ocr.yml"
+      - 'rearend/iOSClub.WebAPI/iOSClub.FinanceOcr/**'
+      - '.github/workflows/paddle-ocr.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'rearend/iOSClub.WebAPI/iOSClub.FinanceOcr/**'
+      - '.github/workflows/paddle-ocr.yml'
 
 permissions:
   contents: read
@@ -14,39 +20,41 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      LOCAL_IMAGE: finance-ocr-aot:ci
     steps:
       - uses: actions/checkout@v4
-
-      - name: Resolve image tags
-        id: image
+      - uses: docker/setup-buildx-action@v3
+      - name: Build NativeAOT image
+        uses: docker/build-push-action@v6
+        with:
+          context: rearend/iOSClub.WebAPI/iOSClub.FinanceOcr
+          platforms: linux/amd64
+          load: true
+          tags: ${{ env.LOCAL_IMAGE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Verify NativeAOT service
         shell: bash
         run: |
-          owner="$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
-          image="ghcr.io/${owner}/finance-paddleocr"
-          {
-            echo "tags<<TAGS_EOF"
-            echo "${image}:${GITHUB_SHA}"
-            if [[ "$GITHUB_REF" == "refs/heads/master" ]]; then
-              echo "${image}:latest"
-            fi
-            echo "TAGS_EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - uses: docker/setup-buildx-action@v3
-
+          docker run -d --rm --name finance-ocr-ci -p 127.0.0.1:5099:5099 "$LOCAL_IMAGE"
+          trap 'docker logs finance-ocr-ci; docker stop finance-ocr-ci' EXIT
+          curl -fsS --retry 30 --retry-delay 1 --retry-connrefused http://127.0.0.1:5099/health
+          curl -fsS --max-time 60 http://127.0.0.1:5099/ocr \
+            -F file=@rearend/iOSClub.WebAPI/iOSClub.FinanceOcr/test-data/synthetic-invoice.png |
+            jq -e '.rawText | contains("发票") and contains("12345678") and contains("318.00")'
       - name: Log in to GHCR
+        if: github.ref == 'refs/heads/master'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: tools/paddle-ocr
-          platforms: linux/amd64
-          push: true
-          tags: ${{ steps.image.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Publish tested image
+        if: github.ref == 'refs/heads/master'
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/finance-ocr-aot"
+          docker tag "$LOCAL_IMAGE" "$image:$GITHUB_SHA"
+          docker tag "$LOCAL_IMAGE" "$image:latest"
+          docker push "$image:$GITHUB_SHA"
+          docker push "$image:latest"

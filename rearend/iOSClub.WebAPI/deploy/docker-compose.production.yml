@@ -8,12 +8,18 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       SQLITE_DB_PATH: /app/data/Data.db
+      Finance__OcrEndpoint: ${Finance__OcrEndpoint-http://finance-ocr:5099/ocr}
+      Finance__RecognitionTimeoutSeconds: ${Finance__RecognitionTimeoutSeconds:-60}
     ports:
       - "${APP_PORT:-8080}:8080"
     volumes:
       - app-data:/app/data
       - app-logs:/app/logs
       - app-keys:/app/keys
+
+  finance-ocr:
+    image: ${OCR_IMAGE:-ghcr.io/xauat-iosclub/finance-ocr-aot:latest}
+    restart: unless-stopped
 
 volumes:
   app-data:

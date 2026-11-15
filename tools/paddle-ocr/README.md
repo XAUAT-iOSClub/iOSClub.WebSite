@@ -1,5 +1,7 @@
 # 本地 / 远端 PaddleOCR 服务
 
+此目录保留旧版 Python 服务供对照。生产部署使用 [C# NativeAOT OCR](../../rearend/iOSClub.WebAPI/README.md#docker-生产部署)。
+
 财务系统的发票 OCR 独立服务。后端只通过 `Finance__OcrEndpoint` 调用它，不把 PaddleOCR 装进 WebAPI。
 
 ## 重要：本地安装不会自动上远端

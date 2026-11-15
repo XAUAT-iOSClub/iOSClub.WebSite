@@ -5,6 +5,7 @@ CONTAINER_NAME="iosclub-webapi"
 SERVICE_NAME="app"
 DEFAULT_IMAGE="ghcr.io/${GITHUB_REPOSITORY:-xauat-iosclub/iosclub.website}-backend:latest"
 IMAGE="${IMAGE:-${1:-$DEFAULT_IMAGE}}"
+OCR_IMAGE="${OCR_IMAGE:-${2:-ghcr.io/xauat-iosclub/finance-ocr-aot:latest}}"
 REGISTRY_HOST="${IMAGE%%/*}"
 APP_PORT="${APP_PORT:-8080}"
 READY_TIMEOUT="${READY_TIMEOUT:-60}"
@@ -12,7 +13,7 @@ COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-iosclub-webapi}"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-export IMAGE APP_PORT COMPOSE_PROJECT_NAME
+export IMAGE OCR_IMAGE APP_PORT COMPOSE_PROJECT_NAME
 command -v docker >/dev/null 2>&1 || { echo "错误：未找到 docker。" >&2; exit 1; }
 docker compose version >/dev/null 2>&1 || { echo "错误：需要 docker compose v2。" >&2; exit 1; }
 [[ "$APP_PORT" =~ ^[0-9]+$ ]] && (( APP_PORT >= 1 && APP_PORT <= 65535 )) || {
@@ -43,8 +44,15 @@ if [[ -n "${PULL_TOKEN:-}" ]]; then
 fi
 
 previous_image="$(docker container inspect -f '{{.Config.Image}}' "$CONTAINER_NAME" 2>/dev/null || true)"
-echo "==> 拉取镜像 $IMAGE"
-docker compose -f docker-compose.production.yml pull "$SERVICE_NAME"
+previous_ocr_container="$(docker compose -f docker-compose.production.yml ps -aq finance-ocr)"
+previous_ocr_image=""
+if [[ -n "$previous_ocr_container" ]]; then
+  previous_ocr_image="$(docker container inspect -f '{{.Config.Image}}' "$previous_ocr_container")"
+fi
+echo "==> 拉取 WebAPI 镜像 $IMAGE 和 OCR 镜像 $OCR_IMAGE"
+docker compose -f docker-compose.production.yml pull "$SERVICE_NAME" finance-ocr
+echo "==> 启动 OCR 并等待健康检查"
+docker compose -f docker-compose.production.yml up -d --no-build --wait --wait-timeout "$READY_TIMEOUT" finance-ocr
 echo "==> 启动服务"
 docker compose -f docker-compose.production.yml up -d --no-build --remove-orphans "$SERVICE_NAME"
 
@@ -69,8 +77,9 @@ if (( ! ready )); then
 fi
 
 docker image prune --force >/dev/null
-echo "==> 部署完成：$IMAGE（宿主机端口 $APP_PORT）"
+echo "==> 部署完成：${IMAGE}（宿主机端口 ${APP_PORT}），OCR：$OCR_IMAGE"
 echo "    日志：docker logs -f $CONTAINER_NAME"
-if [[ -n "$previous_image" && "$previous_image" != "$IMAGE" ]]; then
-  echo "    回滚：$0 $previous_image"
+if [[ -n "$previous_image" && -n "$previous_ocr_image" ]] &&
+   [[ "$previous_image" != "$IMAGE" || "$previous_ocr_image" != "$OCR_IMAGE" ]]; then
+  echo "    回滚：$0 $previous_image $previous_ocr_image"
 fi
