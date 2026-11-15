@@ -51,7 +51,17 @@ jobs:
       - name: Build
         run: dotnet build rearend/iOSClub.WebAPI/iOSClub.WebAPI.sln --no-restore --configuration Release
       - name: Test
-        run: dotnet test rearend/iOSClub.WebAPI/iOSClub.WebAPI.sln --no-build --configuration Release --verbosity normal
+        shell: bash
+        run: |
+          key_dir="$(mktemp -d)"
+          trap 'rm -rf -- "$key_dir"' EXIT
+          export JWT_RSA_PRIVATE_KEY_PATH="$key_dir/rsa_private.pem"
+          export JWT_RSA_PUBLIC_KEY_PATH="$key_dir/rsa_public.pem"
+          umask 077
+          # Provision one key pair before parallel test hosts initialize JWT.
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$JWT_RSA_PRIVATE_KEY_PATH"
+          openssl pkey -in "$JWT_RSA_PRIVATE_KEY_PATH" -pubout -out "$JWT_RSA_PUBLIC_KEY_PATH"
+          dotnet test rearend/iOSClub.WebAPI/iOSClub.WebAPI.sln --no-build --configuration Release --verbosity normal
 
   publish:
     name: Build and push image
