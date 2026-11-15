@@ -50,6 +50,7 @@ public interface IFinanceOcrService
 /// </summary>
 public class FinanceOcrService : IFinanceOcrService
 {
+    private const string InvoiceUnit = "个|批|项|套|张|份|箱|台|本|块|支|盒|包|件|米|千克|kg|把|只|条|双|组|卷|袋|瓶|罐|枚|片|粒|副|辆|艘|架|部|例";
     private static readonly Regex SpaceRegex = new(@"\s+", RegexOptions.Compiled);
     private static readonly Regex MoneyRegex = new(@"[-+]?\d[\d,]*\.?\d*", RegexOptions.Compiled);
 
@@ -75,6 +76,7 @@ public class FinanceOcrService : IFinanceOcrService
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(_options.RecognitionTimeoutSeconds, 5, 60)));
+        FinanceOcrResult? localFallback = null;
 
         try
         {
@@ -88,7 +90,13 @@ public class FinanceOcrService : IFinanceOcrService
             if (!string.IsNullOrWhiteSpace(text) && ContainsInvoiceSignal(text))
             {
                 var local = ParseText(text, _options);
-                if (local.Success) return local;
+                if (local.Success)
+                {
+                    if (extension != "pdf" || string.IsNullOrWhiteSpace(_options.OcrEndpoint) ||
+                        local.Item != null && local.Qty.HasValue && local.Price.HasValue)
+                        return local;
+                    localFallback = local;
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(_options.OcrEndpoint))
@@ -134,7 +142,7 @@ public class FinanceOcrService : IFinanceOcrService
                     bestFailure ??= whole;
                 }
 
-                return bestFailure ?? new FinanceOcrResult
+                return localFallback ?? bestFailure ?? new FinanceOcrResult
                 {
                     Success = false,
                     Error = "OCR 服务未返回可用结果，请手工录入"
@@ -152,12 +160,12 @@ public class FinanceOcrService : IFinanceOcrService
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return new FinanceOcrResult { Success = false, Error = "识别超时，请重试或手工录入" };
+            return localFallback ?? new FinanceOcrResult { Success = false, Error = "识别超时，请重试或手工录入" };
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "发票识别失败：{FileName}", fileName);
-            return new FinanceOcrResult { Success = false, Error = $"识别失败：{ex.Message}" };
+            return localFallback ?? new FinanceOcrResult { Success = false, Error = $"识别失败：{ex.Message}" };
         }
     }
 
@@ -481,17 +489,15 @@ public class FinanceOcrService : IFinanceOcrService
 
         var headerY = headers.Min(x => x.Line.Y0);
         var totalsY = lines
-            .Where(line => Norm(line.Text) is "合" or "计" or "合计" or "价税合计(大写)" or "价税合计")
+            .Where(line => line.Y0 > headerY &&
+                Norm(line.Text) is ("合" or "计" or "合计" or "价税合计(大写)" or "价税合计"))
             .Select(line => (double?)line.Y0)
             .Min();
         var lowerBound = totalsY ?? double.MaxValue;
 
         var itemParts = new List<(double Y, double X, string Text)>();
-        string? unit = null;
         decimal? qty = null;
         decimal? price = null;
-        decimal? amount = null;
-        decimal? tax = null;
 
         foreach (var line in lines.OrderBy(line => line.Y0).ThenBy(line => line.X0))
         {
@@ -538,29 +544,15 @@ public class FinanceOcrService : IFinanceOcrService
                         !itemParts.Any(part => part.Text == text))
                         itemParts.Add((line.Y0, line.X0, text));
                     break;
-                case "unit":
-                    if (Regex.IsMatch(text, @"^(个|批|项|套|张|份|箱|台|本|块|支|盒|包|件|米|千克|kg|把|只|条|双|组|卷|袋|瓶|罐|枚|片|粒|副|辆|艘|架|部)$"))
-                        unit ??= text;
-                    break;
                 case "qty":
-                    if (qty == null && decimal.TryParse(OnlyNumber(text), NumberStyles.Any,
+                    if (qty == null && decimal.TryParse(text, NumberStyles.AllowDecimalPoint,
                             CultureInfo.InvariantCulture, out var parsedQty))
                         qty = parsedQty;
                     break;
                 case "price":
-                    if (price == null && decimal.TryParse(OnlyNumber(text), NumberStyles.Any,
+                    if (price == null && decimal.TryParse(text, NumberStyles.AllowDecimalPoint,
                             CultureInfo.InvariantCulture, out var parsedPrice))
                         price = parsedPrice;
-                    break;
-                case "amount":
-                    if (amount == null && decimal.TryParse(OnlyNumber(text), NumberStyles.Any,
-                            CultureInfo.InvariantCulture, out var parsedAmount))
-                        amount = parsedAmount;
-                    break;
-                case "tax":
-                    if (tax == null && decimal.TryParse(OnlyNumber(text), NumberStyles.Any,
-                            CultureInfo.InvariantCulture, out var parsedTax))
-                        tax = parsedTax;
                     break;
             }
         }
@@ -581,70 +573,26 @@ public class FinanceOcrService : IFinanceOcrService
                                  !itemText.EndsWith(',') && !itemText.EndsWith('；');
             itemText += (needsSeparator ? "、" : "") + part;
         }
-        if (!string.IsNullOrWhiteSpace(itemText)) result.Item = itemText.Trim();
-
-        if (!string.IsNullOrWhiteSpace(unit)) result.Unit = unit;
-        if (qty is > 0) result.Qty = qty;
-        if (price is > 0) result.Price = price;
-        if (amount is > 0) result.AmountCents = FinanceMoney.FromYuan(amount.Value);
-        if (tax is >= 0) result.TaxCents = FinanceMoney.FromYuan(tax.Value);
-
-        if (result.Qty is not > 0 && result.Price is > 0 && result.AmountCents > 0)
+        if (result.Item == null && !string.IsNullOrWhiteSpace(itemText))
         {
-            var ratio = FinanceMoney.ToYuan(result.AmountCents) / result.Price.Value;
-            var rounded = Math.Round(ratio);
-            if (rounded >= 1 && Math.Abs(ratio - rounded) <= 0.05m) result.Qty = rounded;
+            result.Item = itemText.Trim();
+            result.Confidence["item"] = 0.55;
         }
-
-        // 发票抬头区域：购买方在左、销售方在右；用坐标兜底，避免把金额/税号当成销售方。
-        var partyLines = lines
-            .Where(line => line.Y1 < headerY - 2 && line.Y0 > 40)
-            .Select(line =>
-            {
-                var raw = Norm(line.Text);
-                var name = Regex.Match(raw, @"^名称\s*[:：]?\s*(.*)$");
-                return new { Line = line, Raw = raw, Text = name.Success ? name.Groups[1].Value : raw };
-            })
-            .Where(item =>
-            {
-                var text = item.Text;
-                return text.Length is >= 4 and <= 80 &&
-                       !Regex.IsMatch(text, @"^[0-9A-Z]{15,20}$") &&
-                       !Regex.IsMatch(text, @"^(统一社会信用|发票号码|开票日期|电子发票|购买方|销售方|购|买|方|信|息|销|售)") &&
-                       !text.Contains("税务局") && !text.Contains("税务") && !text.Contains("总局") &&
-                       !text.Contains("查验") && !text.Contains("打印") && !text.Contains("次数") &&
-                       !text.Contains("时间") &&
-                       !Regex.IsMatch(text, @"^\d{4}\s*年") && !text.Contains("年") &&
-                       !text.Contains("社会信用代码") && !text.Contains("纳税人识别号") &&
-                       !text.Contains("识别号") && !text.Contains("信用代码") &&
-                       !text.Contains("地址") && !text.Contains("电话") &&
-                       !text.Contains("银行") && !text.Contains("账号") &&
-                       !text.Contains("下载次数") && !text.Contains("开票日期");
-            })
-            .OrderBy(item => (item.Line.X0 + item.Line.X1) / 2)
-            .ToList();
-
-        if (partyLines.Count >= 2)
+        if (result.Qty == null && result.Price == null && result.AmountCents > 0 &&
+            qty is > 0 and <= 1_000_000 && price is > 0 and <= 1_000_000_000 &&
+            Math.Abs(qty.Value * price.Value - FinanceMoney.ToYuan(result.AmountCents)) <= 0.01m)
         {
-            var buyer = partyLines[0].Text;
-            if (buyer.Contains("建筑科技")) buyer = "西安建筑科技大学";
-            result.Buyer = buyer;
-            result.Seller = partyLines[^1].Text;
+            result.Qty = qty;
+            result.Price = price;
+            result.Confidence["qty"] = 0.75;
+            result.Confidence["price"] = 0.75;
         }
     }
 
-    private static string OnlyNumber(string text)
-    {
-        var match = Regex.Match(text.Replace(",", ""), @"[-+]?\d+(?:\.\d+)?");
-        return match.Success ? match.Value : "";
-    }
-
-    /// <summary>从文本中按标签抽取发票字段。纯函数，便于单测。</summary>
     public static FinanceOcrResult ParseText(string text, FinanceOptions options)
     {
-        var normalized = Regex.Replace(
-            text.Replace('：', ':').Replace('（', '(').Replace('）', ')'),
-            @"[ \t\u00A0]+", "");
+        var spaced = text.Replace('：', ':').Replace('（', '(').Replace('）', ')');
+        var normalized = Regex.Replace(spaced, @"[ \t\u00A0]+", "");
         var result = new FinanceOcrResult { Success = true, RawText = text };
 
         string? Capture(string pattern, int group = 1)
@@ -677,21 +625,8 @@ public class FinanceOcrService : IFinanceOcrService
         result.Code = Capture(@"(?:发票代码|代码)\s*[:：]?\s*(\d{10,12})");
         Set("code", result.Code, 0.95);
 
-        result.Number = Capture(@"(?:发票号码|号码)\s*[:：]?\s*(\d{8,20})");
-        if (string.IsNullOrWhiteSpace(result.Number))
-        {
-            // OCR 常把“发票号码”标签读错；取最长的 8-20 位数字作为发票号兜底
-            var candidate = Regex.Matches(normalized, @"(?<!\d)\d{8,20}(?!\d)")
-                .Cast<Match>()
-                .Select(m => m.Value)
-                .OrderByDescending(v => v.Length)
-                .FirstOrDefault();
-            if (!string.IsNullOrWhiteSpace(candidate))
-            {
-                result.Number = candidate;
-                Set("number", candidate, 0.55);
-            }
-        }
+        var number = Regex.Match(normalized, @"发票号码:?(?:\r?\n)?(\d{8,20})(?!\d)");
+        result.Number = number.Success ? number.Groups[1].Value : Capture(@"^号码\s*[:：]?\s*(\d{8,20})(?!\d)");
         Set("number", result.Number, 0.95);
 
         var dateText = Capture(@"(?:开票日期|日期)\s*[:：]?\s*(\d{4}\s*[年\-/.]\s*\d{1,2}\s*[月\-/.]\s*\d{1,2}\s*日?)");
@@ -740,6 +675,12 @@ public class FinanceOcrService : IFinanceOcrService
         {
             result.Seller = null;
         }
+        var printedSeller = Regex.Match(spaced, @"(?m)销[ \t]*名[ \t]*称:[ \t]*(?<name>[^\r\n]+)");
+        if (printedSeller.Success)
+            result.Seller = printedSeller.Groups["name"].Value.Trim();
+        else if (result.Seller is "(章)" or "章")
+            result.Seller = null;
+
         if (string.IsNullOrWhiteSpace(result.Seller))
         {
             // OCR 可能把“名称”读成别的字；用公司/厂/店后缀兜底，排除购买方学校和地址/银行行
@@ -774,9 +715,12 @@ public class FinanceOcrService : IFinanceOcrService
         {
             result.Seller = Regex.Replace(result.Seller, @"^.*?[:：]\s*", "").Trim();
         }
-        Set("seller", result.Seller, 0.8);
+        if (!result.Confidence.ContainsKey("seller"))
+            Set("seller", result.Seller, 0.8);
 
         result.Item = Capture(@"(?:项目名称|货物或应税劳务、服务名称|货物或应税劳务名称|货物名称|服务名称)\s*[:：]?\s*([^\r\n]{2,80})");
+        if (result.Item != null && Regex.IsMatch(result.Item, @"^(规格型号|单位数量|数量[/单]|单价金额)"))
+            result.Item = null;
         Set("item", result.Item, 0.75);
 
         var qty = Capture(@"(?:数量)\s*[:：]?\s*(\d+(?:\.\d+)?)");
@@ -786,7 +730,7 @@ public class FinanceOcrService : IFinanceOcrService
             Set("qty", qty, 0.75);
         }
 
-        var unit = Capture(@"(?:单位)\s*[:：]?\s*([^\s\r\n\d]{1,10})");
+        var unit = Capture($@"单位\s*[:：]?\s*({InvoiceUnit})\r?$");
         result.Unit = unit;
         Set("unit", unit, 0.7);
 
@@ -812,7 +756,10 @@ public class FinanceOcrService : IFinanceOcrService
             Set("tax", taxText, 0.8);
         }
 
-        var totalText = Capture(@"(?:价税合计|合计\(小写\)|小写)\s*(?:\(大写\)|\(小写\))?\s*[:：]?\s*(?:¥|￥)?\s*([-+]?\d[\d,]*\.?\d*)");
+        var printedTotal = Regex.Match(normalized,
+            @"(?:\(小写\)|小写\)?)(?:[:：])?(?:\r?\n)?[¥￥Y]?(?<total>[-+]?\d[\d,]*\.?\d*)");
+        var totalText = printedTotal.Success ? printedTotal.Groups["total"].Value :
+            Capture(@"价税合计\s*[:：]?\s*[¥￥]?\s*([-+]?\d[\d,]*\.?\d*)");
         if (!TryParseMoney(totalText, out var totalCents))
         {
             // 有些 PDF 把金额拆成"金额 + 税额"，只有金额时用两者相加兜底
@@ -848,8 +795,7 @@ public class FinanceOcrService : IFinanceOcrService
             .ToList();
 
         var itemIndex = lines.FindIndex(line => line.StartsWith('*'));
-        var unitIndex = lines.FindIndex(line =>
-            Regex.IsMatch(line, @"^(个|批|项|套|张|份|箱|台|本|块|支|盒|包|件|米|千克|kg|把|只|条|双|组|卷|袋|瓶|罐|枚|片|粒|副|辆|艘|架|部)$"));
+        var unitIndex = lines.FindIndex(line => Regex.IsMatch(line, $@"^(?:{InvoiceUnit})$"));
         if (itemIndex >= 0)
         {
             var firstItemLine = lines[itemIndex];
@@ -857,12 +803,12 @@ public class FinanceOcrService : IFinanceOcrService
             for (var j = itemIndex + 1; j < lines.Count; j++)
             {
                 var next = lines[j];
-                if (Regex.IsMatch(next, @"^(合计|价税合计|备注|开票人|销售方地址|销售方信息|购买方信息)"))
+                if (Regex.IsMatch(next, @"^(合计|价税合计|备注|开票人|销售方地址|销售方信息|购买方信息)|^[合计]$"))
                 {
                     break;
                 }
                 if (Regex.IsMatch(next, @"^(项目名称|规格型号|单位|数量|单价|金额|税率/征收率|税额)") ||
-                    Regex.IsMatch(next, @"^(个|批|项|套|张|份|箱|台|本|块|支|盒|包|件|米|千克|kg|把|只|条|双|组|卷|袋|瓶|罐|枚|片|粒|副|辆|艘|架|部)$") ||
+                    Regex.IsMatch(next, $@"^(?:{InvoiceUnit})$") ||
                     Regex.IsMatch(next, @"^\d") ||
                     next.Contains('%') ||
                     next.Contains("cm", StringComparison.OrdinalIgnoreCase) ||
@@ -899,46 +845,6 @@ public class FinanceOcrService : IFinanceOcrService
                 result.Unit = lines[unitIndex];
                 Set("unit", result.Unit, 0.55);
             }
-
-            if (result.Qty is not > 0 && result.Price is not > 0)
-            {
-                var numericLine = lines.Skip(itemIndex + 1)
-                    .FirstOrDefault(line => Regex.IsMatch(line, @"^\d{2}\d+\.\d{3,}$"));
-                if (numericLine != null)
-                {
-                    var parts = Regex.Match(numericLine, @"^(\d{2})(\d+\.\d{3,})$");
-                    if (parts.Success &&
-                        decimal.TryParse(parts.Groups[1].Value, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedQty) &&
-                        decimal.TryParse(parts.Groups[2].Value, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedPrice))
-                    {
-                        result.Qty = parsedQty;
-                        result.Price = parsedPrice;
-                        Set("qty", parsedQty.ToString("0.##"), 0.45);
-                        Set("price", parsedPrice.ToString("0.00"), 0.45);
-                    }
-                }
-            }
-
-            if (result.Qty is not > 0 || result.Price is not > 0)
-            {
-                var numeric = lines.Skip((unitIndex >= 0 ? unitIndex : itemIndex) + 1)
-                    .Where(line => Regex.IsMatch(line, @"^\d+(?:\.\d+)?$"))
-                    .Take(4)
-                    .ToList();
-                if (result.Qty is not > 0 && numeric.Count >= 1 &&
-                    Regex.IsMatch(numeric[0], @"^\d+$") &&
-                    decimal.TryParse(numeric[0], NumberStyles.Any, CultureInfo.InvariantCulture, out var separateQty))
-                {
-                    result.Qty = separateQty;
-                    Set("qty", separateQty.ToString("0.##"), 0.45);
-                }
-                if (result.Price is not > 0 && numeric.Count >= 2 &&
-                    decimal.TryParse(numeric[1], NumberStyles.Any, CultureInfo.InvariantCulture, out var separatePrice))
-                {
-                    result.Price = separatePrice;
-                    Set("price", separatePrice.ToString("0.00"), 0.45);
-                }
-            }
         }
 
         // 没有 *分类*项目名 的发票：从“单位”往上找第一行有效项目名。
@@ -963,41 +869,6 @@ public class FinanceOcrService : IFinanceOcrService
                     Set("item", candidate, 0.45);
                     break;
                 }
-            }
-        }
-
-        // 没有 *项目名 时，数量/单价也按“单位”后面的数字行兜底。
-        if ((result.Qty is not > 0 || result.Price is not > 0) && unitIndex >= 0)
-        {
-            var numeric = lines.Skip(unitIndex + 1)
-                .Where(line => Regex.IsMatch(line, @"^\d+(?:\.\d+)?$"))
-                .Take(4)
-                .ToList();
-            if (result.Qty is not > 0 && numeric.Count >= 1 &&
-                Regex.IsMatch(numeric[0], @"^\d+$") &&
-                decimal.TryParse(numeric[0], NumberStyles.Any, CultureInfo.InvariantCulture, out var genericQty))
-            {
-                result.Qty = genericQty;
-                Set("qty", genericQty.ToString("0.##"), 0.4);
-            }
-            if (result.Price is not > 0 && numeric.Count >= 2 &&
-                decimal.TryParse(numeric[1], NumberStyles.Any, CultureInfo.InvariantCulture, out var genericPrice))
-            {
-                result.Price = genericPrice;
-                Set("price", genericPrice.ToString("0.00"), 0.4);
-            }
-        }
-
-        // 有些发票不印数量，只印单价和金额；金额 / 单价为整数时反推数量。
-        if (result.Qty is not > 0 && result.Price is > 0 && result.AmountCents > 0)
-        {
-            var amountYuan = FinanceMoney.ToYuan(result.AmountCents);
-            var ratio = amountYuan / result.Price.Value;
-            var rounded = Math.Round(ratio);
-            if (rounded >= 1 && Math.Abs(ratio - rounded) <= 0.05m)
-            {
-                result.Qty = rounded;
-                Set("qty", rounded.ToString("0.##"), 0.35);
             }
         }
 
@@ -1033,47 +904,131 @@ public class FinanceOcrService : IFinanceOcrService
                 .Where(value => value > 0 && (totalYuan <= 0 || value < totalYuan))
                 .Take(2)
                 .ToList();
-            if (result.AmountCents <= 0 && moneyValues.Count >= 1)
+            if (moneyValues.Count == 2 && totalCents > 0 &&
+                moneyValues[0] + moneyValues[1] == totalYuan)
             {
-                result.AmountCents = FinanceMoney.FromYuan(moneyValues[0]);
-                Set("amount", moneyValues[0].ToString("0.00"), 0.55);
-            }
-            if (result.TaxCents <= 0 && moneyValues.Count >= 2)
-            {
-                result.TaxCents = FinanceMoney.FromYuan(moneyValues[1]);
-                Set("tax", moneyValues[1].ToString("0.00"), 0.55);
-            }
-        }
-
-        if (result.Qty is not > 0 && result.Price is > 0 && result.AmountCents > 0)
-        {
-            var amountYuan = FinanceMoney.ToYuan(result.AmountCents);
-            var ratio = amountYuan / result.Price.Value;
-            var rounded = Math.Round(ratio);
-            if (rounded >= 1 && Math.Abs(ratio - rounded) <= 0.05m)
-            {
-                result.Qty = rounded;
-                Set("qty", rounded.ToString("0.##"), 0.35);
+                if (result.AmountCents <= 0)
+                {
+                    result.AmountCents = FinanceMoney.FromYuan(moneyValues[0]);
+                    Set("amount", moneyValues[0].ToString("0.00"), 0.55);
+                }
+                if (result.TaxCents <= 0)
+                {
+                    result.TaxCents = FinanceMoney.FromYuan(moneyValues[1]);
+                    Set("tax", moneyValues[1].ToString("0.00"), 0.55);
+                }
             }
         }
 
         result.TotalCents = totalCents;
+        ParseInvoiceDetail(spaced, result);
+        if (result.TotalCents > 0 && (result.AmountCents != 0 || result.TaxCents != 0) &&
+            (decimal)result.AmountCents + result.TaxCents != result.TotalCents)
+        {
+            result.Confidence["amount"] = 0.4;
+            result.Confidence["tax"] = 0.4;
+            result.Confidence["total"] = 0.5;
+        }
 
-        var hasKeyField = !string.IsNullOrWhiteSpace(result.Number) || result.TotalCents > 0 ||
-                          !string.IsNullOrWhiteSpace(result.Seller);
+        var hasInvoiceSignal = result.Type != null || normalized.Contains("发票号码") || normalized.Contains("价税合计");
+        var hasKeyField = hasInvoiceSignal && (result.Number != null || totalText != null && result.TotalCents > 0);
         if (!hasKeyField)
         {
             result.Success = false;
-            result.Error = "未识别到发票号码、销售方或价税合计，请手工录入";
+            result.Error = "未识别到带发票号码或价税合计的发票，请核对原件或手工录入";
         }
 
         if (!string.IsNullOrWhiteSpace(options.ClubName) && !string.IsNullOrWhiteSpace(result.Buyer) &&
-            !SpaceRegex.Replace(result.Buyer, "").Contains(SpaceRegex.Replace(options.ClubName, "")))
+            !FinanceOptions.IsClubBuyer(result.Buyer, options.ClubName))
         {
             result.Confidence["buyer"] = 0.4;
         }
 
         return result;
+    }
+
+    private static void ParseInvoiceDetail(string text, FinanceOcrResult result)
+    {
+        const string number = @"[0-9]{1,10}(?:\.[0-9]{1,16})?";
+        const string money = @"[¥￥]?[0-9]{1,10}\.[0-9]{2}";
+        var header = Regex.Match(text,
+            @"(?m)^.*(?:项[ \t]*目[ \t]*名[ \t]*称|货物或应税劳务[^\r\n]*名称).*数[ \t]*量.*单[ \t]*价[^\r\n]*");
+        var itemStart = Regex.Match(text, @"(?m)^[ \t]*\*[^\r\n]+");
+        if (!header.Success && !itemStart.Success) return;
+        var start = header.Success ? header.Index + header.Length : itemStart.Index;
+        var detail = text[start..];
+        var end = Regex.Match(detail, @"(?m)^[ \t]*(?:合[ \t]*计|合[ \t]*\r?$|价[ \t]*税[ \t]*合[ \t]*计|备注|开票人)");
+        if (end.Success) detail = detail[..end.Index];
+
+        // 横排文本层保留列间空白，按票面的表头顺序读取金额和税额。
+        var taxFirst = header.Success && Regex.IsMatch(header.Value, @"税[ \t]*额.*金[ \t]*额");
+        var columns = taxFirst
+            ? $@"(?<rate>{number})%?[ \t]+(?<tax>{money})[ \t]+(?<amount>{money})"
+            : $@"(?<amount>{money})[ \t]+(?<rate>{number})%[ \t]+(?<tax>{money})";
+        var rows = Regex.Matches(detail,
+            $@"(?m)^[ \t]*(?<item>[^\r\n]+?)[ \t]+(?<qty>{number})[ \t]+(?<price>{number})[ \t]+{columns}[ \t]*\r?$");
+        if (header.Success && rows.Count > 0)
+        {
+            var items = new List<string>(rows.Count);
+            foreach (Match row in rows)
+            {
+                var prefix = row.Groups["item"].Value;
+                var unitMatch = Regex.Match(prefix, $@"[ \t]+(?<unit>{InvoiceUnit})$");
+                if (rows.Count == 1)
+                {
+                    result.Unit = unitMatch.Success ? unitMatch.Groups["unit"].Value : null;
+                    if (unitMatch.Success) result.Confidence["unit"] = 0.9;
+                    else result.Confidence.Remove("unit");
+                }
+                var item = Regex.Split(prefix[..(unitMatch.Success ? unitMatch.Index : prefix.Length)],
+                    @"[ \t]{2,}|[ \t]+(?=\d{8,}(?:[ \t]|$))", RegexOptions.None)[0];
+                var following = detail[(row.Index + row.Length)..];
+                var continuation = Regex.Match(following, @"^\r?\n(?<text>[\u4e00-\u9fff][^\r\n]*)");
+                if (continuation.Success)
+                    item += Regex.Split(continuation.Groups["text"].Value, @"[ \t]{2,}")[0].Trim();
+                items.Add(item.Trim());
+            }
+
+            result.Item = string.Join("、", items.Distinct());
+            result.Confidence["item"] = 0.9;
+            if (rows.Count == 1)
+                ApplyDetailValues(rows[0], result, taxFirst);
+            return;
+        }
+
+        // 图片 OCR 可能将数量、单价拆成两行，或者用空格放在同一个文字框里。
+        // 只采纳与票面不含税金额相符的组合，禁止按固定字符位数拆数字。
+        var candidates = Regex.Matches(detail,
+            $@"(?m)^[ \t]*(?<qty>{number})[ \t\r\n]+(?<price>{number})[ \t\r\n]+(?<amount>{money})[ \t\r\n]+(?<rate>{number})%[ \t\r\n]+(?<tax>{number})[ \t]*\r?$");
+        if (candidates.Count == 1)
+            ApplyDetailValues(candidates[0], result);
+    }
+
+    private static void ApplyDetailValues(Match row, FinanceOcrResult result, bool taxFirst = false)
+    {
+        var qty = decimal.Parse(row.Groups["qty"].Value, CultureInfo.InvariantCulture);
+        var price = decimal.Parse(row.Groups["price"].Value, CultureInfo.InvariantCulture);
+        if (!TryParseMoney(row.Groups["amount"].Value, out var amount) ||
+            !TryParseMoney(row.Groups["tax"].Value, out var tax)) return;
+
+        var product = qty * price;
+        var matchesNet = Math.Abs(product - FinanceMoney.ToYuan(amount)) <= 0.01m;
+        var matchesGross = taxFirst && (decimal)amount + tax == result.TotalCents &&
+                           Math.Abs(product - FinanceMoney.ToYuan(result.TotalCents)) <= 0.01m;
+        if (qty > 0 && price > 0 && (matchesNet || matchesGross))
+        {
+            result.Qty = qty;
+            result.Price = price;
+            result.Confidence["qty"] = 0.9;
+            result.Confidence["price"] = 0.9;
+        }
+        if (result.TotalCents > 0 && (decimal)amount + tax == result.TotalCents)
+        {
+            result.AmountCents = amount;
+            result.TaxCents = tax;
+            result.Confidence["amount"] = 0.9;
+            result.Confidence["tax"] = 0.9;
+        }
     }
 
     private static bool TryParseMoney(string? text, out long cents)

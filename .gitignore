@@ -24,3 +24,6 @@ frontend/.env.e2e.local
 .local-e2e/
 .local-dev/
 .local-tools/
+
+/报销
+/.vs

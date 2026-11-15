@@ -58,7 +58,8 @@ jobs:
           fi
           curl -fsS --max-time 60 http://127.0.0.1:5099/ocr \
             -F file=@rearend/iOSClub.WebAPI/iOSClub.FinanceOcr/test-data/synthetic-invoice.png |
-            jq -e '.rawText | contains("发票") and contains("12345678") and contains("318.00")'
+            jq -e '(.rawText | contains("发票") and contains("12345678") and contains("318.00")) and
+              (.lines | any(.x1 > .x0 and .y1 > .y0 and (.text | contains("12345678"))))'
       - name: Log in to GHCR
         if: github.ref == 'refs/heads/master'
         uses: docker/login-action@v3

@@ -70,6 +70,85 @@ public class FinanceFundRulesTests
 public class FinanceOcrParsingTests
 {
     [Fact]
+    public void ParseText_PdfTablePreservesColumnsAndWrappedItem()
+    {
+        const string text = """
+            电子发票（普通发票）                       发票号码：12345678
+            购 名称：西安建筑科技大学                  销 名称：某某图文快印部
+                项目名称     规格型号     单 位    数 量       单 价      金 额     税率/征收率     税 额
+            *印刷品*桌上立牌                         个       2 10.005        20.01        1%          0.20
+            定制
+                    合 计                                          ¥20.01                        ¥0.20
+                价税合计（大写）                              （小写）¥20.21
+            备注  1234567890123456789
+            """;
+
+        var result = FinanceOcrService.ParseText(text, new FinanceOptions());
+
+        Assert.True(result.Success);
+        Assert.Equal("*印刷品*桌上立牌定制", result.Item);
+        Assert.Equal("某某图文快印部", result.Seller);
+        Assert.Equal(2m, result.Qty);
+        Assert.Equal(10.005m, result.Price);
+        Assert.Equal(2001, result.AmountCents);
+        Assert.Equal(20, result.TaxCents);
+        Assert.Equal(0.8, result.Confidence["buyer"]);
+    }
+
+    [Fact]
+    public void ParseText_PdfTableAllowsTaxInclusivePriceWhenTaxPrecedesAmount()
+    {
+        var result = FinanceOcrService.ParseText("""
+            发票号码：12345678
+            货物或应税劳务、服务名称      数量 / 单价     税率 / 税额     金额
+            *工艺品*钥匙扣                100 2.00       0.01  1.98     198.02
+            价税合计（大写）                           （小写）200.00
+            """, new FinanceOptions());
+
+        Assert.True(result.Success);
+        Assert.Equal(100m, result.Qty);
+        Assert.Equal(2m, result.Price);
+        Assert.Equal(19802, result.AmountCents);
+        Assert.Equal(198, result.TaxCents);
+        Assert.Equal(20000, result.TotalCents);
+    }
+
+    [Theory]
+    [InlineData("1 84.3564356435644", true)]
+    [InlineData("184.3564356435644", false)]
+    public void ParseText_ImageNumbersRequireASeparatedQuantityAndPrice(string quantityAndPrice, bool separated)
+    {
+        var result = FinanceOcrService.ParseText($"""
+            电子发票（普通发票）
+            发票号码：12345678
+            *塑料制品*标牌
+            块
+            {quantityAndPrice}
+            84.36
+            1%
+            0.84
+            合
+            计
+            （小写）¥85.20
+            """, new FinanceOptions());
+
+        Assert.True(result.Success);
+        Assert.Equal(separated ? 1m : null, result.Qty);
+        Assert.Equal(separated ? 84.3564356435644m : null, result.Price);
+        Assert.Equal("*塑料制品*标牌", result.Item);
+    }
+
+    [Fact]
+    public void ParseText_PaymentReceiptIsNotAnInvoice()
+    {
+        const string text = "支付成功\n收款方：示例有限公司\n支付金额：¥18.00";
+
+        var result = FinanceOcrService.ParseText(text, new FinanceOptions());
+
+        Assert.False(result.Success);
+    }
+
+    [Fact]
     public void ParseText_ExtractsLabeledInvoiceFields()
     {
         const string text = """

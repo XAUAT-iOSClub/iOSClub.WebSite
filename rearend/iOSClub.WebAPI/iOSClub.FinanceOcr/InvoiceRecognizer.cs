@@ -8,7 +8,7 @@ internal sealed class InvoiceRecognizer(PaddleOcrAll engine)
     private const int MaxPdfPages = 20;
     private const int MaxImagePixels = 24_000_000;
 
-    public async Task<string> RecognizeAsync(Stream input, bool isPdf, CancellationToken cancellationToken)
+    public async Task<OcrResponse> RecognizeAsync(Stream input, bool isPdf, CancellationToken cancellationToken)
     {
         if (!isPdf)
         {
@@ -29,7 +29,7 @@ internal sealed class InvoiceRecognizer(PaddleOcrAll engine)
                 "-layout", source, textPath);
             var text = await File.ReadAllTextAsync(textPath, cancellationToken);
             if (text.Length >= 60 && (text.Contains("发票") || text.Contains("号码")))
-                return text;
+                return new OcrResponse(text);
 
             var pagePrefix = Path.Combine(directory.FullName, "page");
             await RunPdfToolAsync("pdftoppm", cancellationToken, "-scale-to", "2400",
@@ -38,14 +38,17 @@ internal sealed class InvoiceRecognizer(PaddleOcrAll engine)
             if (pages.Length == 0 || pages.Length > MaxPdfPages)
                 throw new InvalidDataException($"Scanned PDF must contain 1–{MaxPdfPages} pages.");
 
-            var lines = new List<string>(pages.Length);
+            var textPages = new List<string>(pages.Length);
+            OcrLine[]? firstPageLines = null;
             foreach (var page in pages)
             {
                 var bytes = await File.ReadAllBytesAsync(page.FullName, cancellationToken);
-                lines.Add(RecognizeImage(bytes, cancellationToken));
+                var recognized = RecognizeImage(bytes, cancellationToken);
+                textPages.Add(recognized.RawText);
+                firstPageLines ??= recognized.Lines;
             }
 
-            return string.Join('\n', lines);
+            return new OcrResponse(string.Join('\n', textPages), firstPageLines);
         }
         finally
         {
@@ -53,7 +56,7 @@ internal sealed class InvoiceRecognizer(PaddleOcrAll engine)
         }
     }
 
-    private string RecognizeImage(ReadOnlySpan<byte> data, CancellationToken cancellationToken)
+    private OcrResponse RecognizeImage(ReadOnlySpan<byte> data, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (!ImageCodecs.TryReadInfo(data, out var info))
@@ -63,7 +66,17 @@ internal sealed class InvoiceRecognizer(PaddleOcrAll engine)
 
         var options = new DecodeOptions { ApplyOrientation = true };
         using var image = ImageCodecs.Decode(data, PixelFormat.Bgr24, options, cancellationToken);
-        return engine.Run(image.Pixels, image.Width, image.Height, image.Stride).Text;
+        var recognized = engine.Run(image.Pixels, image.Width, image.Height, image.Stride);
+        var lines = recognized.Lines.Select(line =>
+        {
+            var b = line.Box;
+            return new OcrLine(line.Text,
+                Math.Min(Math.Min(b.X1, b.X2), Math.Min(b.X3, b.X4)),
+                Math.Min(Math.Min(b.Y1, b.Y2), Math.Min(b.Y3, b.Y4)),
+                Math.Max(Math.Max(b.X1, b.X2), Math.Max(b.X3, b.X4)),
+                Math.Max(Math.Max(b.Y1, b.Y2), Math.Max(b.Y3, b.Y4)));
+        }).ToArray();
+        return new OcrResponse(recognized.Text, lines);
     }
 
     private static async Task RunPdfToolAsync(string executable, CancellationToken cancellationToken,

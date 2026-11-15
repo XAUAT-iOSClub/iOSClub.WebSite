@@ -12,6 +12,15 @@ public class FinanceOptions
     /// <summary>购买方抬头，用于抬头一致性提示与表单默认值。</summary>
     public string ClubName { get; set; } = "西安建筑科技大学 iOS Club";
 
+    internal static bool IsClubBuyer(string buyer, string clubName)
+    {
+        var normalized = string.Concat(buyer.Where(c => !char.IsWhiteSpace(c)));
+        var club = string.Concat(clubName.Where(c => !char.IsWhiteSpace(c)));
+        return (club.Length > 0 && normalized.Equals(club, StringComparison.OrdinalIgnoreCase)) ||
+               normalized is "西安建筑科技大学" or "西建大" ||
+               normalized.Equals("iosclub", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>低于该置信度的字段前端标黄，要求人工确认。</summary>
     public double LowConfidenceThreshold { get; set; } = 0.8;
 

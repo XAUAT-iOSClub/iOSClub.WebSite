@@ -601,16 +601,7 @@ public class FinanceService(
         return null;
     }
 
-    private bool IsClubBuyer(string buyer)
-    {
-        var normalized = Normalize(buyer);
-        var club = Normalize(_options.ClubName);
-        return normalized.Contains(club) || normalized.Contains("西安建筑科技大学") ||
-               normalized.Contains("西建大") || normalized.Contains("iosclub");
-    }
-
-    private static string Normalize(string value) =>
-        new string(value.Where(c => !char.IsWhiteSpace(c)).ToArray()).ToLowerInvariant();
+    private bool IsClubBuyer(string buyer) => FinanceOptions.IsClubBuyer(buyer, _options.ClubName);
 
     private static string? TrimOrNull(string? value, int maxLength)
     {

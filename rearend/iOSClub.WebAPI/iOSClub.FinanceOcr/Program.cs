@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http.Features;
 using Sdcb.SimdPaddleOCR;
-using Sdcb.SimdPaddleOCR.Models.ChineseV6Tiny;
+using Sdcb.SimdPaddleOCR.Models.ChineseV6Medium;
 
 const int maxFileBytes = 10 * 1024 * 1024;
 const int maxRequestBytes = maxFileBytes + 64 * 1024;
@@ -14,7 +14,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.TypeInfoResolverChain.Insert(0, OcrJsonContext.Default));
 
 await using var app = builder.Build();
-using var engine = await PaddleOcrAll.LoadAsync(ChineseV6TinyModels.Default);
+using var engine = await PaddleOcrAll.LoadAsync(ChineseV6MediumModels.Default);
 using var inferenceSlot = new SemaphoreSlim(1);
 var recognizer = new InvoiceRecognizer(engine);
 
@@ -33,8 +33,8 @@ app.MapPost("/ocr", async (IFormFile file, CancellationToken cancellationToken) 
         await using var input = file.OpenReadStream();
         var isPdf = file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)
             || file.ContentType.Contains("pdf", StringComparison.OrdinalIgnoreCase);
-        var text = await recognizer.RecognizeAsync(input, isPdf, cancellationToken);
-        return Results.Ok(new OcrResponse(text));
+        var result = await recognizer.RecognizeAsync(input, isPdf, cancellationToken);
+        return Results.Ok(result);
     }
     catch (Exception ex) when (ex is InvalidDataException or NotSupportedException)
     {
@@ -49,7 +49,8 @@ app.MapPost("/ocr", async (IFormFile file, CancellationToken cancellationToken) 
 await app.RunAsync();
 
 internal sealed record HealthResponse(bool Ok, string Engine, string Language, string Version);
-internal sealed record OcrResponse(string RawText);
+internal sealed record OcrResponse(string RawText, OcrLine[]? Lines = null);
+internal sealed record OcrLine(string Text, double X0, double Y0, double X1, double Y1);
 internal sealed record ErrorResponse(string Detail);
 
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
