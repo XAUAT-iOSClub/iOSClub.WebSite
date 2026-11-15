@@ -1,0 +1,17 @@
+services:
+  finance-ocr:
+    build: .
+    image: ${OCR_IMAGE:-finance-paddleocr:latest}
+    container_name: finance-ocr
+    ports:
+      - "5099:5099"
+    environment:
+      PADDLE_PDX_CACHE_HOME: /opt/paddle-models
+      PADDLE_PDX_MODEL_SOURCE: BOS
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5099/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 5
+    restart: unless-stopped

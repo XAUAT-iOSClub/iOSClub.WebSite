@@ -63,7 +63,7 @@
             :to="item.path"
             class="nav-item flex items-center py-2.5 transition-all duration-200 group select-none"
             :class="[
-              $route.path === item.path
+              isMenuActive(item)
                 ? 'bg-[#007AFF] text-white shadow-md shadow-blue-500/20'
                 : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5',
               layoutStore.isSidebarCollapsed ? 'justify-center rounded-2xl px-0 mx-1' : 'px-3.5 rounded-xl'
@@ -75,7 +75,7 @@
               class="shrink-0 transition-transform duration-300"
               :class="[
                layoutStore.isSidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5 mr-3',
-               $route.path === item.path ? 'text-white' : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-200'
+               isMenuActive(item) ? 'text-white' : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-200'
             ]"
           />
 
@@ -83,7 +83,7 @@
               v-if="!layoutStore.isSidebarCollapsed"
               class="text-[15px] font-medium whitespace-nowrap"
               :style="{
-                color: $route.path === item.path ? '#ffffff' : 'var(--text-color)'
+                color: isMenuActive(item) ? '#ffffff' : 'var(--text-color)'
               }"
           >
             {{ item.name }}
@@ -114,14 +114,21 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthorizationStore } from '../stores/Authorization'
 import { useLayoutStore } from '../stores/LayoutStore'
 import Icon from '@/components/Icon.vue'
 
+const route = useRoute()
 const router = useRouter()
 const authorizationStore = useAuthorizationStore()
 const layoutStore = useLayoutStore()
+
+// 财务管理是一个模块入口，进入发票库/报销材料等子页面时仍保持高亮。
+const isMenuActive = (item: { path: string }) =>
+    item.path === '/Centre/Finance'
+        ? route.path === item.path || route.path.startsWith(item.path + '/')
+        : route.path === item.path
 
 const handleResize = () => {
   layoutStore.handleResize()
@@ -152,6 +159,8 @@ const menuItems = [
   // Article API allows Department+ (PRD 6.7 matrix).
   {name: '公告文章', path: '/Centre/Article', icon: 'newspaper', requiresRole: 'Department'},
   {name: '活动记录', path: '/Centre/Activity', icon: 'calendar', requiresRole: 'Minister'},
+  // 财务模块：Founder / President / Minister 同权，Department / Member 无入口。
+  {name: '财务管理', path: '/Centre/Finance', icon: 'wallet', requiresRole: 'Minister'},
   {name: '成员管理', path: '/Centre/MemberData', icon: 'users', requiresRole: 'Minister'},
   {name: '权限管理', path: '/Centre/FounderPermission', icon: 'shield-check', requiresRole: 'Founder'},
   {name: '数据分析', path: '/Centre/Admin', icon: 'settings', requiresRole: 'Minister'},
