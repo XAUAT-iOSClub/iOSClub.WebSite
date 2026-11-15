@@ -113,7 +113,7 @@ export class FinanceService {
     return apiRequest<FinanceInvoiceSaveResult>({
       url: `${url}/Finance/invoices/${id}`,
       method: 'PUT',
-      body: dto as unknown as Record<string, unknown>
+      body: { ...dto }
     })
   }
 
@@ -135,6 +135,24 @@ export class FinanceService {
     })
     if (!res.ok) throw new Error('发票原件读取失败')
     return URL.createObjectURL(await res.blob())
+  }
+
+  static uploadInvoiceVerification(id: string, file: File): Promise<FinanceInvoice> {
+    const body = new FormData()
+    body.append('file', file)
+    return apiRequest<FinanceInvoice>({ url: `${url}/Finance/invoices/${id}/verification-file`, method: 'POST', body })
+  }
+
+  static async invoiceVerificationObjectUrl(id: string): Promise<string> {
+    const res = await fetch(`${url}/Finance/invoices/${id}/verification-file`, {
+      headers: { Authorization: `Bearer ${token()}` }
+    })
+    if (!res.ok) throw new Error('查验单读取失败')
+    return URL.createObjectURL(await res.blob())
+  }
+
+  static downloadInvoiceVerification(id: string): Promise<void> {
+    return download(`/Finance/invoices/${id}/verification-file`, '发票-查验.pdf')
   }
 
   // ===== 材料 =====

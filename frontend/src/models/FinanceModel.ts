@@ -39,6 +39,8 @@ export interface FinanceInvoice {
   contentType?: string | null;
   recognitionError?: string | null;
   recognizedAt?: string | null;
+  hasVerificationFile: boolean;
+  verificationUploadedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -158,6 +160,7 @@ export interface FinanceMeta {
   activityTypes: string[];
   lowConfidenceThreshold: number;
   ocrConfigured: boolean;
+  verificationRequired: boolean;
   pdfConfigured: boolean;
   maxFileSizeMb: number;
   maxFilesPerUpload: number;

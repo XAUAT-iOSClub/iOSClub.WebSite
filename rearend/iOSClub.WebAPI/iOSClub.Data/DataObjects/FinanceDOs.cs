@@ -167,6 +167,12 @@ public class FinanceInvoiceDO
     [MaxLength(500), Column("recognition_error")]
     public string? RecognitionError { get; set; }
 
+    [Column("verification_uploaded_at")]
+    public DateTime? VerificationUploadedAt { get; set; }
+
+    [MaxLength(512), Column("verification_file_path")]
+    public string? VerificationFilePath { get; set; }
+
     [Column("recognized_at")]
     public DateTime? RecognizedAt { get; set; }
 

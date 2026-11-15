@@ -614,7 +614,7 @@ public class FinanceRepository(IDbContextFactory<ClubContext> factory) : IFinanc
     {
         await using var ctx = await factory.CreateDbContextAsync(ct);
         var entity = await ctx.FinanceInvoices.FirstOrDefaultAsync(i => i.Id == invoice.Id, ct);
-        if (entity == null) return false;
+        if (entity == null || entity.IsDeleted || entity.UpdatedAt != invoice.UpdatedAt) return false;
 
         entity.Type = invoice.Type;
         entity.Code = invoice.Code;
@@ -633,8 +633,17 @@ public class FinanceRepository(IDbContextFactory<ClubContext> factory) : IFinanc
         entity.Status = invoice.Status;
         entity.RecognitionError = invoice.RecognitionError;
         entity.RecognizedAt = invoice.RecognizedAt;
+        entity.VerificationUploadedAt = invoice.VerificationUploadedAt;
+        entity.VerificationFilePath = invoice.VerificationFilePath;
         entity.UpdatedAt = DateTime.UtcNow;
-        return await ctx.SaveChangesAsync(ct) > 0;
+        try
+        {
+            return await ctx.SaveChangesAsync(ct) > 0;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return false;
+        }
     }
 
     public async Task<bool> SoftDeleteInvoiceAsync(string id, DateTime now, CancellationToken ct = default)
@@ -1024,7 +1033,7 @@ public class FinanceRepository(IDbContextFactory<ClubContext> factory) : IFinanc
             Type = invoice.Type,
             Code = invoice.Code,
             Number = invoice.Number,
-            IssueDate = invoice.IssueDate,
+            IssueDate = invoice.IssueDate is { } issueDate ? DateTime.SpecifyKind(issueDate, DateTimeKind.Utc) : null,
             Buyer = invoice.Buyer,
             Seller = invoice.Seller,
             Item = invoice.Item,
@@ -1043,6 +1052,9 @@ public class FinanceRepository(IDbContextFactory<ClubContext> factory) : IFinanc
             ContentType = invoice.ContentType,
             RecognitionError = invoice.RecognitionError,
             RecognizedAt = invoice.RecognizedAt,
+            HasVerificationFile = !string.IsNullOrWhiteSpace(invoice.VerificationFilePath),
+            VerificationUploadedAt = invoice.VerificationUploadedAt is { } uploadedAt
+                ? DateTime.SpecifyKind(uploadedAt, DateTimeKind.Utc) : null,
             CreatedAt = invoice.CreatedAt,
             UpdatedAt = invoice.UpdatedAt
         };

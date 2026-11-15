@@ -47,6 +47,8 @@ public class FinanceInvoiceVO
     public string? ContentType { get; set; }
     public string? RecognitionError { get; set; }
     public DateTime? RecognizedAt { get; set; }
+    public bool HasVerificationFile { get; set; }
+    public DateTime? VerificationUploadedAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
@@ -195,6 +197,7 @@ public class FinanceInvoiceSaveResultVO
 /// <summary>前端启动时需要的财务模块元信息。</summary>
 public class FinanceMetaVO
 {
+    public bool VerificationRequired { get; set; }
     public string ClubName { get; set; } = "";
     public string CurrentAcademicYear { get; set; } = "";
     public List<string> Years { get; set; } = [];

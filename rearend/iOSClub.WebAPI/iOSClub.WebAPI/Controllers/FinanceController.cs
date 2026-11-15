@@ -109,9 +109,10 @@ public class FinanceController(
         }
         catch
         {
+            using var cleanupTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             foreach (var path in savedPaths)
             {
-                try { storage.Delete(path); }
+                try { await storage.DeleteAsync(path, cleanupTimeout.Token); }
                 catch (Exception) { /* 清理失败不掩盖原始异常 */ }
             }
 
@@ -234,11 +235,44 @@ public class FinanceController(
     public async Task<IActionResult> GetInvoiceFile(string id, CancellationToken ct)
     {
         var invoice = await repository.GetInvoiceDOAsync(id, ct);
-        if (invoice == null || string.IsNullOrWhiteSpace(invoice.FilePath) || !storage.Exists(invoice.FilePath))
+        var stream = await storage.TryOpenInvoiceAsync(invoice?.FilePath, ct);
+        if (stream == null)
             return Ok(ApiResponse.Fail(ErrorCode.FileNotFound, "发票原件不存在"));
 
-        var stream = storage.OpenRead(invoice.FilePath);
-        return File(stream, invoice.ContentType ?? "application/octet-stream");
+        return File(stream, invoice?.ContentType ?? "application/octet-stream");
+    }
+
+    [HttpPost("invoices/{id}/verification-file")]
+    [RequestSizeLimit(UploadRequestBytes)]
+    public async Task<ActionResult<ApiResponse<FinanceInvoiceVO>>> UploadVerificationFile(string id,
+        [FromForm] IFormFile? file, CancellationToken ct)
+    {
+        if (file == null || file.Length == 0)
+            return Ok(ApiResponse<FinanceInvoiceVO>.Fail(ErrorCode.ParameterEmpty, "请选择查验结果 PDF"));
+
+        var limit = Math.Min(HardMaxUploadBytes, (long)Options.MaxFileSizeMb * 1024 * 1024);
+        if (file.Length > limit || !Path.GetExtension(file.FileName).Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+            return Ok(ApiResponse<FinanceInvoiceVO>.Fail(ErrorCode.ParameterValidationFailed,
+                $"请上传不超过 {limit / (1024 * 1024)} MB 的 PDF"));
+
+        await using var stream = file.OpenReadStream();
+        var result = await service.AttachVerificationFileAsync(id, stream, ct);
+        if (result == null)
+            return Ok(ApiResponse<FinanceInvoiceVO>.Fail(ErrorCode.ResourceNotFound, "发票不存在"));
+        await audit.WriteAsync(FinanceActions.AttachInvoiceVerification, FinanceTargetType.Invoice, id,
+            null, result, "success", null, await ActorAsync(ct), ct);
+        return Ok(ApiResponse<FinanceInvoiceVO>.Success(result, "查验结果已归档"));
+    }
+
+    [HttpGet("invoices/{id}/verification-file")]
+    public async Task<IActionResult> GetVerificationFile(string id, CancellationToken ct)
+    {
+        var invoice = await repository.GetInvoiceDOAsync(id, ct);
+        var stream = await storage.TryOpenInvoiceAsync(invoice?.VerificationFilePath, ct);
+        if (stream == null) return NotFound();
+        Response.Headers["Cache-Control"] = "private, no-store";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        return File(stream, "application/pdf", enableRangeProcessing: stream.CanSeek);
     }
 
     [HttpDelete("invoices/{id}")]
@@ -673,7 +707,7 @@ public class FinanceController(
         if (!await repository.DeleteTemplateAsync(id, ct))
             return Ok(ApiResponse.Fail(ErrorCode.OperationFailed, "删除失败"));
 
-        try { storage.Delete(template.FilePath); }
+        try { await storage.DeleteAsync(template.FilePath, ct); }
         catch (Exception) { /* 数据库记录删除成功后，文件清理失败不影响结果 */ }
 
         await audit.WriteAsync(FinanceActions.DeleteTemplate, FinanceTargetType.Template, id, template, null,

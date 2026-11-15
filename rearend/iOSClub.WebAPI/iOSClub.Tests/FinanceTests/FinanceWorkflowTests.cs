@@ -184,6 +184,74 @@ public class FinanceWorkflowTests : IAsyncLifetime
         Assert.Equal(FinanceMaterialStatus.Pending, restored.Status);
     }
 
+    [Fact]
+    public async Task ConfirmationRequiresArchivedPdfForCurrentInvoiceDetails()
+    {
+        var service = _service!;
+        var repository = _repository!;
+        await using var originalFile = new MemoryStream([1, 2, 3]);
+        var originalPath = await _storage!.SaveAsync(originalFile, "invoice.png", "invoices");
+        var invoice = new FinanceInvoiceDO
+        {
+            FilePath = originalPath,
+            OriginalFileName = "invoice.png",
+            ContentType = "image/png"
+        };
+        await repository.CreateInvoicesAsync([invoice]);
+        var recognized = await service.RecognizeInvoiceAsync(invoice.Id);
+        Assert.Equal(FinanceInvoiceStatus.Failed, recognized.Invoice!.Status);
+
+        var dto = new FinanceInvoiceUpdateDTO
+        {
+            Type = "增值税普通发票",
+            Code = "044001900111",
+            Number = "01234567",
+            IssueDate = new DateTime(2025, 10, 1, 16, 0, 0, DateTimeKind.Utc),
+            Buyer = _options!.ClubName,
+            Seller = "测试销售方",
+            Item = "活动物料",
+            Qty = 1,
+            Price = 100m,
+            Unit = "件",
+            Amount = 100m,
+            Tax = 3m,
+            Total = 103m
+        };
+        Assert.True((await service.SaveInvoiceAsync(invoice.Id, dto)).Saved);
+
+        dto.Confirm = true;
+        var missing = await service.SaveInvoiceAsync(invoice.Id, dto);
+        Assert.False(missing.Saved);
+        Assert.Contains(missing.Errors, error => error.Contains("查验结果 PDF"));
+        Assert.Empty(await repository.GetAssignableInvoicesAsync(null, 20));
+
+        var bytes = "%PDF-1.4\n% verification fixture\n%%EOF"u8.ToArray();
+        await using var upload = new MemoryStream(bytes);
+        var attached = await service.AttachVerificationFileAsync(invoice.Id, upload);
+        Assert.True(attached!.HasVerificationFile);
+        Assert.NotNull(attached.VerificationUploadedAt);
+
+        var saved = await repository.GetInvoiceDOAsync(invoice.Id);
+        await using (var file = await _storage!.TryOpenInvoiceAsync(saved!.VerificationFilePath))
+        {
+            Assert.NotNull(file);
+            using var copy = new MemoryStream();
+            await file!.CopyToAsync(copy);
+            Assert.Equal(bytes, copy.ToArray());
+        }
+
+        Assert.True((await service.SaveInvoiceAsync(invoice.Id, dto)).Saved);
+        Assert.True(Assert.Single(await repository.GetAssignableInvoicesAsync(null, 20)).HasVerificationFile);
+
+        dto.Number = "87654321";
+        Assert.False((await service.SaveInvoiceAsync(invoice.Id, dto)).Saved);
+
+        dto.Confirm = false;
+        Assert.False((await service.SaveInvoiceAsync(invoice.Id, dto)).Invoice!.HasVerificationFile);
+        Assert.Null(await _storage!.TryOpenInvoiceAsync(saved.VerificationFilePath));
+        Assert.False((await repository.GetInvoiceVOAsync(invoice.Id))!.HasVerificationFile);
+    }
+
     private sealed class Factory(DbContextOptions<ClubContext> options) : IDbContextFactory<ClubContext>
     {
         public ClubContext CreateDbContext() => new(options);

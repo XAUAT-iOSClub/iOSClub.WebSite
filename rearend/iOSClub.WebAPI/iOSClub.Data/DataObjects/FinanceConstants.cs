@@ -101,6 +101,7 @@ public static class FinanceActions
     public const string UploadInvoice = "上传发票";
     public const string RecognizeInvoice = "识别发票";
     public const string UpdateInvoice = "校对发票";
+    public const string AttachInvoiceVerification = "归档发票查验结果";
     public const string ConfirmInvoice = "确认发票";
     public const string DeleteInvoice = "删除发票";
     public const string CreateMaterial = "新建材料";

@@ -89,6 +89,8 @@ public class FinanceService(
                 throw new BusinessException(2003, "材料已删除，无法修改发票");
         }
 
+        var originalEvidenceKey = VerificationKey(invoice);
+        var obsoleteFile = invoice.VerificationFilePath;
         invoice.Type = TrimOrNull(dto.Type, 20);
         invoice.Code = TrimOrNull(dto.Code, 20);
         invoice.Number = TrimOrNull(dto.Number, 20);
@@ -106,8 +108,13 @@ public class FinanceService(
         var validation = await ValidateInvoiceAsync(invoice, id, ct);
         var result = new FinanceInvoiceSaveResultVO { Errors = validation.Errors, Warnings = validation.Warnings };
 
+        var verificationChanged = originalEvidenceKey != VerificationKey(invoice);
         if (dto.Confirm)
         {
+            if (_options.VerificationRequired &&
+                (verificationChanged || string.IsNullOrWhiteSpace(invoice.VerificationFilePath) ||
+                 !storage.Exists(invoice.VerificationFilePath)))
+                result.Errors.Add("请先保存票面信息，并上传税务平台的查验结果 PDF");
             if (string.IsNullOrWhiteSpace(invoice.Type)) result.Errors.Add("确认前请填写发票类型");
             if (string.IsNullOrWhiteSpace(invoice.Number)) result.Errors.Add("确认前请填写发票号码");
             if (!invoice.IssueDate.HasValue) result.Errors.Add("确认前请填写开票日期");
@@ -123,16 +130,76 @@ public class FinanceService(
 
         if (result.Errors.Count > 0) return result;
 
+        if (verificationChanged)
+        {
+            invoice.VerificationFilePath = null;
+            invoice.VerificationUploadedAt = null;
+        }
+
         invoice.Status = dto.Confirm ? FinanceInvoiceStatus.Confirmed : FinanceInvoiceStatus.Recognized;
         invoice.RecognitionError = null;
         if (!await repository.UpdateInvoiceAsync(invoice, ct))
-            throw new BusinessException(2001, "发票保存失败");
+            throw new BusinessException(2001, "发票已被修改或无法保存，请刷新后重试");
+
+        if (verificationChanged)
+            await TryDeleteVerificationFileAsync(obsoleteFile);
 
         if (!string.IsNullOrWhiteSpace(invoice.MaterialId))
             await repository.RecomputeMaterialTotalAsync(invoice.MaterialId, ct);
 
         result.Invoice = await repository.GetInvoiceVOAsync(id, ct);
         return result;
+    }
+
+    public async Task<FinanceInvoiceVO?> AttachVerificationFileAsync(string id, Stream stream,
+        CancellationToken ct = default)
+    {
+        var invoice = await repository.GetInvoiceDOAsync(id, ct)
+                      ?? throw new BusinessException(4000, "发票不存在");
+        if (string.IsNullOrWhiteSpace(invoice.Number) || !invoice.IssueDate.HasValue)
+            throw new BusinessException(2003, "请先保存发票号码和开票日期");
+
+        if (invoice.MaterialId != null &&
+            await repository.GetMaterialDOAsync(invoice.MaterialId, false, ct) is
+                { Status: not FinanceMaterialStatus.Pending })
+            throw new BusinessException(2003, "材料已报销或删除，无法更换查验结果");
+
+        var signature = new byte[5];
+        if (await stream.ReadAtLeastAsync(signature, signature.Length, false, ct) !=
+            signature.Length || !signature.AsSpan().SequenceEqual("%PDF-"u8))
+            throw new BusinessException(2003, "请上传有效的 PDF 查验结果");
+        stream.Position = 0;
+
+        var oldFile = invoice.VerificationFilePath;
+        var newFile = await storage.SaveAsync(stream, "verification.pdf", "verification", ct);
+        try
+        {
+            invoice.VerificationFilePath = newFile;
+            invoice.VerificationUploadedAt = DateTime.UtcNow;
+            if (!await repository.UpdateInvoiceAsync(invoice, ct))
+                throw new BusinessException(2001, "发票已被修改，请刷新后重新上传");
+        }
+        catch
+        {
+            await TryDeleteVerificationFileAsync(newFile);
+            throw;
+        }
+
+        await TryDeleteVerificationFileAsync(oldFile);
+        return await repository.GetInvoiceVOAsync(id, ct);
+    }
+
+    private static (string? Number, string? Code, DateTime? Date, string? Buyer, string? Seller,
+        long Amount, long Tax, long Total) VerificationKey(FinanceInvoiceDO invoice) =>
+        (invoice.Number, invoice.Code, invoice.IssueDate?.Add(FinanceTime.ChinaOffset).Date, invoice.Buyer,
+            invoice.Seller, invoice.AmountCents, invoice.TaxCents, invoice.TotalCents);
+
+    private async Task TryDeleteVerificationFileAsync(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return;
+        try { await storage.DeleteAsync(path); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 
     public async Task<FinanceInvoiceSaveResultVO> RecognizeInvoiceAsync(string id, CancellationToken ct = default)
@@ -153,16 +220,18 @@ public class FinanceService(
         if (string.IsNullOrWhiteSpace(invoice.FilePath))
             throw new BusinessException(4005, "发票原件不存在，无法识别");
 
-        if (!storage.Exists(invoice.FilePath))
-            throw new BusinessException(4005, "发票原件已丢失，请重新上传");
-
         FinanceOcrResult ocr;
-        await using (var stream = storage.OpenRead(invoice.FilePath))
+        await using (var stream = await storage.TryOpenInvoiceAsync(invoice.FilePath, ct))
         {
+            if (stream == null)
+                throw new BusinessException(4005, "发票原件已丢失，请重新上传");
+
             ocr = await ocrService.RecognizeAsync(stream, invoice.OriginalFileName ?? "invoice",
                 invoice.ContentType ?? "application/octet-stream", ct);
         }
 
+        var oldEvidenceKey = VerificationKey(invoice);
+        var oldVerificationFile = invoice.VerificationFilePath;
         if (ocr.Success)
         {
             if (!string.IsNullOrWhiteSpace(ocr.Type)) invoice.Type = TrimOrNull(ocr.Type, 20);
@@ -207,10 +276,18 @@ public class FinanceService(
 
         invoice.ConfidenceJson = JsonSerializer.Serialize(ocr.Confidence);
         invoice.RecognizedAt = DateTime.UtcNow;
-        invoice.UpdatedAt = DateTime.UtcNow;
 
+        var verificationChanged = oldEvidenceKey != VerificationKey(invoice);
+        if (verificationChanged)
+        {
+            invoice.VerificationFilePath = null;
+            invoice.VerificationUploadedAt = null;
+        }
         if (!await repository.UpdateInvoiceAsync(invoice, ct))
             throw new BusinessException(2001, "识别结果保存失败");
+
+        if (verificationChanged)
+            await TryDeleteVerificationFileAsync(oldVerificationFile);
 
         var validation = await ValidateInvoiceAsync(invoice, id, ct);
         return new FinanceInvoiceSaveResultVO
@@ -570,6 +647,7 @@ public class FinanceService(
 
         return new FinanceMetaVO
         {
+            VerificationRequired = _options.VerificationRequired,
             ClubName = _options.ClubName,
             CurrentAcademicYear = current,
             Years = years,

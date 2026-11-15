@@ -564,8 +564,18 @@ namespace iOSClub.Data.Migrations
                         .HasColumnName("unit");
 
                     b.Property<DateTime>("UpdatedAt")
+                        .IsConcurrencyToken()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
+
+                    b.Property<string>("VerificationFilePath")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("verification_file_path");
+
+                    b.Property<DateTime?>("VerificationUploadedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("verification_uploaded_at");
 
                     b.HasKey("Id");
 

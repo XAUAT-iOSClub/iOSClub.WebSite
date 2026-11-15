@@ -186,6 +186,12 @@ const invoiceColumns: DataTableColumns<FinanceInvoice> = [
         row.status === 'failed' ? '识别失败' : row.confirmed ? '待报销' : '待确认')
   },
   {
+    title: '查验单', key: 'verificationFile', width: 96,
+    render: row => row.hasVerificationFile
+        ? h('button', { class: 'finance-btn', type: 'button', onClick: () => downloadVerification(row) }, '下载 PDF')
+        : h('span', { class: 'finance-muted' }, '未归档')
+  },
+  {
     title: '操作', key: 'actions', width: 80,
     render: row => editable.value
         ? h('button', {
@@ -204,6 +210,14 @@ const poolColumns: DataTableColumns<FinanceInvoice> = [
   { title: '价税合计', key: 'total', width: 120, align: 'right', render: row => formatMoney(row.total) },
   { title: '状态', key: 'statusLabel', width: 90, render: row => row.status === 'failed' ? '识别失败' : row.confirmed ? '待报销' : '待确认' }
 ]
+
+async function downloadVerification(invoice: FinanceInvoice) {
+  try {
+    await FinanceService.downloadInvoiceVerification(invoice.id)
+  } catch (error: unknown) {
+    message.error(error instanceof Error ? error.message : '查验单下载失败')
+  }
+}
 
 function removeInvoice(invoice: FinanceInvoice) {
   dialog.warning({

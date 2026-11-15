@@ -13,6 +13,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <PackageReference Include="AWSSDK.S3" Version="4.0.104.6" />
       <PackageReference Include="BCrypt.Net-Core" Version="1.6.0" />
       <PackageReference Include="ClosedXML" Version="0.104.2" />
       <!-- 财务模块按表头 / 单元格定位填充学校固定 docx 表单，只改文本不改版式。 -->

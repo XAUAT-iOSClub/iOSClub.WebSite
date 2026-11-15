@@ -77,6 +77,32 @@ builder.Services.Configure<FinanceOptions>(options =>
 {
     builder.Configuration.GetSection("Finance").Bind(options);
     options.StorageRoot = financeStorageRoot;
+    options.VerificationRequired = builder.Configuration.GetValue<bool?>("FINANCE_VERIFICATION_REQUIRED")
+                                   ?? options.VerificationRequired;
+    var config = builder.Configuration;
+    var s3 = options.S3;
+    var region = config["S3_REGION"];
+    var legacyRegion = config["FINANCE_S3_REGION"];
+    var legacyAccessKey = config["FINANCE_S3_SECRET_ID"] ?? config["Finance:S3:SecretId"];
+    var legacySecretKey = config["FINANCE_S3_SECRET_KEY"] ?? config["Finance:S3:SecretKey"];
+    s3.Enabled = config.GetValue<bool?>("S3_ENABLED")
+                 ?? config.GetValue<bool?>("FINANCE_S3_ENABLED") ?? s3.Enabled;
+    s3.Bucket = config["S3_BUCKET"] ?? config["FINANCE_S3_BUCKET"] ?? s3.Bucket;
+    s3.Endpoint = config["S3_ENDPOINT"] ?? s3.Endpoint;
+    s3.ForcePathStyle = config.GetValue<bool?>("S3_FORCE_PATH_STYLE") ?? s3.ForcePathStyle;
+    s3.BasePrefix = config["S3_BASE_PREFIX"] ?? s3.BasePrefix;
+    s3.CdnUrl = config["S3_CDN_URL"] ?? s3.CdnUrl;
+    s3.CdnAuthToken = config["S3_CDN_AUTH_TOKEN"] ?? s3.CdnAuthToken;
+    s3.AccessKeyId = config["S3_ACCESS_KEY_ID"] ?? legacyAccessKey ?? s3.AccessKeyId;
+    s3.SecretAccessKey = config["S3_SECRET_ACCESS_KEY"] ?? legacySecretKey ?? s3.SecretAccessKey;
+    s3.SessionToken = config["S3_SESSION_TOKEN"] ?? s3.SessionToken;
+    s3.Region = region ?? legacyRegion ?? s3.Region;
+
+    // 旧配置只填写 COS 地域，由服务端生成 COS 地址。
+    if (region == null && config["S3_ENDPOINT"] == null && string.IsNullOrWhiteSpace(s3.Endpoint) &&
+        (legacyRegion != null || legacyAccessKey != null || legacySecretKey != null) &&
+        !string.IsNullOrWhiteSpace(s3.Region))
+        s3.Endpoint = $"https://cos.{s3.Region}.myqcloud.com";
 });
 
 #region 控制器基本设置

@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, h, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from 'vue'
 import { NDataTable, NModal, useDialog, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import Icon from '@/components/Icon.vue'
 import FinanceTabs from './components/FinanceTabs.vue'
 import FinanceInvoiceThumb from './components/FinanceInvoiceThumb.vue'
+import FinanceInvoiceVerification from './components/FinanceInvoiceVerification.vue'
+import { ApiError } from '../../services/ApiService'
 import { FinanceService } from '../../services/FinanceService'
 import { useLayoutStore } from '../../stores/LayoutStore'
 import type {
@@ -36,8 +38,11 @@ const editModal = ref(false)
 const editReadonly = ref(false)
 const editing = ref<FinanceInvoice | null>(null)
 const saving = ref(false)
+const verificationBusy = shallowRef(false)
+const saveError = shallowRef('')
 const editForm = reactive({
   type: '',
+  code: '',
   number: '',
   issueDate: '',
   buyer: '',
@@ -48,9 +53,11 @@ const editForm = reactive({
   unit: '',
   amount: 0,
   tax: 0,
-  total: 0,
-  confirm: false
+  total: 0
 })
+
+const modalBusy = computed(() => saving.value || verificationBusy.value)
+const verificationRequired = computed(() => meta.value?.verificationRequired ?? true)
 
 const statusTabs = [
   { label: '全部', value: '' },
@@ -73,17 +80,52 @@ const formatDate = (value?: string | null) => {
   if (!value) return '—'
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return value
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return chinaDate.format(d)
 }
+
+const chinaDate = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' })
+const chinaTime = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', dateStyle: 'short', timeStyle: 'short' })
 
 const formatTime = (value?: string | null) => {
   if (!value) return ''
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return value
-  return `${formatDate(value)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  return chinaTime.format(d)
 }
 
 const toDateInput = (value?: string | null) => formatDate(value) === '—' ? '' : formatDate(value)
+
+const verificationFieldsChanged = computed(() => {
+  const invoice = editing.value
+  if (!invoice) return false
+
+  return editForm.code.trim() !== (invoice.code ?? '') ||
+      editForm.number.trim() !== (invoice.number ?? '') ||
+      editForm.issueDate !== toDateInput(invoice.issueDate) ||
+      editForm.buyer.trim() !== (invoice.buyer ?? '') ||
+      editForm.seller.trim() !== (invoice.seller ?? '') ||
+      Number(editForm.amount) !== invoice.amount ||
+      Number(editForm.tax) !== invoice.tax ||
+      Number(editForm.total) !== invoice.total
+})
+
+const verificationUploadHint = computed(() => {
+  const invoice = editing.value
+  if (!invoice || invoice.materialStatus === 'reimbursed' || invoice.materialStatus === 'deleted') return ''
+  if (!invoice.number || !invoice.issueDate || verificationFieldsChanged.value) {
+    return editReadonly.value ? '需要先补齐发票号码和开票日期。' : '请先保存票面信息，再上传新的查验单。'
+  }
+  return ''
+})
+
+const canUploadVerification = computed(() => {
+  const invoice = editing.value
+  return !!invoice && invoice.materialStatus !== 'reimbursed' && invoice.materialStatus !== 'deleted' &&
+      !verificationUploadHint.value
+})
+
+const verificationMissing = computed(() =>
+    verificationRequired.value && (!editing.value?.hasVerificationFile || verificationFieldsChanged.value))
 
 const invoiceDisplayStatus = (invoice: FinanceInvoice) =>
     invoice.materialStatus === 'reimbursed' ? 'reimbursed' : invoice.status
@@ -152,7 +194,10 @@ const allColumns: DataTableColumns<FinanceInvoice> = [
   },
   {
     title: '状态', key: 'status', width: 85,
-    render: row => chip(statusLabel(row), statusClass(row))
+    render: row => h('div', { class: 'space-y-1' }, [
+      chip(statusLabel(row), statusClass(row)),
+      h('div', { class: 'finance-muted' }, row.hasVerificationFile ? '查验单已归档' : '查验单未归档')
+    ])
   },
   {
     title: '操作', key: 'actions', width: 190,
@@ -178,7 +223,7 @@ const allColumns: DataTableColumns<FinanceInvoice> = [
       } else if (row.status === 'recognized') {
         buttons.push(actionBtn('人工确认',
             'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-500/20 dark:text-emerald-300',
-            () => openEdit(row, true)))
+            () => openEdit(row)))
         buttons.push(actionBtn('删除',
             'bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-500/20 dark:text-red-300',
             () => remove(row)))
@@ -367,15 +412,17 @@ function invoiceRowProps(row: FinanceInvoice) {
       if (target?.closest('button, a, .n-checkbox, .n-checkbox-box')) return
       const readonly = row.status === 'confirmed' || row.status === 'pending' ||
           row.materialStatus === 'reimbursed'
-      openEdit(row, row.status === 'recognized' || row.status === 'confirmed', readonly)
+      openEdit(row, readonly)
     }
   }
 }
 
-function openEdit(invoice: FinanceInvoice, confirm = false, readonly = false) {
+function openEdit(invoice: FinanceInvoice, readonly = false) {
   editing.value = invoice
   editReadonly.value = readonly
+  saveError.value = ''
   editForm.type = invoice.type ?? ''
+  editForm.code = invoice.code ?? ''
   editForm.number = invoice.number ?? ''
   editForm.issueDate = toDateInput(invoice.issueDate)
   editForm.buyer = invoice.buyer ?? ''
@@ -387,14 +434,22 @@ function openEdit(invoice: FinanceInvoice, confirm = false, readonly = false) {
   editForm.amount = invoice.amount ?? 0
   editForm.tax = invoice.tax ?? 0
   editForm.total = invoice.total ?? 0
-  editForm.confirm = confirm || invoice.confirmed
   editModal.value = true
 }
 
-async function saveEdit() {
-  if (!editing.value) return
+function onVerificationUploaded(invoice: FinanceInvoice) {
+  editing.value = invoice
+  items.value = items.value.map(row => row.id === invoice.id ? invoice : row)
+  saveError.value = ''
+  message.success('税局查验单已归档')
+}
 
-  if (editForm.confirm) {
+async function saveEdit(confirm: boolean) {
+  const invoice = editing.value
+  if (!invoice || editReadonly.value || modalBusy.value || (confirm && verificationMissing.value)) return
+  saveError.value = ''
+
+  if (confirm) {
     const missing: string[] = []
     if (!editForm.type.trim()) missing.push('发票类型')
     if (!editForm.number.trim()) missing.push('发票号码')
@@ -415,8 +470,10 @@ async function saveEdit() {
 
   const dto: FinanceInvoiceUpdateDto = {
     type: editForm.type.trim() || null,
+    code: editForm.code.trim() || null,
     number: editForm.number.trim() || null,
-    issueDate: editForm.issueDate ? new Date(`${editForm.issueDate}T00:00:00`).toISOString() : null,
+    issueDate: editForm.issueDate === toDateInput(invoice.issueDate) ? invoice.issueDate :
+        editForm.issueDate ? new Date(`${editForm.issueDate}T00:00:00+08:00`).toISOString() : null,
     buyer: editForm.buyer.trim() || null,
     seller: editForm.seller.trim() || null,
     item: editForm.item.trim() || null,
@@ -426,22 +483,24 @@ async function saveEdit() {
     amount: Number(editForm.amount) || 0,
     tax: Number(editForm.tax) || 0,
     total: Number(editForm.total) || 0,
-    confirm: editForm.confirm
+    confirm
   }
 
   saving.value = true
   try {
-    const result = await FinanceService.updateInvoice(editing.value.id, dto)
+    const result = await FinanceService.updateInvoice(invoice.id, dto)
     if (result.errors?.length) {
-      message.error(result.errors.join('；'))
+      saveError.value = result.errors.join('；')
       return
     }
-    if (result.warnings?.length && !editForm.confirm) message.warning(result.warnings.join('；'))
-    message.success(editForm.confirm ? '发票已人工确认，进入待报销状态' : '发票已保存')
-    editModal.value = false
+    if (result.warnings?.length && !confirm) message.warning(result.warnings.join('；'))
+    message.success(confirm ? '发票已人工确认，进入待报销状态' : '发票已保存，可继续归档查验单')
+    if (confirm) editModal.value = false
+    else if (result.invoice) openEdit(result.invoice)
     await load()
-  } catch (e: any) {
-    message.error(e?.detail || e?.message || '保存失败')
+  } catch (error: unknown) {
+    saveError.value = error instanceof ApiError ? error.detail || error.message
+        : error instanceof Error ? error.message : '保存失败'
   } finally {
     saving.value = false
   }
@@ -457,6 +516,7 @@ function revertToReview(invoice: FinanceInvoice) {
       try {
         const result = await FinanceService.updateInvoice(invoice.id, {
           type: invoice.type,
+          code: invoice.code,
           number: invoice.number,
           issueDate: invoice.issueDate,
           buyer: invoice.buyer,
@@ -626,20 +686,26 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
 
     <!-- 编辑 / 校对发票 -->
     <n-modal v-model:show="editModal" preset="card" style="max-width: 760px" :bordered="false"
-             :title="editReadonly ? '发票详情' : editForm.confirm ? '人工确认发票' : '人工录入发票'">
-      <fieldset v-if="editing" :disabled="editReadonly" class="space-y-4 border-0 p-0 m-0">
+             :closable="!modalBusy" :mask-closable="!modalBusy" :close-on-esc="!modalBusy"
+             :title="editReadonly ? '发票详情' : '核对发票'">
+      <fieldset v-if="editing" :disabled="editReadonly || modalBusy" class="space-y-4 border-0 p-0 m-0">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label class="finance-label">发票类型</label>
             <input v-model="editForm.type" class="finance-input" :class="{ 'finance-low-confidence': isLow(editing, 'type') }" :title="confidenceTitle(editing, 'type')"/>
           </div>
           <div>
-            <label class="finance-label">开票日期</label>
-            <input v-model="editForm.issueDate" type="date" class="finance-input" :class="{ 'finance-low-confidence': isLow(editing, 'issueDate') }" :title="confidenceTitle(editing, 'issueDate')"/>
+            <label for="finance-invoice-date" class="finance-label">开票日期</label>
+            <input id="finance-invoice-date" v-model="editForm.issueDate" type="date" class="finance-input" :class="{ 'finance-low-confidence': isLow(editing, 'issueDate') }" :title="confidenceTitle(editing, 'issueDate')"/>
           </div>
           <div>
-            <label class="finance-label">发票号码</label>
-            <input v-model="editForm.number" maxlength="20" class="finance-input" :class="{ 'finance-low-confidence': isLow(editing, 'number') }" :title="confidenceTitle(editing, 'number')"/>
+            <label for="finance-invoice-code" class="finance-label">发票代码（如票面有）</label>
+            <input id="finance-invoice-code" v-model="editForm.code" inputmode="numeric" maxlength="20"
+                   class="finance-input" :class="{ 'finance-low-confidence': isLow(editing, 'code') }" :title="confidenceTitle(editing, 'code')"/>
+          </div>
+          <div>
+            <label for="finance-invoice-number" class="finance-label">发票号码</label>
+            <input id="finance-invoice-number" v-model="editForm.number" maxlength="20" class="finance-input" :class="{ 'finance-low-confidence': isLow(editing, 'number') }" :title="confidenceTitle(editing, 'number')"/>
           </div>
           <div>
             <label class="finance-label">购买方</label>
@@ -686,18 +752,24 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
           <span>{{ editing.recognitionError }}</span>
         </div>
 
-        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 select-none">
-          <input v-model="editForm.confirm" type="checkbox" class="rounded"/>
-          人工确认后进入“待报销”状态（可用于生成表单与报销）
-        </label>
         <p class="finance-muted">标黄字段表示识别置信度低于 {{ ((meta?.lowConfidenceThreshold ?? 0.8) * 100).toFixed(0) }}%，请人工核对。</p>
       </fieldset>
+      <FinanceInvoiceVerification v-if="editing" :key="editing.id" :invoice="editing"
+                                  :upload-allowed="canUploadVerification" :upload-hint="verificationUploadHint"
+                                  :uploaded-at="formatTime(editing.verificationUploadedAt)" :disabled="saving"
+                                  @uploaded="onVerificationUploaded" @busy="verificationBusy = $event"/>
+      <p v-if="saveError" class="finance-alert danger mt-3" role="alert">{{ saveError }}</p>
       <template #footer>
-        <div class="flex justify-between items-center gap-2">
-          <span class="finance-muted">上传时间：{{ editing ? formatTime(editing.createdAt) : '' }}</span>
-          <div class="flex gap-2">
-            <button class="finance-btn" @click="editModal = false">{{ editReadonly ? '关闭' : '取消' }}</button>
-            <button v-if="!editReadonly" class="finance-btn primary" :disabled="saving" @click="saveEdit">{{ saving ? '保存中…' : '保存' }}</button>
+        <div class="flex flex-wrap justify-between items-center gap-2">
+          <span class="finance-muted">{{ !editReadonly && verificationMissing ? '确认前需归档当前票面的查验单' :
+              `上传时间：${editing ? formatTime(editing.createdAt) : ''}` }}</span>
+          <div class="flex flex-wrap gap-2">
+            <button class="finance-btn" :disabled="modalBusy" @click="editModal = false">关闭</button>
+            <button v-if="!editReadonly" class="finance-btn" :disabled="modalBusy" @click="saveEdit(false)">
+              {{ saving ? '保存中…' : '保存草稿' }}
+            </button>
+            <button v-if="!editReadonly" class="finance-btn primary" :disabled="modalBusy || verificationMissing"
+                    @click="saveEdit(true)">确认发票</button>
           </div>
         </div>
       </template>

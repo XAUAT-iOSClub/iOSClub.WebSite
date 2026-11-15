@@ -79,6 +79,7 @@ public static class OperationLogCatalog
         ["Activity.ImportErrorReport"] = "导出活动导入错误报告",
 
         ["Finance.Upload"] = "上传发票",
+        ["Finance.UploadVerificationFile"] = "归档发票查验结果",
         ["Finance.Recognize"] = "识别发票",
         ["Finance.UpdateInvoice"] = "编辑发票",
         ["Finance.DeleteInvoice"] = "删除发票",

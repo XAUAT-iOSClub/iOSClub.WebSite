@@ -118,6 +118,8 @@ public sealed class ClubContext(DbContextOptions<ClubContext> options) : DbConte
             .IsRequired(false);
 
         modelBuilder.Entity<FinanceInvoiceDO>()
+            .Property(x => x.UpdatedAt).IsConcurrencyToken();
+        modelBuilder.Entity<FinanceInvoiceDO>()
             .HasIndex(i => new { i.MaterialId, i.IsDeleted });
         modelBuilder.Entity<FinanceInvoiceDO>()
             .HasIndex(i => new { i.Code, i.Number });

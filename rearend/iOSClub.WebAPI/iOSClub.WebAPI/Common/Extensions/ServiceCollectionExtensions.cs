@@ -36,6 +36,7 @@ public static class ServiceCollectionExtensions
 
             // 财务模块
             services.AddScoped<IFinanceRepository, FinanceRepository>();
+            services.AddSingleton<FinanceS3Storage>();
             services.AddScoped<IFinanceStorage, FinanceStorage>();
             services.AddScoped<IFinanceOcrService, FinanceOcrService>();
             services.AddHttpClient<IFinanceOcrService, FinanceOcrService>();

@@ -9,6 +9,10 @@ public class FinanceOptions
     /// <summary>发票与生成文档的落盘根目录（绝对路径，由 Program 解析）。</summary>
     public string StorageRoot { get; set; } = "";
 
+    public FinanceS3Options S3 { get; set; } = new();
+
+    public bool VerificationRequired { get; set; } = true;
+
     /// <summary>购买方抬头，用于抬头一致性提示与表单默认值。</summary>
     public string ClubName { get; set; } = "西安建筑科技大学 iOS Club";
 
@@ -43,4 +47,19 @@ public class FinanceOptions
 
     public string[] ActivityTypes { get; set; } =
         ["校级活动", "内部活动"];
+}
+
+public class FinanceS3Options
+{
+    public bool Enabled { get; set; }
+    public string Region { get; set; } = "";
+    public string Bucket { get; set; } = "";
+    public string Endpoint { get; set; } = "";
+    public bool ForcePathStyle { get; set; }
+    public string BasePrefix { get; set; } = "finance";
+    public string AccessKeyId { get; set; } = "";
+    public string SecretAccessKey { get; set; } = "";
+    public string SessionToken { get; set; } = "";
+    public string CdnUrl { get; set; } = "";
+    public string CdnAuthToken { get; set; } = "";
 }
