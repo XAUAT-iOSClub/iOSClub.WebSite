@@ -7,3 +7,12 @@ frontend/test-results/
 frontend/playwright-report/
 frontend/blob-report/
 frontend/playwright/.cache/
+
+# Local-only runners (Docker + real download test)
+scripts/e2e-local.sh
+scripts/dev-local.sh
+frontend/playwright.e2e-local.config.ts
+frontend/.env.e2e.local
+.local-e2e/
+.local-dev/
+.local-tools/
