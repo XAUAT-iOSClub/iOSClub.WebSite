@@ -45,7 +45,8 @@ public sealed class OperationLogFilter(
         try
         {
             snapshot = await OperationLogRequestSnapshot.CaptureAsync(
-                context.HttpContext.Request, context.RouteData.Values);
+                context.HttpContext.Request, context.RouteData.Values,
+                captureBody: !string.Equals(descriptor.ControllerName, "Finance", StringComparison.OrdinalIgnoreCase));
         }
         catch (Exception ex)
         {

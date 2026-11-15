@@ -31,7 +31,8 @@ public static class OperationLogRequestSnapshot
     public const int MaxBodyChars = 16 * 1024;
     private const long MaxBodyBytes = 64 * 1024;
 
-    public static async Task<OperationLogSnapshot> CaptureAsync(HttpRequest request, RouteValueDictionary routeData)
+    public static async Task<OperationLogSnapshot> CaptureAsync(
+        HttpRequest request, RouteValueDictionary routeData, bool captureBody = true)
     {
         var route = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         foreach (var (key, value) in routeData)
@@ -59,7 +60,11 @@ public static class OperationLogRequestSnapshot
 
         if (!HttpMethods.IsGet(request.Method) && !HttpMethods.IsHead(request.Method))
         {
-            if (contentType?.StartsWith("multipart/", StringComparison.OrdinalIgnoreCase) == true)
+            if (!captureBody)
+            {
+                bodyOmitted = "[敏感业务请求体已省略]";
+            }
+            else if (contentType?.StartsWith("multipart/", StringComparison.OrdinalIgnoreCase) == true)
             {
                 bodyOmitted = $"[multipart/form-data, {contentLength?.ToString() ?? "unknown"} bytes]";
             }
