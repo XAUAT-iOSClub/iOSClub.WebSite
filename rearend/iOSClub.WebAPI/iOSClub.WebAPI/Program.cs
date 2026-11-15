@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using FluentValidation.AspNetCore;
 using iOSClub.Data;
 using iOSClub.Data.Mappers;
+using iOSClub.Data.DataObjects;
 using iOSClub.DataApi.Services;
 using iOSClub.WebAPI.Common;
 using iOSClub.WebAPI.Common.Audit;
@@ -14,6 +15,7 @@ using iOSClub.WebAPI.Common.Middleware;
 using iOSClub.WebAPI.Common.Security;
 using iOSClub.WebAPI.IdentityModels;
 using iOSClub.WebAPI.Services;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
@@ -24,6 +26,7 @@ using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using NpgsqlDataProtection;
 using ParadeDB.EntityFrameworkCore.Extensions;
@@ -215,7 +218,16 @@ builder.Services.AddSingleton<JwtService>();
 
 #region 身份验证
 
-builder.Services.AddAuthorizationCore();
+builder.Services.AddAuthorizationCore(options =>
+{
+    options.AddPolicy(ApiKeyAuthenticationHandler.WritePolicy, policy =>
+        policy.RequireAssertion(context =>
+            context.User.Identity?.AuthenticationType == ApiKeyAuthenticationHandler.SchemeName
+                ? context.User.HasClaim(ApiKeyAuthenticationHandler.PermissionClaim, nameof(ApiKeyPermission.ReadWrite))
+                : context.User.IsInRole(RoleHierarchy.Founder)
+            || context.User.IsInRole(RoleHierarchy.President)
+            || context.User.IsInRole(RoleHierarchy.Minister)));
+});
 builder.Services.AddSingleton<IAuthorizationHandler, FounderAuthorizationHandler>();
 
 // 配置JWT认证 - 注意：在测试环境中，我们将使用服务注入的方式获取RsaKeyManager，
@@ -334,6 +346,15 @@ builder.Services.AddAuthentication(options =>
                 await context.Response.WriteAsJsonAsync(body);
             }
         };
+    })
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationHandler.SchemeName, _ => { })
+    .AddPolicyScheme(ApiKeyAuthenticationHandler.ResourceScheme, null, options =>
+    {
+        options.ForwardDefaultSelector = context => ApiKeyAuthenticationHandler.IsBasicRequest(context)
+            ? ApiKeyAuthenticationHandler.SchemeName
+            : context.RequestServices.GetRequiredService<IOptions<AuthenticationOptions>>().Value.DefaultAuthenticateScheme
+              ?? context.RequestServices.GetRequiredService<IOptions<AuthenticationOptions>>().Value.DefaultScheme
+              ?? JwtBearerDefaults.AuthenticationScheme;
     });
     // C21：原 "OAuth2" Cookie 方案没有对应的外部 OAuth 处理器，Challenge 会指回
     // 自身 LoginPath 形成循环，logout 又使用未注册的 Cookies 方案。

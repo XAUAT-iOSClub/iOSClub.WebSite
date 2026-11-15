@@ -104,7 +104,10 @@ public sealed class OperationLogFilter(
         }
 
         var user = context.HttpContext.User.GetUser();
-        if (user is null)
+        var keyId = context.HttpContext.User.Identity?.AuthenticationType == ApiKeyAuthenticationHandler.SchemeName
+            ? context.HttpContext.User.FindFirst(ApiKeyAuthenticationHandler.IdClaim)?.Value
+            : null;
+        if (user is null && keyId is null)
         {
             return false;
         }
@@ -121,8 +124,8 @@ public sealed class OperationLogFilter(
         }
 
         descriptor = cad;
-        operatorId = user.UserId;
-        operatorRole = user.Identity;
+        operatorId = user?.UserId ?? keyId!;
+        operatorRole = user?.Identity ?? "ApiKey";
         return true;
     }
 

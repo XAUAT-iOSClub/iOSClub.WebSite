@@ -20,6 +20,7 @@ public static class OperationLogCatalog
         ["Resource"] = "资源管理",
         ["Activity"] = "活动管理",
         ["Finance"] = "财务管理",
+        ["ApiKey"] = "API Key 管理",
         ["ClientApp"] = "OAuth 应用",
         ["IpBlacklist"] = "IP 黑名单",
         ["DataCentre"] = "数据管理",
@@ -97,6 +98,8 @@ public static class OperationLogCatalog
         ["Finance.DeleteTemplate"] = "删除财务模板",
         ["Finance.UpdateAccount"] = "更新经费账户",
 
+        ["ApiKey.Create"] = "创建 API Key",
+        ["ApiKey.Revoke"] = "撤销 API Key",
         ["ClientApp.CreateClientApplication"] = "创建 OAuth 应用",
         ["ClientApp.UpdateClientApplication"] = "编辑 OAuth 应用",
         ["ClientApp.DeleteClientApplication"] = "删除 OAuth 应用",

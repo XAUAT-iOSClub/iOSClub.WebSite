@@ -12,12 +12,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace iOSClub.WebAPI.Controllers;
 
-[Authorize]
+[Authorize(AuthenticationSchemes = ApiKeyAuthenticationHandler.ResourceScheme)]
 [ApiController]
 [Route("[controller]")] // 使用C#推荐的API路径格式
 public class ResourceController(
     IDbContextFactory<ClubContext> factory,
-    IHttpContextAccessor httpContextAccessor,
     IResourceRepository resourceRepository,
     ILogger<ResourceController> logger)
     : ControllerBase
@@ -28,15 +27,7 @@ public class ResourceController(
     [HttpGet]
     public async Task<ActionResult<ApiResponse<List<ResourceVO>>>> GetAllResources()
     {
-        var userJwt = httpContextAccessor.HttpContext?.User.GetUser();
-        if (userJwt == null)
-            return Ok(ApiResponse<List<ResourceVO>>.Fail(ErrorCode.Unauthorized, "用户未认证"));
-
-        await using var context = await factory.CreateDbContextAsync();
-        var user = await context.Staffs.FirstOrDefaultAsync(x => x.UserId == userJwt.UserId);
-
-        // 检查用户身份：必须是社团成员及以上
-        if (user == null || !IsClubMember(user.Identity))
+        if (!await CanAccessResourcesAsync(IsClubMember))
             return Ok(ApiResponse<List<ResourceVO>>.Fail(ErrorCode.InsufficientPermission, "权限不足，需要社团成员身份"));
 
         var resources = await resourceRepository.GetAllResourcesAsync();
@@ -49,15 +40,7 @@ public class ResourceController(
     [HttpGet("{id}")]
     public async Task<ActionResult<ApiResponse<ResourceVO>>> GetResourceById(string id)
     {
-        var userJwt = httpContextAccessor.HttpContext?.User.GetUser();
-        if (userJwt == null)
-            return Ok(ApiResponse<ResourceVO>.Fail(ErrorCode.Unauthorized, "用户未认证"));
-
-        await using var context = await factory.CreateDbContextAsync();
-        var user = await context.Staffs.FirstOrDefaultAsync(x => x.UserId == userJwt.UserId);
-
-        // 检查用户身份：必须是社团成员及以上
-        if (user == null || !IsClubMember(user.Identity))
+        if (!await CanAccessResourcesAsync(IsClubMember))
             return Ok(ApiResponse<ResourceVO>.Fail(ErrorCode.InsufficientPermission, "权限不足，需要社团成员身份"));
 
         var resource = await resourceRepository.GetResourceByIdAsync(id);
@@ -73,15 +56,7 @@ public class ResourceController(
     [HttpGet("tag/{tag}")]
     public async Task<ActionResult<ApiResponse<List<ResourceVO>>>> GetResourcesByTag(string tag)
     {
-        var userJwt = httpContextAccessor.HttpContext?.User.GetUser();
-        if (userJwt == null)
-            return Ok(ApiResponse<List<ResourceVO>>.Fail(ErrorCode.Unauthorized, "用户未认证"));
-
-        await using var context = await factory.CreateDbContextAsync();
-        var user = await context.Staffs.FirstOrDefaultAsync(x => x.UserId == userJwt.UserId);
-
-        // 检查用户身份：必须是社团成员及以上
-        if (user == null || !IsClubMember(user.Identity))
+        if (!await CanAccessResourcesAsync(IsClubMember))
             return Ok(ApiResponse<List<ResourceVO>>.Fail(ErrorCode.InsufficientPermission, "权限不足，需要社团成员身份"));
 
         var resources = await resourceRepository.GetResourcesByTagAsync(tag);
@@ -94,15 +69,7 @@ public class ResourceController(
     [HttpGet("search/{name}")]
     public async Task<ActionResult<ApiResponse<List<ResourceVO>>>> SearchResources(string name)
     {
-        var userJwt = httpContextAccessor.HttpContext?.User.GetUser();
-        if (userJwt == null)
-            return Ok(ApiResponse<List<ResourceVO>>.Fail(ErrorCode.Unauthorized, "用户未认证"));
-
-        await using var context = await factory.CreateDbContextAsync();
-        var user = await context.Staffs.FirstOrDefaultAsync(x => x.UserId == userJwt.UserId);
-
-        // 检查用户身份：必须是社团成员及以上
-        if (user == null || !IsClubMember(user.Identity))
+        if (!await CanAccessResourcesAsync(IsClubMember))
             return Ok(ApiResponse<List<ResourceVO>>.Fail(ErrorCode.InsufficientPermission, "权限不足，需要社团成员身份"));
 
         var resources = await resourceRepository.SearchResourcesByNameAsync(name);
@@ -113,18 +80,10 @@ public class ResourceController(
     /// 添加资源（需要社长、团支书或部长身份）
     /// </summary>
     [HttpPost]
-    [Authorize(Roles = "Founder,President,Minister")]
+    [Authorize(Policy = ApiKeyAuthenticationHandler.WritePolicy)]
     public async Task<ActionResult<ApiResponse<ResourceVO>>> AddResource([FromBody] ResourceCreateUpdateDTO resource)
     {
-        var userJwt = httpContextAccessor.HttpContext?.User.GetUser();
-        if (userJwt == null)
-            return Ok(ApiResponse<ResourceVO>.Fail(ErrorCode.Unauthorized, "用户未认证"));
-
-        // 双重验证：除了角色授权外，再检查用户身份
-        await using var context = await factory.CreateDbContextAsync();
-        var user = await context.Staffs.FirstOrDefaultAsync(x => x.UserId == userJwt.UserId);
-
-        if (user == null || !IsAdmin(user.Identity))
+        if (!await CanAccessResourcesAsync(IsAdmin))
             return Ok(ApiResponse<ResourceVO>.Fail(ErrorCode.InsufficientPermission, "权限不足，需要管理员身份"));
 
         var createdResource = await resourceRepository.AddResourceAsync(resource.Adapt<ResourceDO>());
@@ -145,7 +104,7 @@ public class ResourceController(
     /// 更新资源（需要社长、团支书或部长身份）
     /// </summary>
     [HttpPut]
-    [Authorize(Roles = "Founder,President,Minister")]
+    [Authorize(Policy = ApiKeyAuthenticationHandler.WritePolicy)]
     public async Task<ActionResult<ApiResponse<object>>> UpdateResource([FromBody] ResourceCreateUpdateDTO resource)
     {
         if (string.IsNullOrEmpty(resource.Id))
@@ -153,15 +112,7 @@ public class ResourceController(
             return Ok(ApiResponse<object>.Fail(ErrorCode.ResourceNotFound, "资源不存在"));
         }
 
-        var userJwt = httpContextAccessor.HttpContext?.User.GetUser();
-        if (userJwt == null)
-            return Ok(ApiResponse<object>.Fail(ErrorCode.Unauthorized, "用户未认证"));
-
-        // 双重验证
-        await using var context = await factory.CreateDbContextAsync();
-        var user = await context.Staffs.FirstOrDefaultAsync(x => x.UserId == userJwt.UserId);
-
-        if (user == null || !IsAdmin(user.Identity))
+        if (!await CanAccessResourcesAsync(IsAdmin))
             return Ok(ApiResponse<object>.Fail(ErrorCode.InsufficientPermission, "权限不足，需要管理员身份"));
 
         // 检查资源是否存在
@@ -185,18 +136,10 @@ public class ResourceController(
     /// 删除资源（需要社长、团支书或部长身份）
     /// </summary>
     [HttpDelete("{id}")]
-    [Authorize(Roles = "Founder,President,Minister")]
+    [Authorize(Policy = ApiKeyAuthenticationHandler.WritePolicy)]
     public async Task<ActionResult<ApiResponse<object>>> DeleteResource(string id)
     {
-        var userJwt = httpContextAccessor.HttpContext?.User.GetUser();
-        if (userJwt == null)
-            return Ok(ApiResponse<object>.Fail(ErrorCode.Unauthorized, "用户未认证"));
-
-        // 双重验证
-        await using var context = await factory.CreateDbContextAsync();
-        var user = await context.Staffs.FirstOrDefaultAsync(x => x.UserId == userJwt.UserId);
-
-        if (user == null || !IsAdmin(user.Identity))
+        if (!await CanAccessResourcesAsync(IsAdmin))
             return Ok(ApiResponse<object>.Fail(ErrorCode.InsufficientPermission, "权限不足，需要管理员身份"));
 
         // 检查资源是否存在
@@ -222,15 +165,7 @@ public class ResourceController(
     [HttpGet("tags")]
     public async Task<ActionResult<ApiResponse<List<string>>>> GetAllTags()
     {
-        var userJwt = httpContextAccessor.HttpContext?.User.GetUser();
-        if (userJwt == null)
-            return Ok(ApiResponse<List<string>>.Fail(ErrorCode.Unauthorized, "用户未认证"));
-
-        await using var context = await factory.CreateDbContextAsync();
-        var user = await context.Staffs.FirstOrDefaultAsync(x => x.UserId == userJwt.UserId);
-
-        // 检查用户身份：必须是社团成员及以上
-        if (user == null || !IsClubMember(user.Identity))
+        if (!await CanAccessResourcesAsync(IsClubMember))
             return Ok(ApiResponse<List<string>>.Fail(ErrorCode.InsufficientPermission, "权限不足，需要社团成员身份"));
 
         var tags = await resourceRepository.GetAllTagsAsync();
@@ -243,15 +178,7 @@ public class ResourceController(
     [HttpGet("statistics")]
     public async Task<ActionResult<ApiResponse<object>>> GetResourceStatistics()
     {
-        var userJwt = httpContextAccessor.HttpContext?.User.GetUser();
-        if (userJwt == null)
-            return Ok(ApiResponse<object>.Fail(ErrorCode.Unauthorized, "用户未认证"));
-
-        await using var context = await factory.CreateDbContextAsync();
-        var user = await context.Staffs.FirstOrDefaultAsync(x => x.UserId == userJwt.UserId);
-
-        // 检查用户身份：必须是社团成员及以上
-        if (user == null || !IsClubMember(user.Identity))
+        if (!await CanAccessResourcesAsync(IsClubMember))
             return Ok(ApiResponse<object>.Fail(ErrorCode.InsufficientPermission, "权限不足，需要社团成员身份"));
 
         var count = await resourceRepository.GetResourceCountAsync();
@@ -265,6 +192,20 @@ public class ResourceController(
         };
 
         return Ok(ApiResponse<object>.Success(result, "获取资源统计成功"));
+    }
+
+    private async Task<bool> CanAccessResourcesAsync(Func<string?, bool> hasRole)
+    {
+        if (User.Identity?.AuthenticationType == ApiKeyAuthenticationHandler.SchemeName)
+            return true;
+
+        var user = User.GetUser();
+        if (user is null)
+            return false;
+
+        await using var context = await factory.CreateDbContextAsync(HttpContext.RequestAborted);
+        var staff = await context.Staffs.FirstOrDefaultAsync(x => x.UserId == user.UserId, HttpContext.RequestAborted);
+        return hasRole(staff?.Identity);
     }
 
     /// <summary>

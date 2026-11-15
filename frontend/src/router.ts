@@ -218,6 +218,12 @@ const routes = [
                 component: () => import('./adminPages/ClientApplication.vue'),
             },
             {
+                path: 'ApiKeys',
+                name: 'ApiKeys',
+                meta: { title: "API Key 管理 - 西建大 iOS Club", requiresAuth: true, presidentOnly: true },
+                component: () => import('./adminPages/ApiKeys.vue'),
+            },
+            {
                 path: 'Logs',
                 name: 'Logs',
                 meta: { title: "日志查看 - 西建大 iOS Club" },

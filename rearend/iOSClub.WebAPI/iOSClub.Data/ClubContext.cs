@@ -18,6 +18,7 @@ public sealed class ClubContext(DbContextOptions<ClubContext> options) : DbConte
     public DbSet<ArticleDO> Articles { get; init; }
     public DbSet<CategoryDO> Categories { get; init; }
     public DbSet<ClientApplicationDO> ClientApplications { get; init; }
+    public DbSet<ApiKeyDO> ApiKeys { get; init; }
     public DbSet<ImportHistoryDO> ImportHistories { get; init; }
     public DbSet<ActivityDO> Activities { get; init; }
     public DbSet<ActivityParticipantDO> ActivityParticipants { get; init; }
