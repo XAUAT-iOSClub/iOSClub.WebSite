@@ -86,6 +86,16 @@ public interface IStudentRepository
     public Task<StudentDO?> GetByIdAsync(string id);
 
     /// <summary>
+    /// 检查学生学号是否已存在
+    /// <para>
+    /// 只查存在性、不取整行数据，供注册第一步的提前校验使用。
+    /// </para>
+    /// </summary>
+    /// <param name="userId">学号</param>
+    /// <returns>学号是否已被学生占用</returns>
+    public Task<bool> StudentExistsAsync(string userId);
+
+    /// <summary>
     /// 异步删除学生
     /// </summary>
     /// <param name="id">学生ID</param>
@@ -160,6 +170,14 @@ public class StudentRepository(IDbContextFactory<ClubContext> factory) : IStuden
     {
         await using var context = await factory.CreateDbContextAsync();
         return await GetStudentByIdQuery(context, id);
+    }
+
+    public async Task<bool> StudentExistsAsync(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId)) return false;
+
+        await using var context = await factory.CreateDbContextAsync();
+        return await context.Students.AnyAsync(s => s.UserId == userId);
     }
 
     public async Task<bool> UpdateProfileAsync(StudentDO model)

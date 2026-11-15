@@ -22,6 +22,7 @@ public sealed class ClubContext(DbContextOptions<ClubContext> options) : DbConte
     public DbSet<ActivityDO> Activities { get; init; }
     public DbSet<ActivityParticipantDO> ActivityParticipants { get; init; }
     public DbSet<ActivityOperationLogDO> ActivityOperationLogs { get; init; }
+    public DbSet<OperationLogDO> OperationLogs { get; init; }
 
     // ---- 财务模块（仅新增，不改动现有实体与关系）----
     public DbSet<FinanceMaterialDO> FinanceMaterials { get; init; }
@@ -139,6 +140,11 @@ public sealed class ClubContext(DbContextOptions<ClubContext> options) : DbConte
 
         modelBuilder.Entity<FinanceTemplateDO>()
             .HasIndex(t => new { t.Kind, t.Enabled });
+        // OperationLogDO 索引：列表按时间倒序，并支持模块/操作人/结果过滤
+        modelBuilder.Entity<OperationLogDO>().HasIndex(l => l.CreatedAt);
+        modelBuilder.Entity<OperationLogDO>().HasIndex(l => new { l.Module, l.CreatedAt });
+        modelBuilder.Entity<OperationLogDO>().HasIndex(l => new { l.OperatorId, l.CreatedAt });
+        modelBuilder.Entity<OperationLogDO>().HasIndex(l => new { l.Success, l.CreatedAt });
 
         // ParadeDB BM25 全文检索索引（pg_search）
         modelBuilder.Entity<ArticleDO>()

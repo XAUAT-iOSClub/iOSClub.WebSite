@@ -214,13 +214,13 @@
             >
               <div class="flex items-center justify-between">
                 <h4 class="font-medium text-slate-900 group-hover:text-white dark:text-slate-100 text-sm truncate"
-                    v-html="article.highlightedTitle || article.title"></h4>
+                    v-html="renderHighlight(article.highlightedTitle || article.title)"></h4>
                 <span class="text-xs text-zinc-500 group-hover:text-blue-100 dark:text-zinc-400 ml-2 flex-shrink-0">{{
                     new Date(article.lastWriteTime).toLocaleDateString()
                   }}</span>
               </div>
               <p class="line-clamp-2 text-xs text-zinc-500 group-hover:text-blue-100 dark:text-zinc-400 mt-1"
-                 v-html="article.highlightedContent || ''"></p>
+                 v-html="renderHighlight(article.highlightedContent || '')"></p>
             </div>
           </div>
 
@@ -268,11 +268,24 @@ import MenuContent from '../components/MenuContent.vue'
 import {ArticleService} from '../services/ArticleService'
 import {useAuthorizationStore} from '../stores/Authorization'
 import type {ArticleSearchResult} from '../models'
+import DOMPurify from 'dompurify'
 
 // --- 配置与状态 ---
 const router = useRouter()
 const route = useRoute()
 const message = useMessage()
+
+/**
+ * 搜索结果高亮片段来自 ParadeDB 的 Snippet，内容是文章原文包着 <b>。
+ * 直接 v-html 会把文章里的 <img onerror> 也执行掉；这里只放行高亮标签。
+ */
+const renderHighlight = (raw?: string): string =>
+  raw
+    ? DOMPurify.sanitize(raw, {
+        ALLOWED_TAGS: ['b', 'mark', 'em', 'strong'],
+        ALLOWED_ATTR: [],
+      })
+    : ''
 
 const mobileMenuOpen = ref<boolean>(false)
 const windowWidth = ref<number>(typeof window !== 'undefined' ? window.innerWidth : 1024)

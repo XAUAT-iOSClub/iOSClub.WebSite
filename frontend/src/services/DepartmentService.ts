@@ -54,8 +54,8 @@ export class DepartmentService {
 
     static async deleteDepartment(name: string): Promise<void> {
         await apiRequest<void>({
-            url: `${url}/Department/Delete/${name}`,
-            method: 'GET'
+            url: `${url}/Department/Delete/${encodeURIComponent(name)}`,
+            method: 'DELETE'
         });
     }
 

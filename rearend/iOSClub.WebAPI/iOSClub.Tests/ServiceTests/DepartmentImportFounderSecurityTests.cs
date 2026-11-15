@@ -27,7 +27,7 @@ public class DepartmentImportFounderSecurityTests
         var dto = new DepartmentImportDTO { Members = IncomingMembers(), FileName = "名单.json" };
 
         var error = await Assert.ThrowsAsync<BusinessException>(() =>
-            service.ImportRosterAsync("技术部", dto, "9999999999", "操作员"));
+            service.ImportRosterAsync("技术部", dto, "9999999999", "操作员", "Founder"));
 
         Assert.Equal(ErrorCode.InvalidStatusForOperation, error.ErrorCode);
         Assert.Equal(before, await ReadStateAsync());
@@ -56,7 +56,7 @@ public class DepartmentImportFounderSecurityTests
         var service = new DepartmentImportService(_factory);
 
         var error = await Assert.ThrowsAsync<BusinessException>(() =>
-            service.RollbackAsync("技术部", history.Id, "9999999999", "操作员"));
+            service.RollbackAsync("技术部", history.Id, "9999999999", "操作员", "Founder"));
 
         Assert.Equal(ErrorCode.InvalidStatusForOperation, error.ErrorCode);
         Assert.Equal(before, await ReadStateAsync());
@@ -70,7 +70,7 @@ public class DepartmentImportFounderSecurityTests
         var service = new DepartmentImportService(_factory);
 
         var error = await Assert.ThrowsAsync<BusinessException>(() =>
-            service.ImportRosterAsync("技术部", new DepartmentImportDTO(), "9999999999", "操作员"));
+            service.ImportRosterAsync("技术部", new DepartmentImportDTO(), "9999999999", "操作员", "Founder"));
 
         Assert.Equal(ErrorCode.InvalidStatusForOperation, error.ErrorCode);
         Assert.Equal(before, await ReadStateAsync());
@@ -88,7 +88,7 @@ public class DepartmentImportFounderSecurityTests
             Members = [new DepartmentImportMemberDTO { UserId = "0000000003", Name = "新社长", Identity = "President" }]
         };
 
-        await service.ImportRosterAsync("技术部", dto, "9999999999", "操作员");
+        await service.ImportRosterAsync("技术部", dto, "9999999999", "操作员", "Founder");
 
         await using var context = _factory.CreateDbContext();
         var president = await context.Staffs.Include(s => s.Department).SingleAsync(s => s.UserId == "0000000003");

@@ -1,18 +1,17 @@
 namespace iOSClub.Data.VOs;
 
 /// <summary>
-/// 客户端应用视图对象 - 含 ClientSecret
+/// 客户端应用视图对象。
+/// <para>
+/// 不包含 ClientSecret：数据库里存的是 BCrypt 哈希，任何"回显密钥"的读取接口
+/// 都会把哈希本身变成可用的口令。原始密钥只在创建与重置时通过
+/// <c>ClientAppResultVO</c> 返回一次。
+/// </para>
 /// </summary>
 public class ClientAppVO
 {
     public string ClientId { get; set; } = "";
 
-    /// <summary>
-    /// 客户端密钥。数据库中以 BCrypt 哈希形式存储，这里返回的就是那串哈希，
-    /// 不是创建/重置时签发的原始密钥。由于 ValidateCredentialsAsync 存在明文相等分支，
-    /// 该哈希值本身可作为 client_secret 使用。
-    /// </summary>
-    public string ClientSecret { get; set; } = "";
     public string ApplicationName { get; set; } = "";
     public string Description { get; set; } = "";
     public string HomepageUrl { get; set; } = "";
@@ -28,4 +27,10 @@ public class ClientAppVO
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public bool IsNeedEMail { get; set; }
+
+    /// <summary>
+    /// 是否保存了可恢复的加密密钥。旧应用只有 BCrypt 哈希时为 false，
+    /// 前端据此提示"需重置密钥后才能查看"。
+    /// </summary>
+    public bool HasRecoverableSecret { get; set; }
 }

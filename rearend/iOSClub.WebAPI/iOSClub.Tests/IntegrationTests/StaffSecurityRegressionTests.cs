@@ -114,7 +114,7 @@ public class StaffSecurityRegressionTests : IClassFixture<WebApplicationFactory<
     {
         await SeedAsync(role);
 
-        var response = await _client.GetAsync($"/Staff/Delete/{targetId}");
+        var response = await _client.DeleteAsync($"/Staff/Delete/{targetId}");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         await using var context = new ClubContext(_options);
@@ -179,7 +179,7 @@ public class StaffSecurityRegressionTests : IClassFixture<WebApplicationFactory<
             Assert.Equal("Minister", saved.Identity);
         }
 
-        var delete = await _client.GetAsync("/Staff/Delete/2023000003");
+        var delete = await _client.DeleteAsync("/Staff/Delete/2023000003");
         Assert.Equal(HttpStatusCode.OK, delete.StatusCode);
         await using var verify = new ClubContext(_options);
         Assert.False(await verify.Staffs.AnyAsync(s => s.UserId == "2023000003"));

@@ -227,15 +227,50 @@
               <div class="p-3 flex justify-between items-center">
                 <div class="flex flex-col w-full mr-2">
                   <span class="text-[10px] uppercase text-gray-400 font-bold tracking-wider">Client Secret</span>
-                  <div class="flex items-center justify-between w-full">
-                    <input :type="showSecret ? 'text' : 'password'" readonly :value="selectedApp?.clientSecret" class="bg-transparent font-mono text-sm text-gray-800 dark:text-gray-200 outline-none w-full"/>
-                  </div>
+
+                  <template v-if="!canViewSecret">
+                    <span class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      仅社长 / Founder 可查看密钥。
+                    </span>
+                  </template>
+                  <template v-else-if="revealedSecret">
+                    <div class="flex items-center justify-between w-full mt-1">
+                      <input :type="showRevealedSecret ? 'text' : 'password'" readonly :value="revealedSecret"
+                             class="bg-transparent font-mono text-sm text-gray-800 dark:text-gray-200 outline-none w-full"/>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <span class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {{ selectedApp?.hasRecoverableSecret
+                        ? '密钥已加密保存，点击右侧「查看」按钮读取。'
+                        : '该应用创建于旧版本，密钥不可恢复，请先重置。' }}
+                    </span>
+                  </template>
                 </div>
-                <div class="flex gap-1">
-                  <button @click="showSecret = !showSecret" class="text-gray-500 hover:bg-gray-200/50 dark:hover:bg-white/10 p-1.5 rounded-lg transition-colors">
-                    <Icon :icon="showSecret ? 'eye-off' : 'eye'" morph />
-                  </button>
-                  <button @click="copyToClipboard(selectedApp?.clientSecret)" class="text-blue-500 hover:bg-blue-500/10 p-1.5 rounded-lg transition-colors"><Icon icon="copy"/></button>
+
+                <div v-if="canViewSecret" class="flex items-center gap-1">
+                  <template v-if="revealedSecret">
+                    <button @click="showRevealedSecret = !showRevealedSecret"
+                            class="text-gray-500 hover:bg-gray-200/50 dark:hover:bg-white/10 p-1.5 rounded-lg transition-colors">
+                      <Icon :icon="showRevealedSecret ? 'eye-off' : 'eye'" morph/>
+                    </button>
+                    <button @click="copyToClipboard(revealedSecret)"
+                            class="text-blue-500 hover:bg-blue-500/10 p-1.5 rounded-lg transition-colors">
+                      <Icon icon="copy"/>
+                    </button>
+                  </template>
+                  <template v-else-if="selectedApp?.hasRecoverableSecret">
+                    <button @click="revealSecret" :disabled="isRevealingSecret"
+                            class="text-xs font-medium text-blue-600 hover:bg-blue-500/10 px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+                      {{ isRevealingSecret ? '读取中…' : '查看' }}
+                    </button>
+                  </template>
+                  <template v-else>
+                    <button @click="resetSecret"
+                            class="text-xs font-medium text-amber-600 hover:bg-amber-500/10 px-2.5 py-1.5 rounded-lg transition-colors">
+                      重置密钥
+                    </button>
+                  </template>
                 </div>
               </div>
             </div>
@@ -286,10 +321,18 @@ import HelpGuide from '../components/HelpGuide.vue';
 import { ClientAppService } from '../services/ClientAppService';
 import type { ClientApplication, CreateClientAppModel, UpdateClientAppModel } from '../models';
 import { useLayoutStore } from '../stores/LayoutStore';
+import { useAuthorizationStore } from '../stores/Authorization';
 
 const message = useMessage();
 const dialog = useDialog();
 const layoutStore = useLayoutStore();
+const authStore = useAuthorizationStore();
+
+// 密钥查看只对社长 / Founder 开放；Minister 可以管理应用但看不到原始密钥。
+const canViewSecret = computed(() => ['Founder', 'President'].includes(authStore.getRole ?? ''));
+const revealedSecret = ref('');
+const showRevealedSecret = ref(false);
+const isRevealingSecret = ref(false);
 
 // 状态管理
 const clientApps = ref<ClientApplication[]>([]);
@@ -303,7 +346,6 @@ const showEditModal = ref(false);
 const showDetailsModal = ref(false);
 const showHelpGuide = ref(false);
 const selectedApp = ref<ClientApplication | null>(null);
-const showSecret = ref(false);
 
 // 表单数据
 const createForm = ref<CreateClientAppModel>({
@@ -446,8 +488,50 @@ const handleEditSubmit = async () => {
 // 详情逻辑
 const openDetailsModal = (app: ClientApplication) => {
   selectedApp.value = app;
-  showSecret.value = false;
+  revealedSecret.value = '';
+  showRevealedSecret.value = false;
   showDetailsModal.value = true;
+};
+
+const revealSecret = async () => {
+  if (!selectedApp.value || isRevealingSecret.value) return;
+  isRevealingSecret.value = true;
+  try {
+    const result = await ClientAppService.getClientSecret(selectedApp.value.clientId);
+    revealedSecret.value = result.clientSecret;
+    showRevealedSecret.value = false;
+  } catch (e) {
+    message.error((e as Error).message);
+  } finally {
+    isRevealingSecret.value = false;
+  }
+};
+
+const resetSecret = () => {
+  if (!selectedApp.value) return;
+  const clientId = selectedApp.value.clientId;
+
+  dialog.warning({
+    title: '重置密钥',
+    content: '重置后旧密钥立即失效，所有使用该应用的第三方服务都需要更新配置。确定继续？',
+    positiveText: '确认重置',
+    negativeText: '取消',
+    positiveButtonProps: { type: 'error', bordered: false, size: 'medium' },
+    onPositiveClick: async () => {
+      try {
+        const result = await ClientAppService.regenerateClientSecret(clientId);
+        revealedSecret.value = result.clientSecret;
+        showRevealedSecret.value = false;
+        if (selectedApp.value) {
+          selectedApp.value = { ...selectedApp.value, hasRecoverableSecret: true };
+        }
+        message.success('密钥已重置，请立即复制保存');
+        await loadClientApps();
+      } catch (e) {
+        message.error((e as Error).message);
+      }
+    }
+  });
 };
 
 

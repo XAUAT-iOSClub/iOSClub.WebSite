@@ -62,7 +62,7 @@ export async function deleteDepartment(request: APIRequestContext, token: string
         headers: authHeaders(token),
         data: {members: []},
     })
-    await request.get(`${API_URL}/Department/Delete/${encodeURIComponent(name)}`, {
+    await request.delete(`${API_URL}/Department/Delete/${encodeURIComponent(name)}`, {
         headers: authHeaders(token),
     })
 }

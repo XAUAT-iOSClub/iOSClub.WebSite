@@ -53,8 +53,8 @@ export class StaffService {
 
     static async deleteStaff(userId: string): Promise<boolean> {
         await apiRequest<void>({
-            url: `${url}/Staff/Delete/${userId}`,
-            method: 'GET'
+            url: `${url}/Staff/Delete/${encodeURIComponent(userId)}`,
+            method: 'DELETE'
         });
         return true;
     }

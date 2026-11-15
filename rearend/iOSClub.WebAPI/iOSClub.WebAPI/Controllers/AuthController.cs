@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using iOSClub.Data.DataObjects;
 using iOSClub.Data.DTOs;
 using iOSClub.Data.VOs;
@@ -8,6 +9,7 @@ using iOSClub.WebAPI.IdentityModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Mapster;
+using System.Text.RegularExpressions;
 
 namespace iOSClub.WebAPI.Controllers;
 
@@ -15,10 +17,39 @@ namespace iOSClub.WebAPI.Controllers;
 [Route("[controller]")]
 public class AuthController(
     IStudentRepository studentRepository,
+    IStaffRepository staffRepository,
     ILoginService loginService,
     ITokenGenerator tokenGenerator)
     : ControllerBase
 {
+    // 与 StudentCreateDTO.UserId 的 [RegularExpression] 保持一致
+    private static readonly Regex StudentIdPattern = new(@"^\d{10}$", RegexOptions.Compiled);
+
+    /// <summary>
+    /// 注册第一步：检查学号是否可注册
+    /// </summary>
+    /// <param name="studentId">10 位数字学号</param>
+    /// <returns>true 表示该学号尚未被学生或员工占用</returns>
+    [HttpGet("student-id-available")]
+    public async Task<ActionResult<ApiResponse<bool>>> CheckStudentIdAvailable(string studentId)
+    {
+        var userId = studentId ?? string.Empty;
+
+        // 与 StudentCreateDTO.UserId 的规则保持一致，格式不合法时不必查库。
+        if (!StudentIdPattern.IsMatch(userId))
+        {
+            return Ok(ApiResponse<bool>.Fail(ErrorCode.ParameterFormatError, "学号必须为10位数字"));
+        }
+
+        // 与 SignUp 的拒绝规则保持一致：学号被学生或员工占用都不可注册。
+        // 该接口必然暴露"某学号是否已注册"，但注册接口本身就会返回同样的信息，
+        // 所以不构成新的泄露面；枚举速率由 register-check 限流策略约束。
+        var available = !await studentRepository.StudentExistsAsync(userId) &&
+                        !await staffRepository.StaffExistsAsync(userId);
+
+        return Ok(ApiResponse<bool>.Success(available, available ? "学号可注册" : "该学号已被占用"));
+    }
+
     /// <summary>
     /// 学生注册接口
     /// </summary>
@@ -27,6 +58,14 @@ public class AuthController(
     [HttpPost("signup")]
     public async Task<ActionResult<ApiResponse<string>>> SignUp(StudentCreateDTO dto)
     {
+        // 公开注册不能占用已有员工账号的学号。登录身份来自 Staffs 表，
+        // 若允许注册一个已有 Staff 的学号，任何人都能用自己的密码接管该身份
+        // （包括 Founder）。这里与管理员创建接口共用同一条拒绝规则。
+        if (await staffRepository.StaffExistsAsync(dto.UserId))
+        {
+            return Ok(ApiResponse<string>.Fail(ErrorCode.ResourceAlreadyExists, "用户已存在"));
+        }
+
         var createdStudent = await studentRepository.Create(dto.Adapt<StudentDO>());
 
         if (createdStudent == null)
@@ -114,26 +153,23 @@ public class AuthController(
     /// <summary>
     /// 修改用户密码
     /// </summary>
-    /// <param name="userId">用户ID</param>
-    /// <param name="oldPassword">旧密码</param>
-    /// <param name="newPassword">新密码</param>
+    /// <param name="request">学号、旧密码和新密码</param>
     /// <returns>成功返回true，失败返回相应的错误信息</returns>
     [Authorize]
     [HttpPut("change-password")]
-    public async Task<ActionResult<ApiResponse<bool>>> ChangePassword(string userId, string oldPassword,
-        string newPassword)
+    public async Task<ActionResult<ApiResponse<bool>>> ChangePassword([FromBody] ChangePasswordRequest request)
     {
         // 验证用户身份
         var token = HttpContext.GetJwt();
         if (string.IsNullOrEmpty(token))
             return Ok(ApiResponse<bool>.Fail(ErrorCode.InvalidToken, "无效的令牌"));
 
-        var isValid = await loginService.ValidateToken(userId, token);
+        var isValid = await loginService.ValidateToken(request.UserId, token);
         if (!isValid)
             return Ok(ApiResponse<bool>.Fail(ErrorCode.InvalidToken, "令牌无效"));
 
         // 尝试更改密码
-        var result = await loginService.ChangePassword(userId, oldPassword, newPassword);
+        var result = await loginService.ChangePassword(request.UserId, request.OldPassword, request.NewPassword);
 
         return Ok(!result
             ? ApiResponse<bool>.Fail(ErrorCode.OperationFailed, "密码更新失败，可能是旧密码错误或用户不存在")
@@ -143,34 +179,27 @@ public class AuthController(
     /// <summary>
     /// 请求重置密码的验证码
     /// </summary>
-    /// <param name="userId">用户ID</param>
+    /// <param name="request">重置密码申请</param>
     /// <returns>成功返回true，失败返回相应的错误信息</returns>
     [HttpPost("request-password-reset")]
-    public async Task<ActionResult<ApiResponse<bool>>> RequestPasswordReset(string userId)
+    public async Task<ActionResult<ApiResponse<bool>>> RequestPasswordReset([FromBody] PasswordResetRequest request)
     {
-        var result = await loginService.RequestPasswordResetCode(userId);
+        // 无论用户是否存在、是否绑定邮箱、邮件是否发送成功，都返回同一句话。
+        // 之前按"用户不存在 / 请联系管理员"区分响应，等于把学号枚举接口送给了攻击者。
+        await loginService.RequestPasswordResetCode(request.UserId);
 
-        if (result) return Ok(ApiResponse<bool>.Success(true, "请求重置密码验证码成功"));
-        // 检查用户是否存在
-        var student = await studentRepository.GetByIdAsync(userId);
-        return Ok(student == null
-            ? ApiResponse<bool>.Fail(ErrorCode.UserNotFound, "用户不存在")
-            : ApiResponse<bool>.Fail(ErrorCode.OperationFailed, "请联系管理员进行密码更改"));
-
-        // 用户存在但没有邮箱
+        return Ok(ApiResponse<bool>.Success(true, "如果该账号已绑定邮箱，验证码已发送"));
     }
 
     /// <summary>
     /// 通过验证码重置密码
     /// </summary>
-    /// <param name="userId">用户ID</param>
-    /// <param name="code">验证码</param>
-    /// <param name="newPassword">新密码</param>
+    /// <param name="request">学号、验证码和新密码</param>
     /// <returns>成功返回true，失败返回相应的错误信息</returns>
     [HttpPost("reset-password")]
-    public async Task<ActionResult<ApiResponse<bool>>> ResetPassword(string userId, string code, string newPassword)
+    public async Task<ActionResult<ApiResponse<bool>>> ResetPassword([FromBody] PasswordResetConfirmation request)
     {
-        var result = await loginService.ResetPasswordWithCode(userId, code, newPassword);
+        var result = await loginService.ResetPasswordWithCode(request.UserId, request.Code, request.NewPassword);
 
         return Ok(!result
             ? ApiResponse<bool>.Fail(ErrorCode.OperationFailed, "验证码无效或密码重置失败")
@@ -180,26 +209,23 @@ public class AuthController(
     /// <summary>
     /// 使用刷新令牌获取新的访问令牌
     /// </summary>
-    /// <param name="userId">用户ID</param>
-    /// <param name="refreshToken">刷新令牌</param>
-    /// <param name="clientId">客户端ID</param>
-    /// <param name="scope">权限范围</param>
+    /// <param name="request">学号、刷新令牌、客户端和权限范围</param>
     /// <returns>成功返回新的访问令牌，失败返回相应的错误信息</returns>
     [HttpPost("refresh-token")]
-    public async Task<ActionResult<ApiResponse<string>>> RefreshToken(string userId, string refreshToken, string clientId = "", string scope = "")
+    public async Task<ActionResult<ApiResponse<string>>> RefreshToken([FromBody] RefreshTokenRequest request)
     {
-        if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(refreshToken))
+        if (string.IsNullOrEmpty(request.UserId) || string.IsNullOrEmpty(request.RefreshToken))
         {
             return Ok(ApiResponse<string>.Fail(ErrorCode.InvalidRequest, "用户ID和刷新令牌不能为空"));
         }
         
-        var newToken = await loginService.RefreshToken(userId, refreshToken, clientId, scope);
+        var newToken = await loginService.RefreshToken(request.UserId, request.RefreshToken, request.ClientId, request.Scope);
 
         // LoginService 会轮换刷新令牌。将新值随响应返回，避免客户端下次
         // 刷新仍提交已被撤销的旧令牌。
         if (!string.IsNullOrEmpty(newToken))
         {
-            var newRefreshToken = await loginService.GetRefreshToken(userId, clientId);
+            var newRefreshToken = await loginService.GetRefreshToken(request.UserId, request.ClientId);
             Response.Headers.Append("X-Refresh-Token", newRefreshToken);
         }
         
@@ -208,3 +234,22 @@ public class AuthController(
             : ApiResponse<string>.Fail(ErrorCode.InvalidToken, "无效的刷新令牌"));
     }
 }
+
+public record PasswordResetRequest(
+    [Required] string UserId);
+
+public record PasswordResetConfirmation(
+    [Required] string UserId,
+    [Required] string Code,
+    [Required] string NewPassword);
+
+public record ChangePasswordRequest(
+    [Required] string UserId,
+    [Required] string OldPassword,
+    [Required] string NewPassword);
+
+public record RefreshTokenRequest(
+    [Required] string UserId,
+    [Required] string RefreshToken,
+    string ClientId = "",
+    string Scope = "");

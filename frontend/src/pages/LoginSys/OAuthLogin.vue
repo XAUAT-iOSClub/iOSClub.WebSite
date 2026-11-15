@@ -157,12 +157,10 @@ import {onMounted, ref} from 'vue'
 import {useRoute} from 'vue-router'
 import {NCheckbox, NForm, NFormItem, NInput} from 'naive-ui'
 import Icon from '@/components/Icon.vue'
-import {useAuthorizationStore} from "../../stores/Authorization";
 import {OAuthService} from '../../services/OAuthService';
 import {AuthService} from '../../services/AuthService';
 import {url} from '../../services/Url';
 
-const authorizationStore = useAuthorizationStore()
 const route = useRoute()
 let paramsData = {
   state: '',
@@ -237,7 +235,7 @@ const performRegularLogin = async (params: any) => {
     if (!errors) {
       try {
         // 执行登录
-        const res = await authorizationStore.oauthLogin({
+        const res = await AuthService.loginForSso({
               userId: form.value.studentId,
               password: form.value.password,
               rememberMe: form.value.rememberMe

@@ -5,6 +5,8 @@ using iOSClub.Data.DTOs;
 using iOSClub.Data.VOs;
 using iOSClub.DataApi.Repositories;
 using iOSClub.WebAPI.Common;
+using iOSClub.WebAPI.Common.Security;
+using iOSClub.WebAPI.IdentityModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,8 +20,40 @@ namespace iOSClub.WebAPI.Controllers;
 [Route("[controller]")]
 public class MemberManagementController(
     IStudentRepository studentRepository,
+    IStaffRepository staffRepository,
     ILogger<MemberManagementController> logger) : ControllerBase
 {
+    /// <summary>
+    /// 调用者是否可以对目标学号做普通维护（改资料、删除）。
+    /// <para>
+    /// 目标没有 Staff 记录时按普通 Member 处理；有 Staff 记录时按
+    /// <see cref="RoleHierarchy.CanManage"/> 判断（允许同级，禁止越级）。
+    /// </para>
+    /// </summary>
+    private async Task<bool> CanManageTargetAsync(string userId)
+    {
+        var actor = User.GetUser();
+        if (actor == null) return false;
+        if (actor.Identity == RoleHierarchy.Founder) return true;
+
+        var target = await staffRepository.GetStaffByIdWithoutOtherData(userId);
+        return RoleHierarchy.CanManage(actor.Identity, target?.Identity ?? RoleHierarchy.Member);
+    }
+
+    /// <summary>
+    /// 调用者是否可以接管目标学号的登录凭据（重置密码、创建 Student 档案）。
+    /// 要求严格高于目标职级：同级之间互相重置密码等于互相接管。
+    /// </summary>
+    private async Task<bool> CanTakeOverTargetAsync(string userId)
+    {
+        var actor = User.GetUser();
+        if (actor == null) return false;
+        if (actor.Identity == RoleHierarchy.Founder) return true;
+
+        var target = await staffRepository.GetStaffByIdWithoutOtherData(userId);
+        return RoleHierarchy.CanTakeOver(actor.Identity, target?.Identity ?? RoleHierarchy.Member);
+    }
+
     /// <summary>
     /// 删除学生成员
     /// </summary>
@@ -28,6 +62,9 @@ public class MemberManagementController(
     [HttpPost("delete/{id}")]
     public async Task<ActionResult<ApiResponse<object>>> Delete(string id)
     {
+        if (!await CanManageTargetAsync(id))
+            return Ok(ApiResponse<object>.Fail(ErrorCode.InsufficientPermission, "无权删除该成员"));
+
         var result = await studentRepository.DeleteAsync(id);
         if (!result)
         {
@@ -60,6 +97,28 @@ public class MemberManagementController(
     [HttpPost("update-many")]
     public async Task<ActionResult<ApiResponse<BulkUpdateResultVO>>> UpdateMany(List<StudentUpdateDTO> list)
     {
+        // 批量写库前统一校验：
+        // - 已存在的 Student 只是改资料，按普通维护（同级可操作）判断；
+        // - 不存在的 Student 会被创建并写入默认密码，等于发放登录凭据，必须严格高于目标职级。
+        var forbidden = new List<string>();
+        foreach (var item in list)
+        {
+            var existing = await studentRepository.GetByIdAsync(item.UserId);
+            var allowed = existing != null
+                ? await CanManageTargetAsync(item.UserId)
+                : await CanTakeOverTargetAsync(item.UserId);
+
+            if (!allowed)
+                forbidden.Add(item.UserId);
+        }
+
+        if (forbidden.Count > 0)
+        {
+            return Ok(ApiResponse<BulkUpdateResultVO>.Fail(
+                ErrorCode.InsufficientPermission,
+                $"无权修改以下学号：{string.Join(", ", forbidden.Distinct())}"));
+        }
+
         var doList = list.Adapt<List<StudentDO>>();
         var result = await studentRepository.UpdateManyAsync(doList);
         var message = $"新增 {result.Created}，更新 {result.Updated}，跳过 {result.Skipped}，失败 {result.Failed}";
@@ -99,6 +158,9 @@ public class MemberManagementController(
     [HttpPost("create")]
     public async Task<ActionResult<ApiResponse<StudentVO>>> Create([FromBody] StudentCreateDTO model)
     {
+        if (!await CanTakeOverTargetAsync(model.UserId))
+            return Ok(ApiResponse<StudentVO>.Fail(ErrorCode.InsufficientPermission, "无权为该学号创建账号"));
+
         // 先查重再创建，避免把"学号已存在"和"参数不合法"混成同一个失败提示。
         var existing = await studentRepository.GetByIdAsync(model.UserId);
         if (existing != null)
@@ -141,6 +203,9 @@ public class MemberManagementController(
     [HttpPost("update")]
     public async Task<ActionResult<ApiResponse<object>>> Update([FromBody] StudentUpdateDTO model)
     {
+        if (!await CanManageTargetAsync(model.UserId))
+            return Ok(ApiResponse<object>.Fail(ErrorCode.InsufficientPermission, "无权修改该成员"));
+
         var result = await studentRepository.UpdateProfileAsync(model.Adapt<StudentDO>());
         if (!result)
         {
@@ -163,6 +228,11 @@ public class MemberManagementController(
     [HttpPost("reset-password")]
     public async Task<ActionResult<ApiResponse<object>>> ResetPassword(ResetPasswordData data)
     {
+        // 重置密码等于直接接管账号：禁止 Minister/President 对同级或更高级别账号操作，
+        // 尤其是 Founder。Founder 仍可重置任何人的密码。
+        if (!await CanTakeOverTargetAsync(data.UserId))
+            return Ok(ApiResponse<object>.Fail(ErrorCode.InsufficientPermission, "无权重置该成员的密码"));
+
         var student = await studentRepository.GetByIdAsync(data.UserId);
         if (student == null)
         {

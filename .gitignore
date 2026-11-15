@@ -1,5 +1,6 @@
 ﻿.DS_Store
 dump.rdb
+backups/
 
 # Playwright
 frontend/test-results/

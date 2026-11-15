@@ -37,6 +37,7 @@ public static class MapperConfig
 
         // DO 里回调地址是分号拼接的字符串，VO 暴露为数组（与 ClientAppResultVO 一致）。
         config.NewConfig<ClientApplicationDO, ClientAppVO>()
+            .Map(dest => dest.HasRecoverableSecret, src => !string.IsNullOrEmpty(src.ClientSecretCipher))
             .Map(dest => dest.RedirectUris,
                 src => src.RedirectUris
                     .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)

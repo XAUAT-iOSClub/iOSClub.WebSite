@@ -28,6 +28,17 @@ export class AuthService {
      * @returns Promise<{ accessToken: string, refreshToken: string }> 访问令牌和刷新令牌
      */
     static async login(loginModel: LoginModel, clientId: string | null | undefined = '', scope: string | null | undefined = ''): Promise<{ accessToken: string, refreshToken: string }> {
+        const tokens = await this.requestLogin(loginModel, clientId, scope);
+        this.saveTokens(tokens.accessToken, tokens.refreshToken);
+        return tokens;
+    }
+
+    static async loginForSso(loginModel: LoginModel, clientId: string, scope: string): Promise<string> {
+        const {accessToken} = await this.requestLogin(loginModel, clientId, scope);
+        return accessToken;
+    }
+
+    private static async requestLogin(loginModel: LoginModel, clientId: string | null | undefined, scope: string | null | undefined): Promise<{ accessToken: string, refreshToken: string }> {
         // 直接使用fetch获取完整响应，以便获取响应头中的刷新令牌；
         // 响应体解析复用 readApiResponse，与 apiRequest 保持同一套判据。
         const response = await fetch(`${url}/Auth/login?clientId=${clientId}&scope=${scope}`, {
@@ -49,7 +60,6 @@ export class AuthService {
         // 从响应头中获取刷新令牌
         const refreshToken = response.headers.get('X-Refresh-Token') || '';
 
-        this.saveTokens(accessToken, refreshToken);
         return { accessToken, refreshToken };
     }
 
@@ -85,6 +95,21 @@ export class AuthService {
 
         this.saveTokens(accessToken, refreshToken);
         return { accessToken, refreshToken };
+    }
+
+    /**
+     * 注册第一步：检查学号是否已被注册（学生或员工占用）。
+     * 仅用于提前提示，最终以 signup 的重复校验为准——两次请求之间仍可能被他人抢先注册。
+     * @param studentId 10 位数字学号
+     * @returns Promise<boolean> true 表示该学号尚未被占用
+     */
+    static async checkStudentIdAvailable(studentId: string): Promise<boolean> {
+        // 注册页面没有登录态，必须显式声明匿名请求，避免 apiRequest 附带失效令牌。
+        return await apiRequest<boolean>({
+            url: `${url}/Auth/student-id-available?studentId=${encodeURIComponent(studentId)}`,
+            method: 'GET',
+            requiresAuth: false
+        });
     }
 
     static async logout(userId: string, clientId: string | null | undefined = ''): Promise<boolean> {
@@ -161,17 +186,18 @@ export class AuthService {
         }
         
         // 刷新令牌按 client_id 分区存储；沿用当前访问令牌的客户端和授权范围。
-        const query = new URLSearchParams({
+        const body = {
             userId: userInfo.sub,
             refreshToken,
             clientId: userInfo.client_id || '',
             scope: userInfo.scope || ''
-        });
-        const res = await fetch(`${url}/Auth/refresh-token?${query.toString()}`, {
+        };
+        const res = await fetch(`${url}/Auth/refresh-token`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
-            }
+            },
+            body: JSON.stringify(body)
         })
 
         // 先解析响应体再判成败：以前这里先看 res.ok，会把 body 里的具体原因丢掉。
@@ -274,8 +300,9 @@ export class AuthService {
      */
     static async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<boolean> {
         return await apiRequest<boolean>({
-            url: `${url}/Auth/change-password?userId=${userId}&oldPassword=${oldPassword}&newPassword=${newPassword}`,
-            method: 'PUT'
+            url: `${url}/Auth/change-password`,
+            method: 'PUT',
+            body: { userId, oldPassword, newPassword }
         });
     }
 
@@ -286,8 +313,9 @@ export class AuthService {
      */
     static async requestPasswordReset(userId: string): Promise<boolean> {
         return await apiRequest<boolean>({
-            url: `${url}/Auth/request-password-reset?userId=${userId}`,
+            url: `${url}/Auth/request-password-reset`,
             method: 'POST',
+            body: { userId },
             requiresAuth: false
         });
     }
@@ -301,8 +329,9 @@ export class AuthService {
      */
     static async resetPassword(userId: string, code: string, newPassword: string): Promise<boolean> {
         return await apiRequest<boolean>({
-            url: `${url}/Auth/reset-password?userId=${userId}&code=${code}&newPassword=${newPassword}`,
+            url: `${url}/Auth/reset-password`,
             method: 'POST',
+            body: { userId, code, newPassword },
             requiresAuth: false
         });
     }
@@ -319,8 +348,9 @@ export class AuthService {
             throw new Error('未登录或令牌已过期');
         }
 
-        const response = await fetch(`${url}/SSO/from_main_jwt?scope=${encodeURIComponent(scope)}&client_id=${encodeURIComponent(clientId)}`, {
-            method: 'GET',
+        const response = await fetch(`${url}/SSO/from_main_jwt`, {
+            method: 'POST',
+            body: JSON.stringify({ clientId, scope }),
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`,
