@@ -37,9 +37,25 @@ jobs:
       - name: Verify NativeAOT service
         shell: bash
         run: |
-          docker run -d --rm --name finance-ocr-ci -p 127.0.0.1:5099:5099 "$LOCAL_IMAGE"
-          trap 'docker logs finance-ocr-ci; docker stop finance-ocr-ci' EXIT
-          curl -fsS --retry 30 --retry-delay 1 --retry-connrefused http://127.0.0.1:5099/health
+          container=finance-ocr-ci
+          docker run -d --name "$container" --health-interval=1s -p 127.0.0.1:5099:5099 "$LOCAL_IMAGE"
+          trap 'docker inspect --format "{{json .State}}" "$container" >&2 || true; docker logs "$container" >&2 || true; docker rm -f "$container" >/dev/null || true' EXIT
+          for ((attempt = 0; attempt < 60; attempt++)); do
+            status="$(docker inspect --format '{{.State.Status}} {{.State.Health.Status}}' "$container")"
+            read -r state health <<<"$status"
+            if [[ "$state" != running || "$health" == unhealthy ]]; then
+              echo "OCR container failed to start ($state, $health)" >&2
+              exit 1
+            fi
+            if [[ "$health" == healthy ]]; then
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$health" != healthy ]]; then
+            echo "Timed out waiting for the OCR container to become healthy" >&2
+            exit 1
+          fi
           curl -fsS --max-time 60 http://127.0.0.1:5099/ocr \
             -F file=@rearend/iOSClub.WebAPI/iOSClub.FinanceOcr/test-data/synthetic-invoice.png |
             jq -e '.rawText | contains("发票") and contains("12345678") and contains("318.00")'
