@@ -102,6 +102,10 @@ public sealed class ClubContext(DbContextOptions<ClubContext> options) : DbConte
 
         // ---- 财务模块索引 ----
         modelBuilder.Entity<FinanceMaterialDO>()
+            .Property(m => m.Status)
+            .IsConcurrencyToken();
+
+        modelBuilder.Entity<FinanceMaterialDO>()
             .HasIndex(m => new { m.Status, m.AcademicYear });
         modelBuilder.Entity<FinanceMaterialDO>()
             .HasIndex(m => m.CreatedAt);

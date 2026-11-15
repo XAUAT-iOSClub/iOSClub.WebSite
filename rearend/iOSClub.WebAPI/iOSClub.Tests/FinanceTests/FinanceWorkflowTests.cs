@@ -143,6 +143,8 @@ public class FinanceWorkflowTests : IAsyncLifetime
 
         var confirmed = await service.ConfirmAsync(material.Id, actor);
         Assert.Equal(FinanceMaterialStatus.Reimbursed, confirmed.Status);
+        Assert.Null(await repository.ConfirmMaterialAsync(material.Id, 23000, actor.UserId, actor.Name,
+            DateTime.UtcNow));
 
         var summary = await service.SummaryAsync(year);
         Assert.Equal(230m, summary.UsedAmount);

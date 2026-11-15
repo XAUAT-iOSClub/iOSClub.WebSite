@@ -388,7 +388,7 @@ public class FinanceRepository(IDbContextFactory<ClubContext> factory) : IFinanc
     {
         await using var ctx = await factory.CreateDbContextAsync(ct);
         var material = await ctx.FinanceMaterials.FirstOrDefaultAsync(m => m.Id == id, ct);
-        if (material == null) return null;
+        if (material == null || material.Status != FinanceMaterialStatus.Pending) return null;
 
         material.Status = FinanceMaterialStatus.Reimbursed;
         material.ConfirmedAt = now;
@@ -410,8 +410,15 @@ public class FinanceRepository(IDbContextFactory<ClubContext> factory) : IFinanc
             CreatedAt = now
         };
         ctx.FinanceFlows.Add(flow);
-        await ctx.SaveChangesAsync(ct);
-        return flow;
+        try
+        {
+            await ctx.SaveChangesAsync(ct);
+            return flow;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return null;
+        }
     }
 
     public async Task<FinanceFlowDO?> RevokeMaterialAsync(string id, string reason, string? operatorId,
@@ -419,7 +426,7 @@ public class FinanceRepository(IDbContextFactory<ClubContext> factory) : IFinanc
     {
         await using var ctx = await factory.CreateDbContextAsync(ct);
         var material = await ctx.FinanceMaterials.FirstOrDefaultAsync(m => m.Id == id, ct);
-        if (material == null) return null;
+        if (material == null || material.Status != FinanceMaterialStatus.Reimbursed) return null;
 
         var deduct = await ctx.FinanceFlows
             .Where(f => f.MaterialId == id && f.Type == FinanceFlowType.Deduct &&
@@ -451,8 +458,15 @@ public class FinanceRepository(IDbContextFactory<ClubContext> factory) : IFinanc
             CreatedAt = now
         };
         ctx.FinanceFlows.Add(rollback);
-        await ctx.SaveChangesAsync(ct);
-        return rollback;
+        try
+        {
+            await ctx.SaveChangesAsync(ct);
+            return rollback;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return null;
+        }
     }
 
     public async Task<PagedResult<FinanceInvoiceVO>> GetInvoicesAsync(FinanceInvoiceQuery query,
