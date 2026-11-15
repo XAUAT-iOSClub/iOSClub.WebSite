@@ -106,7 +106,7 @@ function remove(template: FinanceTemplate) {
 }
 
 onMounted(() => {
-  
+
   layoutStore.setPageHeader('财务管理')
   layoutStore.setShowPageActions(false)
   void load()
@@ -122,7 +122,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
       <div>
         <h2 class="text-xl font-semibold text-gray-900 dark:text-white">表单模板</h2>
-        
+
       </div>
       <button class="finance-btn" @click="load"><Icon icon="refresh-cw" class="w-4 h-4"/>刷新</button>
     </div>

@@ -535,7 +535,7 @@ function remove(invoice: FinanceInvoice) {
 }
 
 onMounted(() => {
-  
+
   layoutStore.setPageHeader('财务管理')
   layoutStore.setShowPageActions(false)
   void load()
@@ -551,7 +551,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
       <div>
         <h2 class="text-xl font-semibold text-gray-900 dark:text-white">发票库</h2>
-        
+
       </div>
       <div class="flex items-center gap-2">
         <button class="finance-btn primary" :disabled="uploading" @click="triggerUpload">

@@ -122,7 +122,7 @@ function resetFilters() {
 }
 
 onMounted(() => {
-  
+
   layoutStore.setPageHeader('财务管理')
   layoutStore.setShowPageActions(false)
   void load()
@@ -138,7 +138,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
       <div>
         <h2 class="text-xl font-semibold text-gray-900 dark:text-white">经费流水</h2>
-        
+
       </div>
       <div class="flex gap-2">
         <select v-model="yearFilter" class="finance-select w-auto min-w-[140px] shrink-0" @change="page = 1; load()">

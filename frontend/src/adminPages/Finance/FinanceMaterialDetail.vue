@@ -377,7 +377,7 @@ async function restoreMaterial() {
 watch(() => route.params.id, () => { void load() })
 
 onMounted(() => {
-  
+
   layoutStore.setPageHeader('财务管理')
   layoutStore.setShowPageActions(false)
   void load()

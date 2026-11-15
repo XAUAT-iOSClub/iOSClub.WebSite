@@ -116,7 +116,7 @@ function saveBudget() {
 }
 
 onMounted(() => {
-  
+
   layoutStore.setPageHeader('财务管理')
   layoutStore.setShowPageActions(false)
   load()
@@ -132,7 +132,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-5">
       <div>
         <h2 class="text-xl font-semibold text-gray-900 dark:text-white">经费看板</h2>
-        
+
       </div>
       <div class="flex items-center gap-2">
         <select class="finance-select w-auto min-w-[150px] shrink-0" :value="year" @change="onYearChange">

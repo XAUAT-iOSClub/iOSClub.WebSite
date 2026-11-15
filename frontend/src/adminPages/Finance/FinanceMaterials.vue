@@ -293,7 +293,7 @@ async function restore(row: FinanceMaterial) {
 }
 
 onMounted(() => {
-  
+
   layoutStore.setPageHeader('财务管理')
   layoutStore.setShowPageActions(false)
   void load()
@@ -309,7 +309,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
       <div>
         <h2 class="text-xl font-semibold text-gray-900 dark:text-white">报销材料</h2>
-        
+
       </div>
       <div class="flex items-center gap-2">
         <button class="finance-btn primary" @click="openCreate">
@@ -417,7 +417,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
         <div class="sm:col-span-2">
           <label class="finance-label">活动经费（元）</label>
           <input v-model.number="form.activityBudget" type="number" min="0" step="0.01" class="finance-input"/>
-          
+
         </div>
         <div class="sm:col-span-2">
           <label class="finance-label">活动简介（选填，≤200 字）</label>
