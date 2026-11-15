@@ -91,10 +91,15 @@ date_path="$(date -u +%Y/%m/%d)"
 base_name="iosclub_${timestamp}.dump"
 tmp_file="$(mktemp "$TMP_DIR/${base_name}.XXXXXX")"
 dump_validated=0
+manifest_file=""
 
 cleanup() {
     local status=$?
     trap - EXIT
+
+    if [[ -n "$manifest_file" ]]; then
+        rm -f -- "$manifest_file"
+    fi
 
     if [[ $status -ne 0 && -f "$tmp_file" ]]; then
         if [[ $dump_validated -eq 1 ]]; then
@@ -158,7 +163,8 @@ JSON
 # 只有上传与大小校验都成功后才更新 latest.json。
 aws "${aws_args[@]}" s3 cp "$manifest_file" "s3://${R2_BUCKET}/${R2_LATEST_MANIFEST_KEY}" \
     --content-type application/json
-rm -f "$manifest_file"
+rm -f -- "$manifest_file"
+manifest_file=""
 log "latest.json 已更新: ${R2_LATEST_MANIFEST_KEY}"
 
 mv "$tmp_file" "$DONE_DIR/$base_name"

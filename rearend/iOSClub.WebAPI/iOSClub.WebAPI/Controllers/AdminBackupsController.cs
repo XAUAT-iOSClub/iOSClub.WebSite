@@ -66,6 +66,7 @@ public class AdminBackupsController(
     /// 为最近一次成功备份生成短时 GET 预签名下载链接。
     /// </summary>
     [HttpGet("latest/download-url")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<ActionResult<ApiResponse<BackupDownloadVO>>> GetLatestDownloadUrl(
         CancellationToken cancellationToken)
     {
