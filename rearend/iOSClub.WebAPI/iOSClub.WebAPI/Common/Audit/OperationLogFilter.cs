@@ -114,7 +114,7 @@ public sealed class OperationLogFilter(
                       || HttpMethods.IsPatch(method)
                       || HttpMethods.IsDelete(method);
 
-        if (!isWrite && !OperationLogCatalog.IsMutatingGet(cad.ControllerName, cad.MethodInfo.Name))
+        if (!isWrite && !OperationLogCatalog.IsAuditedRead(cad.ControllerName, cad.MethodInfo.Name))
         {
             return false;
         }

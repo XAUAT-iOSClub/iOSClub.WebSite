@@ -210,7 +210,7 @@ public class StaffController(
     /// </summary>
     /// <param name="userId">用户ID</param>
     /// <returns>删除结果</returns>
-    [HttpGet("Delete/{userId}")]
+    [HttpDelete("Delete/{userId}")]
     public async Task<ActionResult<ApiResponse<object>>> DeleteStaff(string userId)
     {
         // 获取目标成员信息

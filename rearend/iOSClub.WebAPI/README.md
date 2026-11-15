@@ -101,6 +101,24 @@ dotnet test
 dotnet ef database update --project iOSClub.Data --startup-project iOSClub.WebAPI
 ```
 
+### 全量导出 PostgreSQL 为 JSON
+
+在仓库根目录运行（需要 Python 3、`psql` 和 `python-dotenv`）：
+
+```bash
+python3 -m pip install python-dotenv
+python3 scripts/export-postgres-json.py
+```
+
+脚本读取环境变量 `SQL`，未设置时读取 `rearend/iOSClub.WebAPI/iOSClub.WebAPI/.env`。
+可使用 `--env-file` 指定其他配置文件，使用 `--output` 指定输出文件。
+默认保存到 `backups/database-时间戳.json`，已有文件不会覆盖。
+
+所有非系统 schema 下的表（包括关联表、迁移记录和扩展表）在同一个只读快照中导出，
+分区数据包含在分区父表中。JSON 包含数据库名、导出时间、每张表的 schema、名称、
+记录数和原始字段数据；空表保留为空数组。导出包含敏感字段，备份权限设为仅当前用户
+可读写，`backups/` 已加入 Git 忽略规则。此文件是数据导出，不包含索引、约束等建表定义。
+
 ## Docker 生产部署
 
 后端 CI/CD 工作流位于 `.github/workflows/backend-ci-cd.yml`：PR 会运行 restore、build 和测试；推送到 `master` 后，在测试通过时构建并推送带 commit SHA 与 `latest` 标签的 GHCR 镜像。工作流可在 Actions 中手动触发。若需同步推送到国内镜像仓库，配置 Actions Variables `MIRROR_REGISTRY`、`MIRROR_NAMESPACE`，以及 Secrets `MIRROR_USERNAME`、`MIRROR_PASSWORD`。

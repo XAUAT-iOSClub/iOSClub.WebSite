@@ -37,7 +37,7 @@ public class OperationLogCatalogTests
                               || method.GetCustomAttributes<HttpPatchAttribute>().Any()
                               || method.GetCustomAttributes<HttpDeleteAttribute>().Any();
 
-                if (!isWrite && !OperationLogCatalog.IsMutatingGet(controller, method.Name))
+                if (!isWrite && !OperationLogCatalog.IsAuditedRead(controller, method.Name))
                 {
                     continue;
                 }
@@ -59,12 +59,10 @@ public class OperationLogCatalogTests
     }
 
     [Theory]
-    [InlineData("Category", "DeleteCategory")]
-    [InlineData("Department", "DeleteDepartment")]
-    [InlineData("Staff", "DeleteStaff")]
-    public void MutatingGetActions_AreWhitelistedAndResolved(string controller, string action)
+    [InlineData("ClientApp", "GetClientSecret")]
+    public void AuditedReadActions_AreWhitelistedAndResolved(string controller, string action)
     {
-        Assert.True(OperationLogCatalog.IsMutatingGet(controller, action));
+        Assert.True(OperationLogCatalog.IsAuditedRead(controller, action));
         Assert.True(OperationLogCatalog.TryResolve(controller, action, out var module, out var label));
         Assert.False(string.IsNullOrWhiteSpace(module));
         Assert.False(string.IsNullOrWhiteSpace(label));

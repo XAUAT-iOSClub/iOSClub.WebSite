@@ -99,13 +99,10 @@ public static class OperationLogCatalog
     };
 
     /// <summary>
-    /// 用 GET 承载删除的既有接口。它们同样属于写操作，必须进入审计。
+    /// 需要进入审计的敏感读取接口。
     /// </summary>
-    private static readonly HashSet<string> MutatingGetActions = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> AuditedReadActions = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Category.DeleteCategory",
-        "Department.DeleteDepartment",
-        "Staff.DeleteStaff",
         // 查看密钥不改变数据，但属于敏感读取，必须留下"谁在何时看过"的记录。
         "ClientApp.GetClientSecret"
     };
@@ -114,8 +111,8 @@ public static class OperationLogCatalog
     public static IReadOnlyCollection<string> ModuleLabels { get; } =
         Modules.Values.Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray();
 
-    public static bool IsMutatingGet(string controller, string action)
-        => MutatingGetActions.Contains($"{controller}.{action}");
+    public static bool IsAuditedRead(string controller, string action)
+        => AuditedReadActions.Contains($"{controller}.{action}");
 
     public static bool TryResolve(string controller, string action, out string module, out string actionLabel)
     {

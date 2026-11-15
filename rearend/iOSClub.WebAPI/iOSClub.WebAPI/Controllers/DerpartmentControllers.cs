@@ -136,7 +136,7 @@ public class DepartmentController(
     /// <summary>
     /// 删除部门
     /// </summary>
-    [HttpGet("Delete/{name}")]
+    [HttpDelete("Delete/{name}")]
     [Authorize(Roles = "Founder,President")]
     public async Task<ActionResult<ApiResponse<string>>> DeleteDepartment(string name)
     {
