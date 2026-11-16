@@ -126,7 +126,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
 </script>
 
 <template>
-  <div class="finance-page">
+  <div class="finance-page finance-dashboard">
     <FinanceTabs/>
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-5">
@@ -134,7 +134,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
         <h2 class="text-xl font-semibold text-gray-900 dark:text-white">经费看板</h2>
 
       </div>
-      <div class="flex items-center gap-2">
+      <div class="finance-dashboard-actions flex items-center gap-2">
         <select class="finance-select w-auto min-w-[150px] shrink-0" :value="year" @change="onYearChange">
           <option v-for="item in yearOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
         </select>
@@ -217,7 +217,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
             <router-link to="/Centre/Finance/Flows" class="text-xs text-[#007AFF] hover:underline">查看全部</router-link>
           </div>
           <n-data-table v-if="summary.recentFlows.length" :columns="flowColumns" :data="summary.recentFlows"
-                        :bordered="false" :pagination="false" class="finance-table" size="small"/>
+                        :bordered="false" :pagination="false" :scroll-x="670" class="finance-table" size="small"/>
           <div v-else class="finance-empty py-10">
             <Icon icon="refresh-cw" class="w-8 h-8"/>
             <span>暂无经费流水，确认报销后会生成扣减记录</span>
@@ -265,7 +265,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
       </div>
     </template>
 
-    <n-modal v-model:show="showBudget" preset="card" style="max-width: 460px" :bordered="false"
+    <n-modal v-model:show="showBudget" preset="card" style="width: calc(100% - 32px); max-width: 460px" :bordered="false"
              title="设置年度经费">
       <div class="space-y-4">
         <div>
@@ -295,3 +295,16 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
     </n-modal>
   </div>
 </template>
+
+<style scoped>
+@media (max-width: 640px) {
+  .finance-dashboard { padding: 16px; }
+  .finance-dashboard-actions { flex-wrap: wrap; }
+  .finance-dashboard-actions .finance-select { flex: 1 1 150px; min-width: 0; }
+  .finance-dashboard-actions .finance-btn { min-height: 44px; }
+  .finance-dashboard .finance-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .finance-dashboard .finance-kpi { padding: 16px 14px; border-radius: 16px; }
+  .finance-dashboard .finance-kpi-value { font-size: clamp(18px, 5vw, 24px); overflow-wrap: anywhere; }
+  .finance-dashboard .finance-card { padding: 18px; }
+}
+</style>

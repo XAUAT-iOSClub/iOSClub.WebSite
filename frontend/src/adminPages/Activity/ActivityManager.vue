@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { NDataTable, NModal, useMessage } from 'naive-ui'
+import { NDataTable, NModal, NPagination, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import Icon from '@/components/Icon.vue'
 import { ActivityService } from '../../services/ActivityService'
@@ -67,6 +67,7 @@ const pagination = computed(() => ({
   onUpdatePage: (p: number) => { currentPage.value = p },
   onUpdatePageSize: (s: number) => { pageSize.value = s; currentPage.value = 1 }
 }))
+const visibleActivities = computed(() => activities.value.slice((currentPage.value - 1) * pageSize.value, currentPage.value * pageSize.value))
 
 const columns: DataTableColumns<ActivityModel> = [
   {
@@ -168,7 +169,7 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
       <!-- 工具栏 -->
       <div class="apple-sub-card p-4 flex flex-col lg:flex-row lg:items-center gap-4">
         <!-- 状态筛选 -->
-        <div class="flex gap-1 rounded-full bg-black/5 dark:bg-white/10 p-1 w-fit">
+        <div class="activity-filters flex gap-1 rounded-full bg-black/5 dark:bg-white/10 p-1 w-fit">
           <button v-for="tab in statusTabs" :key="tab.value"
               class="px-4 py-1.5 rounded-full text-sm transition-all"
               :class="statusFilter === tab.value
@@ -194,16 +195,44 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
       </div>
 
       <!-- 表格 -->
-      <div class="apple-sub-card overflow-hidden">
+      <div class="apple-sub-card overflow-hidden max-sm:hidden">
         <div class="overflow-x-auto">
           <n-data-table :columns="columns" :data="activities" :pagination="pagination"
               :bordered="false" :loading="loading" :row-key="rowKey" class="apple-table" />
         </div>
       </div>
+
+      <div class="activity-mobile-list sm:hidden" aria-live="polite">
+        <div v-if="loading" class="activity-empty apple-sub-card">正在加载活动…</div>
+        <div v-else-if="!activities.length" class="activity-empty apple-sub-card">暂无活动记录</div>
+        <template v-else>
+          <article v-for="activity in visibleActivities" :key="activity.id" class="activity-card apple-sub-card">
+            <div class="activity-card-heading">
+              <h3>{{ activity.name }}</h3>
+              <span class="activity-status" :class="statusClass(activity.status)">{{ statusLabel(activity.status) }}</span>
+            </div>
+            <dl class="activity-details">
+              <div><dt>开始</dt><dd>{{ fmt(activity.startTime) }}</dd></div>
+              <div><dt>结束</dt><dd>{{ fmt(activity.endTime) }}</dd></div>
+              <div><dt>地点</dt><dd>{{ activity.location }}</dd></div>
+              <div><dt>人数</dt><dd>{{ activity.status === 'Upcoming' ? '待定' : activity.participantCount }}</dd></div>
+            </dl>
+            <div class="activity-actions">
+              <button class="apple-btn secondary" @click="goDetail(activity)">详情</button>
+              <button class="apple-btn secondary" @click="openEdit(activity)">编辑</button>
+              <button class="apple-btn activity-delete" @click="deleteActivity(activity)">删除</button>
+            </div>
+          </article>
+          <div class="activity-pagination">
+            <span>共 {{ activities.length }} 个活动</span>
+            <n-pagination v-model:page="currentPage" :page-size="pageSize" :item-count="activities.length" simple />
+          </div>
+        </template>
+      </div>
     </div>
 
     <!-- 新建/编辑弹窗 -->
-    <n-modal v-model:show="showModal" preset="card" class="apple-modal" style="max-width: 520px"
+    <n-modal v-model:show="showModal" preset="card" class="apple-modal" style="width: calc(100% - 32px); max-width: 520px"
         :title="editing ? '编辑活动' : '新建活动'" :bordered="false" size="huge">
       <div class="space-y-4">
         <div>
@@ -211,7 +240,7 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
           <input v-model="form.name" maxlength="50" placeholder="1-50 个字符"
               class="w-full px-3 py-2.5 bg-gray-100 dark:bg-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1.5">开始时间 <span class="text-red-500">*</span></label>
             <input v-model="form.startTime" type="datetime-local"
@@ -270,4 +299,23 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
 .dark .apple-btn.secondary { background-color: rgba(255, 255, 255, 0.1); color: #F5F5F7; }
 .dark :deep(.apple-table .n-data-table-th) { border-bottom: 1px solid #38383A; color: #98989D; }
 .dark :deep(.apple-table .n-data-table-td) { border-bottom: 1px solid #2C2C2E; color: #D1D1D6; }
+
+@media (max-width: 639px) {
+  .activity-filters { width: 100%; }
+  .activity-filters button { flex: 1; padding-inline: 4px; min-height: 40px; white-space: nowrap; }
+  .activity-mobile-list { display: grid; gap: 12px; }
+  .activity-card { padding: 16px; }
+  .activity-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .activity-card-heading h3 { min-width: 0; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+  .activity-status { flex-shrink: 0; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+  .activity-details { display: grid; gap: 8px; margin-top: 14px; font-size: 13px; }
+  .activity-details div { display: flex; gap: 12px; }
+  .activity-details dt { flex-shrink: 0; color: #8e8e93; }
+  .activity-details dd { min-width: 0; overflow-wrap: anywhere; }
+  .activity-actions { display: flex; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(128, 128, 128, .15); }
+  .activity-actions .apple-btn { justify-content: center; min-height: 40px; }
+  .activity-delete { color: #dc2626; background: rgba(239, 68, 68, .08); }
+  .activity-empty { padding: 36px 16px; color: #8e8e93; text-align: center; }
+  .activity-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #8e8e93; font-size: 13px; }
+}
 </style>

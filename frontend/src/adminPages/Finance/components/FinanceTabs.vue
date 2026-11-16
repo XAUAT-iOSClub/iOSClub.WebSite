@@ -347,6 +347,9 @@ function isActive(to: string) {
 
 @media (max-width: 640px) {
   .finance-page { padding: 0; }
+  .finance-tabs { width: 100%; overscroll-behavior-x: contain; scrollbar-width: none; }
+  .finance-tabs::-webkit-scrollbar { display: none; }
+  .finance-tab { flex-shrink: 0; min-height: 44px; }
   .finance-card { border-radius: 16px; }
   .finance-kpi-grid { grid-template-columns: 1fr; }
 }
