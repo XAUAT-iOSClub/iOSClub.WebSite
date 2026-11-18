@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import AdminSurface from '@/components/admin/AdminSurface.vue'
+import AdminModal from '@/components/admin/AdminModal.vue'
 import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NDataTable, NModal, NSelect, NSwitch, useMessage } from 'naive-ui'
+import { NDataTable, NSelect, NSwitch, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import Icon from '@/components/Icon.vue'
 import QRCode from 'qrcode'
@@ -244,7 +246,7 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
 </script>
 
 <template>
-  <div class="apple-container min-h-screen max-sm:p-0 p-6 md:p-8 transition-colors duration-300">
+  <div class="admin-page apple-container min-h-screen max-sm:p-0 p-6 md:p-8 transition-colors duration-300">
     <div class="p-4 space-y-6">
 
       <button class="apple-btn secondary" @click="router.push('/Centre/Activity')">
@@ -252,7 +254,7 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
       </button>
 
       <!-- 活动信息 -->
-      <div v-if="activity" class="apple-sub-card p-6">
+      <AdminSurface v-if="activity" class="apple-sub-card p-6">
         <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
           <div class="min-w-0">
             <div class="flex items-center gap-3 flex-wrap">
@@ -280,10 +282,10 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
             <button class="apple-btn primary" @click="exportExcel"><Icon icon="download" class="mr-1" />导出 Excel</button>
           </div>
         </div>
-      </div>
+      </AdminSurface>
 
       <!-- 二维码 -->
-      <div v-if="activity" class="apple-sub-card p-6 flex flex-col sm:flex-row items-center gap-6">
+      <AdminSurface v-if="activity" class="apple-sub-card p-6 flex flex-col sm:flex-row items-center gap-6">
         <img v-if="qrDataUrl" :src="qrDataUrl" alt="自助登记二维码"
             class="w-40 h-40 rounded-2xl border border-black/5 dark:border-white/10 bg-white p-2 cursor-zoom-in" @click="qrZoom = true" />
         <div class="flex-1 min-w-0 text-center sm:text-left">
@@ -294,14 +296,14 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
             <a :href="qrDataUrl" :download="`${activity.name}_自助登记二维码.png`" class="apple-btn secondary"><Icon icon="download" class="mr-1" />下载二维码</a>
           </div>
         </div>
-      </div>
+      </AdminSurface>
 
       <div v-if="qrZoom" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" @click="qrZoom = false">
         <img :src="qrDataUrl" alt="二维码" class="w-[320px] h-[320px] rounded-3xl bg-white p-4" />
       </div>
 
       <!-- Excel 导入 -->
-      <div class="apple-sub-card p-6">
+      <AdminSurface class="apple-sub-card p-6">
         <h3 class="font-semibold text-gray-900 dark:text-white mb-4">Excel 导入参与者</h3>
         <div class="flex flex-wrap items-center gap-3">
           <button class="apple-btn secondary" @click="downloadTemplate"><Icon icon="file" class="mr-1" />下载模板</button>
@@ -318,10 +320,10 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
             <li v-for="(e, i) in importResult.errors" :key="i">{{ e }}</li>
           </ul>
         </div>
-      </div>
+      </AdminSurface>
 
       <!-- 参与者 -->
-      <div class="apple-sub-card overflow-hidden">
+      <AdminSurface class="apple-sub-card overflow-hidden">
         <div class="p-4 flex flex-col md:flex-row md:items-center gap-3 border-b border-black/5 dark:border-white/5">
           <div class="flex-1 relative">
             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Icon icon="search" class="text-gray-400" /></div>
@@ -344,10 +346,10 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
               :checked-row-keys="selectedIds" @update:checked-row-keys="onCheckedChange"
               class="apple-table min-w-[720px]" />
         </div>
-      </div>
+      </AdminSurface>
 
       <!-- 操作日志 -->
-      <div class="apple-sub-card p-4">
+      <AdminSurface class="apple-sub-card p-4">
         <button class="flex items-center text-sm text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200" @click="showLogs = !showLogs">
           <Icon :icon="showLogs ? 'chevron-down' : 'chevron-right'" morph class="mr-1" />操作日志（{{ logs.length }}）
         </button>
@@ -367,11 +369,11 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
             </tbody>
           </table>
         </div>
-      </div>
+      </AdminSurface>
     </div>
 
     <!-- 添加/编辑参与者 -->
-    <n-modal v-model:show="showParticipantModal" preset="card" class="apple-modal" style="max-width: 460px"
+    <AdminModal v-model:show="showParticipantModal"  class="apple-modal" style="--admin-modal-width: 460px; "
         :title="editingParticipant ? '编辑参与者' : '添加参与者'" :bordered="false" size="huge">
       <div class="space-y-4">
         <div>
@@ -397,20 +399,19 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
           <button @click="submitParticipant" :disabled="participantSubmitting" class="apple-btn primary disabled:opacity-50">{{ participantSubmitting ? '保存中…' : '保存' }}</button>
         </div>
       </template>
-    </n-modal>
+    </AdminModal>
   </div>
 </template>
 
 <style scoped>
 .apple-container { background-color: #F1F4F9; }
 .apple-sub-card {
-  background-color: #FFFFFF;
-  border-radius: 24px;
+
   border: 1px solid rgba(0, 0, 0, 0.02);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-.apple-sub-card:hover { box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06); }
+
 .apple-btn {
   padding: 8px 16px; border-radius: 9999px; font-weight: 500; font-size: 14px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); display: inline-flex; align-items: center; width: fit-content;
@@ -421,8 +422,8 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
 :deep(.apple-table .n-data-table-tr:last-child .n-data-table-td) { border-bottom: none; }
 
 .dark .apple-container { background-color: #000000; }
-.dark .apple-sub-card { background-color: #1C1C1E; border-color: rgba(255, 255, 255, 0.05); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
-.dark .apple-sub-card:hover { background-color: #242426; }
+.dark .apple-sub-card {  border-color: rgba(255, 255, 255, 0.05);  }
+
 .dark .apple-btn.secondary { background-color: rgba(255, 255, 255, 0.1); color: #F5F5F7; }
 .dark :deep(.apple-table .n-data-table-th) { border-bottom: 1px solid #38383A; color: #98989D; }
 .dark :deep(.apple-table .n-data-table-td) { border-bottom: 1px solid #2C2C2E; color: #D1D1D6; }

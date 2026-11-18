@@ -1,119 +1,6 @@
-<template>
-  <!-- 移动端遮罩 -->
-  <Transition name="fade">
-    <div
-        v-if="layoutStore.isMobile && layoutStore.showSidebar"
-        class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
-        @click="layoutStore.toggleSidebar()"
-    ></div>
-  </Transition>
-
-  <!-- 侧边栏主体 -->
-  <aside
-      class="sidebar-glass border-r border-gray-200/50 dark:border-white/10 fixed top-0 left-0 h-screen z-50 flex flex-col transition-all duration-500 cubic-apple"
-      :class="[
-        layoutStore.isSidebarCollapsed ? 'w-[80px]' : 'w-[280px]',
-        layoutStore.isMobile && !layoutStore.showSidebar ? '-translate-x-full' : 'translate-x-0'
-      ]"
-  >
-    <!-- 顶部 Logo 区域 -->
-    <div class="h-18 flex items-center px-6 transition-all duration-300"
-         :class="layoutStore.isSidebarCollapsed ? 'justify-center' : 'justify-between'">
-
-      <router-link to="/" class="flex items-center gap-3 group overflow-hidden">
-        <div class="relative shrink-0 rounded-xl shadow-sm overflow-hidden" :class="layoutStore.isSidebarCollapsed ? 'w-7 h-7'  : 'w-9 h-9'">
-          <img
-              src="/assets/iOS_Club_LOGO.png"
-              alt="Logo"
-              class="w-full h-full object-cover bg-white"
-              @error="handleImageError"
-          />
-        </div>
-        <span
-            v-show="!layoutStore.isSidebarCollapsed"
-            class="font-semibold text-lg tracking-tight text-gray-900 dark:text-white whitespace-nowrap opacity-100 transition-opacity delay-100"
-        >
-          iMember
-        </span>
-      </router-link>
-
-      <!-- 桌面端折叠/展开按钮：始终使用同一个元素，折叠时形变并移动位置 -->
-      <button
-          v-if="!layoutStore.isMobile"
-          @click="layoutStore.toggleSidebarCollapse()"
-          :aria-label="layoutStore.isSidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'"
-          class="absolute z-10 p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-200/50 dark:hover:bg-white/10 transition-all duration-500"
-          :class="layoutStore.isSidebarCollapsed ? 'top-20 left-1/2 -translate-x-1/2' : 'top-4 right-4'"
-      >
-        <Icon
-            :icon="layoutStore.isSidebarCollapsed ? 'panel-left-open' : 'panel-left-close'"
-            morph
-            width="20"
-        />
-      </button>
-    </div>
-
-    <!-- 导航菜单 -->
-    <nav
-        class="flex-1 overflow-y-auto px-3 space-y-1 custom-scrollbar"
-        :class="layoutStore.isSidebarCollapsed ? 'pt-16 pb-4' : 'py-4'"
-    >
-      <template v-for="item in filteredMenuItems" :key="item.name">
-        <router-link
-            :to="item.path"
-            class="nav-item flex items-center py-2.5 transition-all duration-200 group select-none"
-            :class="[
-              isMenuActive(item)
-                ? 'bg-[#007AFF] text-white shadow-md shadow-blue-500/20'
-                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5',
-              layoutStore.isSidebarCollapsed ? 'justify-center rounded-2xl px-0 mx-1' : 'px-3.5 rounded-xl'
-            ]"
-            @click="closeSidebar"
-        >
-          <Icon
-              :icon="item.icon"
-              class="shrink-0 transition-transform duration-300"
-              :class="[
-               layoutStore.isSidebarCollapsed ? 'w-6 h-6' : 'w-5 h-5 mr-3',
-               isMenuActive(item) ? 'text-white' : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-200'
-            ]"
-          />
-
-          <span
-              v-if="!layoutStore.isSidebarCollapsed"
-              class="text-[15px] font-medium whitespace-nowrap"
-              :style="{
-                color: isMenuActive(item) ? '#ffffff' : 'var(--text-color)'
-              }"
-          >
-            {{ item.name }}
-          </span>
-        </router-link>
-      </template>
-    </nav>
-
-    <!-- 底部区域 -->
-    <div class="p-4 border-t border-gray-200/50 dark:border-white/5">
-      <button
-          class="w-full flex items-center py-2.5 text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 dark:text-gray-400 rounded-xl transition-colors"
-          :class="layoutStore.isSidebarCollapsed ? 'justify-center px-0' : 'px-3'"
-          @click="logout"
-      >
-        <Icon icon="log-out" class="shrink-0 w-5 h-5" :class="{'mr-3': !layoutStore.isSidebarCollapsed}" />
-        <span v-if="!layoutStore.isSidebarCollapsed" class="text-[15px] font-medium">退出登录</span>
-      </button>
-    </div>
-  </aside>
-
-  <!-- 占位与布局控制 -->
-  <div
-      class="hidden md:block transition-all duration-500 cubic-apple"
-      :style="{ width: layoutStore.showSidebar ? (layoutStore.isSidebarCollapsed ? '80px' : '280px') : '0' }"
-  ></div>
-</template>
-
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount } from 'vue'
+import { computed } from 'vue'
+import { NDrawer, NDrawerContent } from 'naive-ui'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthorizationStore } from '../stores/Authorization'
 import { useLayoutStore } from '../stores/LayoutStore'
@@ -126,22 +13,9 @@ const layoutStore = useLayoutStore()
 
 // 财务管理是一个模块入口，进入发票库/报销材料等子页面时仍保持高亮。
 const isMenuActive = (item: { path: string }) =>
-    item.path === '/Centre/Finance'
+    item.path !== '/Centre'
         ? route.path === item.path || route.path.startsWith(item.path + '/')
         : route.path === item.path
-
-const handleResize = () => {
-  layoutStore.handleResize()
-}
-
-onMounted(() => {
-  window.addEventListener('resize', handleResize)
-  layoutStore.handleResize()
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', handleResize)
-})
 
 const closeSidebar = () => {
   if (layoutStore.isMobile) {
@@ -175,7 +49,7 @@ const menuItems = [
 const filteredMenuItems = computed(() => {
   const userRole = authorizationStore.getRole
   const hierarchy: Record<string, number> = { 'Member': 1, 'Department': 2, 'Minister': 3, 'President': 4, 'Founder': 5 }
-  const userLevel = hierarchy[userRole as string] || 0
+  const userLevel = hierarchy[userRole || ''] || 0
 
   if (!userRole) return menuItems.filter(i => !i.requiresRole)
 
@@ -190,45 +64,39 @@ const logout = async () => {
   await router.push('/')
 }
 
-const handleImageError = (e: Event) => {
-  (e.target as HTMLImageElement).src = '/assets/default-logo.png'
-}
+const collapsed = computed(() => !layoutStore.isMobile && layoutStore.isSidebarCollapsed)
+const menuGroups = computed(() => [
+  { label: '个人', items: filteredMenuItems.value.filter(item => ['/Centre', '/Centre/PersonalData'].includes(item.path)) },
+  { label: '社团管理', items: filteredMenuItems.value.filter(item => ['/Centre/Department', '/Centre/Resources', '/Centre/Article', '/Centre/Activity', '/Centre/Finance', '/Centre/MemberData'].includes(item.path)) },
+  { label: '系统管理', items: filteredMenuItems.value.filter(item => !['/Centre', '/Centre/PersonalData', '/Centre/Department', '/Centre/Resources', '/Centre/Article', '/Centre/Activity', '/Centre/Finance', '/Centre/MemberData'].includes(item.path)) },
+].filter(group => group.items.length))
 </script>
 
+<template>
+  <component :is="layoutStore.isMobile ? NDrawer : 'aside'"
+    v-bind="layoutStore.isMobile ? { show: layoutStore.showSidebar, width: 280, placement: 'left', onUpdateShow: (value: boolean) => layoutStore.showSidebar = value } : {}"
+    class="admin-sidebar admin-theme" :class="{ 'is-collapsed': collapsed }">
+    <component :is="layoutStore.isMobile ? NDrawerContent : 'div'" class="admin-sidebar-inner" :native-scrollbar="false" :body-content-style="{ padding: '0', height: '100%', display: 'flex', flexDirection: 'column' }">
+      <div class="admin-sidebar-brand">
+        <router-link to="/" class="flex items-center gap-2.5 min-w-0" aria-label="返回 iOS Club 官网"><img src="/assets/iOS_Club_LOGO.png" alt="" /><span v-if="!collapsed">iMember</span></router-link>
+        <button v-if="layoutStore.isMobile" class="admin-icon-button ml-auto" aria-label="关闭导航" @click="closeSidebar"><Icon icon="x" :size="18" /></button>
+      </div>
+      <nav id="admin-navigation" aria-label="后台导航">
+        <template v-for="group in menuGroups" :key="group.label">
+          <p v-if="!collapsed" class="admin-nav-heading">{{ group.label }}</p>
+          <router-link v-for="item in group.items" :key="item.path" :to="item.path" class="admin-nav-link" :class="{ 'is-active': isMenuActive(item) }" :aria-current="isMenuActive(item) ? 'page' : undefined" :aria-label="item.name" :title="collapsed ? item.name : undefined" @click="closeSidebar">
+            <Icon :icon="item.icon" :size="18" class="shrink-0" /><span v-if="!collapsed">{{ item.name }}</span>
+          </router-link>
+        </template>
+      </nav>
+      <div class="admin-sidebar-footer">
+        <button v-if="!layoutStore.isMobile" class="admin-nav-link" :aria-label="collapsed ? '展开侧栏' : '折叠侧栏'" @click="layoutStore.toggleSidebarCollapse()"><Icon :icon="collapsed ? 'panel-left-open' : 'panel-left-close'" :size="18" /><span v-if="!collapsed">折叠侧栏</span></button>
+        <button class="admin-nav-link" aria-label="退出登录" @click="logout"><Icon icon="log-out" :size="18" /><span v-if="!collapsed">退出登录</span></button>
+      </div>
+    </component>
+  </component>
+</template>
+
 <style scoped>
-/* 贝塞尔曲线模拟苹果的动画手感 */
-.cubic-apple {
-  transition-timing-function: cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-.sidebar-glass {
-  background-color: rgba(249, 250, 251, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-}
-
-.dark .sidebar-glass {
-  background-color: rgba(28, 28, 30, 0.85);
-}
-
-/* 滚动条样式 */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 0; /* 隐藏滚动条，保持像 iOS 一样简洁，或者设置极细 */
-  background: transparent;
-}
-
-.nav-item:active {
-  transform: scale(0.98);
-}
-
-/* 淡入淡出 Vue Transition */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
+.admin-sidebar-inner { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 </style>

@@ -1,6 +1,6 @@
 <template>
-  <div class="page-container min-h-screen transition-colors duration-500 ease-out">
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+  <div class="admin-page page-container min-h-screen transition-colors duration-500 ease-out">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
 
       <!-- Header Section: Search & Actions -->
       <div class="flex flex-col sm:flex-row items-center justify-between gap-6 mb-10">
@@ -29,7 +29,7 @@
 
       <!-- Grid Layout -->
       <div v-if="!loading && filteredResources.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-8">
-        <div
+        <AdminSurface
             v-for="resource in filteredResources"
             :key="resource.id"
             class="apple-card group relative flex flex-col h-full p-6 transition-all duration-300 hover:-translate-y-1"
@@ -42,10 +42,10 @@
 
             <!-- Context Menu (Admin) -->
             <div v-if="authorizationStore.isAdmin()" class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              <button @click.stop="editResource(resource)" class="icon-btn text-blue-500 bg-blue-50 dark:bg-blue-500/20 hover:bg-blue-100 dark:hover:bg-blue-500/30">
+              <button aria-label="编辑资源" @click.stop="editResource(resource)" class="icon-btn text-blue-500 bg-blue-50 dark:bg-blue-500/20 hover:bg-blue-100 dark:hover:bg-blue-500/30">
                 <Icon icon="square-pen" class="w-4 h-4"/>
               </button>
-              <button @click.stop="deleteResource(resource)" class="icon-btn text-red-500 bg-red-50 dark:bg-red-500/20 hover:bg-red-100 dark:hover:bg-red-500/30">
+              <button aria-label="删除资源" @click.stop="deleteResource(resource)" class="icon-btn text-red-500 bg-red-50 dark:bg-red-500/20 hover:bg-red-100 dark:hover:bg-red-500/30">
                 <Icon icon="trash" class="w-4 h-4"/>
               </button>
             </div>
@@ -76,7 +76,7 @@
               无标签
             </div>
           </div>
-        </div>
+        </AdminSurface>
       </div>
 
       <!-- Empty State -->
@@ -94,35 +94,16 @@
       <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <SkeletonLoader v-for="i in 6" :key="i" type="card" class="rounded-3xl h-48 opacity-50"/>
       </div>
-    </main>
+    </div>
 
-    <!-- iOS Style Modal -->
-    <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-      <!-- Backdrop -->
-      <div class="absolute inset-0 bg-gray-900/30 dark:bg-black/60 backdrop-blur-md transition-opacity" @click="showModal = false"></div>
-
-      <!-- Modal Window -->
-      <div class="relative w-full max-w-lg bg-white dark:bg-[#1C1C1E] rounded-[2rem] shadow-2xl overflow-hidden transform transition-all modal-animation flex flex-col max-h-[85vh]">
-
-        <!-- Header -->
-        <div class="px-8 py-6 border-b border-gray-100 dark:border-white/10 flex items-center justify-between bg-white/50 dark:bg-white/5 backdrop-blur-xl sticky top-0 z-10">
-          <h3 class="text-xl font-bold text-gray-900 dark:text-white">
-            {{ editingResource.id ? '编辑资源' : '新建资源' }}
-          </h3>
-          <button @click="showModal = false" class="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center transition-colors">
-            <Icon icon="x" class="w-5 h-5"/>
-          </button>
-        </div>
-
-        <!-- Scrollable Content -->
-        <div class="p-8 overflow-y-auto custom-scrollbar">
-          <form @submit.prevent="saveResource" class="space-y-6">
+    <AdminModal v-model:show="showModal" :title="editingResource.id ? '编辑资源' : '新建资源'" style="--admin-modal-width: 520px">
+      <form @submit.prevent="saveResource" class="space-y-6">
 
             <!-- Name Input -->
             <div class="space-y-2">
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300 ml-1">名称</label>
+              <label for="resource-name" class="text-sm font-medium text-gray-700 dark:text-gray-300 ml-1">名称</label>
               <input
-                  v-model="editingResource.name"
+                  id="resource-name" v-model="editingResource.name"
                   placeholder="资源名称"
                   class="apple-input w-full px-4 py-3 rounded-xl text-base"
                   required
@@ -131,9 +112,9 @@
 
             <!-- Description Input -->
             <div class="space-y-2">
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300 ml-1">描述</label>
+              <label for="resource-description" class="text-sm font-medium text-gray-700 dark:text-gray-300 ml-1">描述</label>
               <textarea
-                  v-model="editingResource.description"
+                  id="resource-description" v-model="editingResource.description"
                   placeholder="关于这个资源的详细描述..."
                   class="apple-input w-full px-4 py-3 rounded-xl resize-none h-32 text-base"
               />
@@ -141,20 +122,20 @@
 
             <!-- Tags Input -->
             <div class="space-y-3">
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300 ml-1">标签</label>
+              <label for="resource-tag" class="text-sm font-medium text-gray-700 dark:text-gray-300 ml-1">标签</label>
               <div class="flex flex-wrap gap-2 min-h-[32px]">
                  <span v-for="(tag, index) in resourceTags" :key="index"
                        class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300">
                   {{ tag }}
-                  <button @click="removeTag(index)" type="button" class="ml-1.5 hover:text-blue-900 dark:hover:text-blue-100">
+                  <button :aria-label="`移除标签 ${tag}`" @click="removeTag(index)" type="button" class="ml-1.5 hover:text-blue-900 dark:hover:text-blue-100">
                     <Icon icon="circle-x" class="w-4 h-4"/>
                   </button>
                 </span>
               </div>
               <div class="relative">
                 <input
-                    v-model="newTag"
-                    @keyup.enter="addTag"
+                    id="resource-tag" v-model="newTag"
+                    @keyup.enter.prevent="addTag"
                     placeholder="输入标签并回车添加"
                     class="apple-input w-full px-4 py-3 pr-12 rounded-xl text-sm"
                 />
@@ -184,13 +165,13 @@
             </div>
 
           </form>
-        </div>
-      </div>
-    </div>
+    </AdminModal>
   </div>
 </template>
 
 <script setup lang="ts">
+import AdminModal from '@/components/admin/AdminModal.vue'
+import AdminSurface from '@/components/admin/AdminSurface.vue'
 import { ref, computed, onMounted, onBeforeUnmount, defineComponent, h } from 'vue'
 import Icon from '@/components/Icon.vue'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
@@ -393,16 +374,15 @@ onBeforeUnmount(() => {
 
 /* Apple Card Style */
 .apple-card {
-  background-color: #ffffff;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
-  border-radius: 1.5rem; /* rounded-3xl */
+
+   /* rounded-3xl */
   border: 1px solid rgba(0,0,0,0.03);
 }
 
 .dark .apple-card {
-  background-color: #1C1C1E; /* Secondary System Fill */
+   /* Secondary System Fill */
   border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: none;
+
 }
 
 /* Inputs: iOS Style */

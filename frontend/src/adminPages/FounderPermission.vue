@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import AdminToolbar from '@/components/admin/AdminToolbar.vue'
+import AdminSurface from '@/components/admin/AdminSurface.vue'
+import AdminModal from '@/components/admin/AdminModal.vue'
 import {computed, h, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
-import {NDataTable, NModal, NSelect, useMessage} from 'naive-ui'
+import { NDataTable, NSelect, useMessage } from 'naive-ui'
 import type {DataTableColumns} from 'naive-ui'
 import Icon from '@/components/Icon.vue'
 import {useAuthorizationStore} from '../stores/Authorization'
@@ -204,11 +207,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="apple-container min-h-screen max-sm:p-0 p-6 md:p-8 transition-colors duration-300">
+  <div class="admin-page apple-container min-h-screen max-sm:p-0 p-6 md:p-8 transition-colors duration-300">
     <div class="p-4 space-y-6">
 
       <!-- 工具栏：搜索 + 统计 -->
-      <div class="apple-sub-card p-4 flex flex-col md:flex-row md:items-center gap-3">
+      <AdminToolbar label="筛选成员" class="apple-sub-card p-4 flex flex-col md:flex-row md:items-center gap-3">
         <div class="flex-1 relative">
           <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Icon icon="search" class="text-gray-400"/>
@@ -227,10 +230,10 @@ onBeforeUnmount(() => {
             刷新
           </button>
         </div>
-      </div>
+      </AdminToolbar>
 
       <!-- 成员权限表 -->
-      <div class="apple-sub-card overflow-hidden">
+      <AdminSurface class="apple-sub-card overflow-hidden">
         <div class="overflow-x-auto">
           <n-data-table
               :columns="columns"
@@ -242,15 +245,15 @@ onBeforeUnmount(() => {
               class="apple-table"
           />
         </div>
-      </div>
+      </AdminSurface>
     </div>
 
     <!-- 调整权限 -->
-    <n-modal
+    <AdminModal
         v-model:show="showModal"
-        preset="card"
+
         class="apple-modal"
-        style="max-width: 460px"
+        style="--admin-modal-width: 460px; "
         title="调整权限"
         :bordered="false"
         size="huge"
@@ -291,7 +294,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </template>
-    </n-modal>
+    </AdminModal>
   </div>
 </template>
 
@@ -302,15 +305,10 @@ onBeforeUnmount(() => {
 }
 
 .apple-sub-card {
-  background-color: #FFFFFF;
-  border-radius: 24px;
-  border: 1px solid rgba(0, 0, 0, 0.02);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
 
-.apple-sub-card:hover {
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.02);
+
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 /* Buttons */
@@ -349,13 +347,9 @@ onBeforeUnmount(() => {
 }
 
 .dark .apple-sub-card {
-  background-color: #1C1C1E;
-  border-color: rgba(255, 255, 255, 0.05);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
 
-.dark .apple-sub-card:hover {
-  background-color: #242426;
+  border-color: rgba(255, 255, 255, 0.05);
+
 }
 
 .dark .apple-btn.secondary {

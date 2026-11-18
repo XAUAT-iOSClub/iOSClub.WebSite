@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import AdminSurface from '@/components/admin/AdminSurface.vue'
+import AdminModal from '@/components/admin/AdminModal.vue'
 import { computed, h, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from 'vue'
-import { NDataTable, NModal, useDialog, useMessage } from 'naive-ui'
+import { NDataTable, useDialog, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import Icon from '@/components/Icon.vue'
 import FinanceTabs from './components/FinanceTabs.vue'
@@ -605,7 +607,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
 </script>
 
 <template>
-  <div class="finance-page">
+  <div class="admin-page finance-page">
     <FinanceTabs/>
 
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
@@ -626,9 +628,9 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
       <span>当前未配置 OCR 服务：图片与扫描版 PDF 会识别失败并转手工录入；docx 与带文本层的 PDF 仍可自动解析。可在服务器设置 Finance__OcrEndpoint 接入 OCR。</span>
     </div>
 
-    <div class="finance-card mb-4">
-      <div class="flex flex-col lg:flex-row lg:items-center gap-3">
-        <div class="flex gap-1 rounded-full bg-black/5 dark:bg-white/10 p-1 w-fit overflow-x-auto">
+    <AdminSurface class="finance-card mb-4">
+      <div class="flex flex-col lg:flex-row lg:flex-wrap lg:items-center gap-3">
+        <div class="flex gap-1 rounded-full bg-black/5 dark:bg-white/10 p-1 w-fit max-w-full overflow-x-auto">
           <button v-for="tab in statusTabs" :key="tab.value"
                   class="px-4 py-1.5 rounded-full text-sm whitespace-nowrap transition-all"
                   :class="statusFilter === tab.value
@@ -651,17 +653,17 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
         <button class="finance-btn" @click="page = 1; load()"><Icon icon="search" class="w-4 h-4"/>搜索</button>
         <button class="finance-btn" @click="page = 1; load()"><Icon icon="refresh-cw" class="w-4 h-4"/>刷新</button>
       </div>
-    </div>
+    </AdminSurface>
 
-    <div v-if="checkedKeys.length" class="finance-card mb-4 flex items-center justify-between">
+    <AdminSurface v-if="checkedKeys.length" class="finance-card mb-4 flex items-center justify-between">
       <span class="text-sm text-gray-600 dark:text-gray-300">已选择 {{ checkedKeys.length }} 张发票</span>
       <div class="flex gap-2">
         <button class="finance-btn" @click="checkedKeys = []">取消选择</button>
         <button class="finance-btn danger" @click="batchRemoveInvoices">批量删除</button>
       </div>
-    </div>
+    </AdminSurface>
 
-    <div class="finance-card">
+    <AdminSurface class="finance-card">
       <div v-if="loadError" class="finance-empty">
         <Icon icon="circle-alert" class="w-8 h-8 text-red-500"/>
         <p>{{ loadError }}</p>
@@ -682,10 +684,10 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
           </template>
         </n-data-table>
       </div>
-    </div>
+    </AdminSurface>
 
     <!-- 编辑 / 校对发票 -->
-    <n-modal v-model:show="editModal" preset="card" style="max-width: 760px" :bordered="false"
+    <AdminModal v-model:show="editModal"  style="--admin-modal-width: 760px; " :bordered="false"
              :closable="!modalBusy" :mask-closable="!modalBusy" :close-on-esc="!modalBusy"
              :title="editReadonly ? '发票详情' : '核对发票'">
       <fieldset v-if="editing" :disabled="editReadonly || modalBusy" class="space-y-4 border-0 p-0 m-0">
@@ -773,6 +775,6 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
           </div>
         </div>
       </template>
-    </n-modal>
+    </AdminModal>
   </div>
 </template>

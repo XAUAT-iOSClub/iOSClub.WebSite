@@ -1,14 +1,14 @@
 <template>
   <!-- 页面容器：添加平滑的背景过渡 -->
-  <div class="min-h-screen w-full transition-colors duration-300 ease-in-out bg-gray-50/50 dark:bg-transparent">
-    <main class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <div class="admin-page min-h-screen w-full transition-colors duration-300 ease-in-out bg-gray-50/50 dark:bg-transparent">
+    <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
       <!-- 网格布局 -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
 
         <!-- Loading 骨架屏 (保持原有逻辑，优化样式) -->
         <template v-if="loading">
-          <div v-for="i in 8" :key="i" class="ios-card animate-pulse">
+          <AdminSurface v-for="i in 8" :key="i" class="ios-card animate-pulse">
             <div class="p-5 h-full flex flex-col">
               <div class="flex justify-between items-start mb-4">
                 <div class="w-10 h-10 rounded-xl bg-gray-200 dark:bg-white/10"></div>
@@ -22,12 +22,12 @@
                 <div class="w-8 h-8 rounded-full bg-gray-200 dark:bg-white/10"></div>
               </div>
             </div>
-          </div>
+          </AdminSurface>
         </template>
 
         <!-- 文章列表 -->
         <template v-else>
-          <div
+          <AdminSurface
               v-for="article in articles"
               :key="article.path"
               class="ios-card group relative flex flex-col transition-all duration-300 ease-out"
@@ -93,7 +93,7 @@
 
             <!-- 选中/Hover效果的高亮边框模拟 -->
             <div class="absolute inset-0 rounded-2xl border-2 border-transparent group-hover:border-blue-500/20 dark:group-hover:border-blue-400/30 pointer-events-none transition-colors duration-300"></div>
-          </div>
+          </AdminSurface>
 
           <!-- 空状态 -->
           <div
@@ -121,11 +121,12 @@
           </div>
         </template>
       </div>
-    </main>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import AdminSurface from '@/components/admin/AdminSurface.vue'
 import { ref, computed, onMounted, onBeforeUnmount, defineComponent, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDialog, useMessage, NButton, NTag } from 'naive-ui'
@@ -300,8 +301,7 @@ onBeforeUnmount(() => {
 
 .ios-card:hover {
   /* 上浮效果 + 扩散阴影 */
-  transform: translateY(-4px);
-  box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.08), 0 4px 8px -4px rgba(0, 0, 0, 0.04);
+
 }
 
 /* 按钮基础样式 */
@@ -322,14 +322,14 @@ onBeforeUnmount(() => {
   暗黑模式适配 (.dark .class)
 */
 .dark .ios-card {
-  background-color: #1c1c1e; /* macOS Dark Gray */
+   /* macOS Dark Gray */
   border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+
 }
 
 .dark .ios-card:hover {
   border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.5), 0 4px 8px -4px rgba(0, 0, 0, 0.3);
+
 }
 
 .dark .action-btn-icon {
@@ -344,9 +344,7 @@ onBeforeUnmount(() => {
 
 /* 响应式断点微调 (可选) */
 @media (max-width: 640px) {
-  .ios-card:active {
-    transform: scale(0.98);
-  }
+
   /* 移动端默认显示操作栏 */
   .ios-card .opacity-0 {
     opacity: 1 !important;

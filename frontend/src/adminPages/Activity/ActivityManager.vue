@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import AdminState from '@/components/admin/AdminState.vue'
+import AdminSurface from '@/components/admin/AdminSurface.vue'
+import AdminModal from '@/components/admin/AdminModal.vue'
 import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { NDataTable, NModal, NPagination, useMessage } from 'naive-ui'
+import { NDataTable, NPagination, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import Icon from '@/components/Icon.vue'
 import { ActivityService } from '../../services/ActivityService'
@@ -163,11 +166,11 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
 </script>
 
 <template>
-  <div class="apple-container min-h-screen max-sm:p-0 p-6 md:p-8 transition-colors duration-300">
+  <div class="admin-page apple-container min-h-screen max-sm:p-0 p-6 md:p-8 transition-colors duration-300">
     <div class="p-4 space-y-6">
 
       <!-- 工具栏 -->
-      <div class="apple-sub-card p-4 flex flex-col lg:flex-row lg:items-center gap-4">
+      <AdminSurface class="apple-sub-card p-4 flex flex-col lg:flex-row lg:items-center gap-4">
         <!-- 状态筛选 -->
         <div class="activity-filters flex gap-1 rounded-full bg-black/5 dark:bg-white/10 p-1 w-fit">
           <button v-for="tab in statusTabs" :key="tab.value"
@@ -192,21 +195,21 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
           <button @click="load" class="apple-btn secondary"><Icon icon="refresh-cw" class="mr-1" />刷新</button>
           <button @click="openCreate" class="apple-btn primary"><Icon icon="circle-plus" class="mr-1" />新建活动</button>
         </div>
-      </div>
+      </AdminSurface>
 
       <!-- 表格 -->
-      <div class="apple-sub-card overflow-hidden max-sm:hidden">
+      <AdminSurface class="apple-sub-card overflow-hidden max-sm:hidden">
         <div class="overflow-x-auto">
           <n-data-table :columns="columns" :data="activities" :pagination="pagination"
               :bordered="false" :loading="loading" :row-key="rowKey" class="apple-table" />
         </div>
-      </div>
+      </AdminSurface>
 
       <div class="activity-mobile-list sm:hidden" aria-live="polite">
-        <div v-if="loading" class="activity-empty apple-sub-card">正在加载活动…</div>
-        <div v-else-if="!activities.length" class="activity-empty apple-sub-card">暂无活动记录</div>
+        <AdminState v-if="loading" kind="loading" title="正在加载活动…" />
+        <AdminState v-else-if="!activities.length" title="暂无活动记录" />
         <template v-else>
-          <article v-for="activity in visibleActivities" :key="activity.id" class="activity-card apple-sub-card">
+          <AdminSurface as="article" v-for="activity in visibleActivities" :key="activity.id" class="activity-card apple-sub-card">
             <div class="activity-card-heading">
               <h3>{{ activity.name }}</h3>
               <span class="activity-status" :class="statusClass(activity.status)">{{ statusLabel(activity.status) }}</span>
@@ -222,7 +225,7 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
               <button class="apple-btn secondary" @click="openEdit(activity)">编辑</button>
               <button class="apple-btn activity-delete" @click="deleteActivity(activity)">删除</button>
             </div>
-          </article>
+          </AdminSurface>
           <div class="activity-pagination">
             <span>共 {{ activities.length }} 个活动</span>
             <n-pagination v-model:page="currentPage" :page-size="pageSize" :item-count="activities.length" simple />
@@ -232,7 +235,7 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
     </div>
 
     <!-- 新建/编辑弹窗 -->
-    <n-modal v-model:show="showModal" preset="card" class="apple-modal" style="width: calc(100% - 32px); max-width: 520px"
+    <AdminModal v-model:show="showModal"  class="apple-modal" style="--admin-modal-width: 520px; "
         :title="editing ? '编辑活动' : '新建活动'" :bordered="false" size="huge">
       <div class="space-y-4">
         <div>
@@ -269,7 +272,7 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
           <button @click="submit" :disabled="submitting" class="apple-btn primary disabled:opacity-50">{{ submitting ? '保存中…' : '保存' }}</button>
         </div>
       </template>
-    </n-modal>
+    </AdminModal>
   </div>
 </template>
 
@@ -277,13 +280,12 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
 /* Apple Style Base —— 与 FounderPermission.vue / Department.vue 保持一致 */
 .apple-container { background-color: #F1F4F9; }
 .apple-sub-card {
-  background-color: #FFFFFF;
-  border-radius: 24px;
+
   border: 1px solid rgba(0, 0, 0, 0.02);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-.apple-sub-card:hover { box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06); }
+
 .apple-btn {
   padding: 8px 16px; border-radius: 9999px; font-weight: 500; font-size: 14px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); display: inline-flex; align-items: center;
@@ -294,8 +296,8 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
 :deep(.apple-table .n-data-table-tr:last-child .n-data-table-td) { border-bottom: none; }
 
 .dark .apple-container { background-color: #000000; }
-.dark .apple-sub-card { background-color: #1C1C1E; border-color: rgba(255, 255, 255, 0.05); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
-.dark .apple-sub-card:hover { background-color: #242426; }
+.dark .apple-sub-card {  border-color: rgba(255, 255, 255, 0.05);  }
+
 .dark .apple-btn.secondary { background-color: rgba(255, 255, 255, 0.1); color: #F5F5F7; }
 .dark :deep(.apple-table .n-data-table-th) { border-bottom: 1px solid #38383A; color: #98989D; }
 .dark :deep(.apple-table .n-data-table-td) { border-bottom: 1px solid #2C2C2E; color: #D1D1D6; }

@@ -1,9 +1,9 @@
 <template>
   <!-- 页面容器：类 iOS 设置背景 -->
-  <div class="min-h-screen bg-[#F2F2F7] dark:bg-[#000000] transition-colors duration-300 pb-20">
+  <div class="admin-page min-h-screen bg-[#F2F2F7] dark:bg-[#000000] transition-colors duration-300 pb-20">
 
     <!-- 内容区域 -->
-    <main class="max-w-3xl mx-auto px-4 sm:px-6 pt-12">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 pt-12">
 
       <!-- 骨架屏加载状态 -->
       <div v-if="loading" class="animate-pulse space-y-6">
@@ -57,7 +57,7 @@
             <h3 class="pl-4 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
               基本资料
             </h3>
-            <div
+            <AdminSurface
                 class="bg-white dark:bg-[#1C1C1E] rounded-xl overflow-hidden shadow-sm border border-gray-200/50 dark:border-gray-800">
 
               <!-- 姓名 -->
@@ -124,7 +124,7 @@
                   </n-form-item>
                 </div>
               </div>
-            </div>
+            </AdminSurface>
             <p class="pl-4 mt-2 text-xs text-gray-400">请保持您的基本信息真实有效。</p>
           </section>
 
@@ -133,7 +133,7 @@
             <h3 class="pl-4 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
               学籍信息
             </h3>
-            <div
+            <AdminSurface
                 class="bg-white dark:bg-[#1C1C1E] rounded-xl overflow-hidden shadow-sm border border-gray-200/50 dark:border-gray-800">
 
               <!-- 学号 -->
@@ -196,7 +196,7 @@
                 </div>
               </div>
 
-            </div>
+            </AdminSurface>
           </section>
 
           <!-- 分组 3: 联系方式 -->
@@ -204,7 +204,7 @@
             <h3 class="pl-4 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
               联系方式
             </h3>
-            <div
+            <AdminSurface
                 class="bg-white dark:bg-[#1C1C1E] rounded-xl overflow-hidden shadow-sm border border-gray-200/50 dark:border-gray-800">
 
               <!-- 手机 -->
@@ -244,7 +244,7 @@
                 </div>
               </div>
 
-            </div>
+            </AdminSurface>
           </section>
 
           <!-- 操作按钮组 -->
@@ -270,7 +270,7 @@
 
         </n-form>
       </div>
-    </main>
+    </div>
 
     <!-- 确认对话框 - iOS Style -->
     <n-modal v-model:show="showModal" preset="dialog" title="确认更改" positive-text="更新资料" negative-text="取消"
@@ -282,7 +282,7 @@
     </n-modal>
 
     <!-- 密码修改对话框 -->
-    <n-modal v-model:show="showPasswordModal" preset="card" title="修改密码"
+    <AdminModal v-model:show="showPasswordModal"  title="修改密码"
              :style="{ width: '90%', maxWidth: '450px', borderRadius: '16px' }">
       <div class="space-y-4 pt-2">
         <n-form :model="passwordForm" :rules="passwordRules" ref="passwordFormRef">
@@ -324,11 +324,13 @@
           </button>
         </div>
       </div>
-    </n-modal>
+    </AdminModal>
   </div>
 </template>
 
 <script setup lang="ts">
+import AdminSurface from '@/components/admin/AdminSurface.vue'
+import AdminModal from '@/components/admin/AdminModal.vue'
 import {ref, reactive, onMounted, onBeforeUnmount} from 'vue';
 import {useMessage, NForm, NFormItem, NInput, NSelect, NModal} from 'naive-ui';
 import Icon from '@/components/Icon.vue'

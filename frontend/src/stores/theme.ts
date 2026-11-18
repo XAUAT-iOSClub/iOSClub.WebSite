@@ -1,12 +1,19 @@
-// stores/theme.js
+// Theme preference is shared by the site and the administration workspace.
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { darkTheme } from 'naive-ui'
 
+export type ThemePreference = 'light' | 'dark' | 'system'
+
+function readPreference(): ThemePreference {
+    const value = localStorage.getItem('appThemePreference')
+    return value === 'light' || value === 'dark' ? value : 'system'
+}
+
 export const useThemeStore = defineStore('theme', () => {
     const LOCAL_STORAGE_THEME_KEY = 'appThemePreference'
 
-    const userPreference = ref(localStorage.getItem(LOCAL_STORAGE_THEME_KEY) || 'system')
+    const userPreference = ref<ThemePreference>(readPreference())
     const systemPrefersDark = ref(window.matchMedia('(prefers-color-scheme: dark)').matches)
 
     const isDark = computed({
@@ -32,7 +39,7 @@ export const useThemeStore = defineStore('theme', () => {
         }
     }
 
-    function setThemePreference(preference: 'light' | 'dark' | 'system') {
+    function setThemePreference(preference: ThemePreference) {
         userPreference.value = preference
         localStorage.setItem(LOCAL_STORAGE_THEME_KEY, preference)
         updateThemeClass(isDark.value)

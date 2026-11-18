@@ -1,7 +1,7 @@
 <template>
   <div
-      class="apple-page min-h-screen bg-[#f5f5f7] dark:bg-black text-slate-900 dark:text-slate-100 transition-colors duration-500">
-    <main class="max-w-[1440px] mx-auto px-6 py-10">
+      class="admin-page apple-page min-h-screen bg-[#f5f5f7] dark:bg-black text-slate-900 dark:text-slate-100 transition-colors duration-500">
+    <div class="max-w-[1440px] mx-auto px-6 py-10">
 
       <!-- 顶部统计与图表区 (Grid布局) -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
@@ -9,7 +9,7 @@
         <!-- 左侧：关键指标卡片 (2/3 宽度) -->
         <div class="lg:col-span-3 xl:col-span-1 grid grid-cols-2 sm:grid-cols-2 gap-4">
           <!-- 总日志 -->
-          <div class="apple-card relative overflow-hidden group p-6 flex flex-col justify-between h-40">
+          <AdminSurface class="apple-card relative overflow-hidden group p-6 flex flex-col justify-between h-40">
             <div
                 class="absolute -right-4 -top-4 opacity-10 group-hover:opacity-20 transition-opacity transform rotate-12">
               <Icon icon="files" width="120"/>
@@ -24,10 +24,10 @@
               <span class="flex h-2 w-2 rounded-full bg-blue-500"></span>
               <span class="text-xs text-slate-400">系统活跃</span>
             </div>
-          </div>
+          </AdminSurface>
 
           <!-- 错误日志 -->
-          <div
+          <AdminSurface
               class="apple-card relative overflow-hidden group p-6 flex flex-col justify-between h-40 bg-red-50/50 dark:bg-red-900/10 border-red-100 dark:border-red-900/30">
             <div
                 class="absolute -right-4 -top-4 opacity-10 text-red-500 group-hover:opacity-20 transition-opacity transform rotate-12">
@@ -43,10 +43,10 @@
               <span class="flex h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
               <span class="text-xs text-red-600/70 dark:text-red-400/70">需要关注</span>
             </div>
-          </div>
+          </AdminSurface>
 
           <!-- 警告日志 -->
-          <div class="apple-card p-6 flex flex-col justify-center h-32">
+          <AdminSurface class="apple-card p-6 flex flex-col justify-center h-32">
             <div class="flex justify-between items-center mb-2">
                  <span
                      class="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400">
@@ -56,10 +56,10 @@
             </div>
             <div class="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{{ warningLogsCount }}</div>
             <div class="text-xs text-slate-400 mt-1">发现潜在问题</div>
-          </div>
+          </AdminSurface>
 
           <!-- 信息日志 -->
-          <div class="apple-card p-6 flex flex-col justify-center h-32">
+          <AdminSurface class="apple-card p-6 flex flex-col justify-center h-32">
             <div class="flex justify-between items-center mb-2">
                  <span
                      class="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
@@ -69,11 +69,11 @@
             </div>
             <div class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ infoLogsCount }}</div>
             <div class="text-xs text-slate-400 mt-1">正常运行</div>
-          </div>
+          </AdminSurface>
         </div>
 
         <!-- 右侧：ECharts 趋势图 (占据剩余空间) -->
-        <div class="lg:col-span-3 xl:col-span-2 apple-card p-6 min-h-[340px] flex flex-col">
+        <AdminSurface class="lg:col-span-3 xl:col-span-2 apple-card p-6 min-h-[340px] flex flex-col">
           <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
             <Icon icon="trending-up" class="text-blue-500"/>
             日志活动趋势
@@ -82,11 +82,11 @@
             <div ref="chartDom" class="w-full h-full absolute inset-0"></div>
             <!-- Absolute positioning for responsive resizing -->
           </div>
-        </div>
+        </AdminSurface>
       </div>
 
       <!-- 控制栏与表格区域 -->
-      <div class="apple-card p-0 overflow-hidden flex flex-col min-h-[600px]">
+      <AdminSurface class="apple-card p-0 overflow-hidden flex flex-col min-h-[600px]">
 
         <!-- 顶部工具栏 -->
         <div
@@ -259,16 +259,16 @@
               class="apple-pagination"
           />
         </div>
-      </div>
+      </AdminSurface>
 
-    </main>
+    </div>
 
     <!-- 详情弹窗：使用 macOS 风格的 Modal -->
-    <n-modal
+    <AdminModal
         v-model:show="showLogDetailsDialog"
-        preset="card"
+
         :bordered="false"
-        class="!w-[90vw] !max-w-[700px] !rounded-2xl apple-modal overflow-hidden"
+        class="apple-modal overflow-hidden" style="--admin-modal-width: 700px"
         :mask-closable="true"
     >
       <template #header>
@@ -329,7 +329,7 @@
           </div>
         </div>
       </div>
-    </n-modal>
+    </AdminModal>
 
     <!-- 清理弹窗 -->
     <n-modal v-model:show="showCleanupDialog" preset="dialog" title="清理日志" positive-text="清理" negative-text="取消"
@@ -354,6 +354,10 @@
 </template>
 
 <script setup lang="ts">
+import { useAdminCharts } from '@/composables/useAdminCharts'
+const { trackChart } = useAdminCharts()
+import AdminSurface from '@/components/admin/AdminSurface.vue'
+import AdminModal from '@/components/admin/AdminModal.vue'
 import {ref, computed, onMounted, onBeforeUnmount, nextTick} from 'vue'
 import {
   NSelect, NButton, NModal, NPagination, NInputNumber, useMessage
@@ -567,7 +571,7 @@ const confirmCleanup = async () => {
 // ---------------------------------------------------------
 const initChart = () => {
   if (!chartDom.value) return
-  chartInstance = echarts.init(chartDom.value)
+  chartInstance = trackChart(echarts.getInstanceByDom(chartDom.value) || echarts.init(chartDom.value))
   void updateChart() // 使用void忽略Promise返回值，避免未处理的Promise警告
   window.addEventListener('resize', resizeChart)
 }
@@ -711,9 +715,6 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   layoutStore.clearPageHeader()
-  if (chartInstance) {
-    chartInstance.dispose()
-  }
   window.removeEventListener('resize', resizeChart)
 })
 </script>
@@ -731,20 +732,15 @@ onBeforeUnmount(() => {
 }
 
 .dark .apple-card {
-  background: #1e1e1e; /* Dark gray like iOS Settings dark mode */
+   /* Dark gray like iOS Settings dark mode */
   border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: none;
-}
 
-.apple-card:hover {
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
 }
 
 /* 覆盖 NaiveUI 默认圆角，使其更符合 Apple 风格 */
 .n-button, .n-input, .n-input-wrapper {
   border-radius: 10px !important;
 }
-
 
 .apple-select .n-base-selection {
   border-radius: 8px !important;

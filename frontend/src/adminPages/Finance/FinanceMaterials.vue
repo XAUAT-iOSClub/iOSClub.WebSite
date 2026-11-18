@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import AdminSurface from '@/components/admin/AdminSurface.vue'
+import AdminModal from '@/components/admin/AdminModal.vue'
 import { computed, h, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { NDataTable, NModal, useDialog, useMessage } from 'naive-ui'
+import { NDataTable, useDialog, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import Icon from '@/components/Icon.vue'
 import FinanceTabs from './components/FinanceTabs.vue'
@@ -303,7 +305,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
 </script>
 
 <template>
-  <div class="finance-page">
+  <div class="admin-page finance-page">
     <FinanceTabs/>
 
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
@@ -318,9 +320,9 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
       </div>
     </div>
 
-    <div class="finance-card mb-4">
-      <div class="flex flex-col lg:flex-row lg:items-center gap-3">
-        <div class="flex gap-1 rounded-full bg-black/5 dark:bg-white/10 p-1 w-fit shrink-0">
+    <AdminSurface class="finance-card mb-4">
+      <div class="flex flex-col lg:flex-row lg:flex-wrap lg:items-center gap-3">
+        <div class="flex gap-1 rounded-full bg-black/5 dark:bg-white/10 p-1 w-fit max-w-full overflow-x-auto shrink-0">
           <button v-for="tab in statusTabs" :key="tab.value"
                   class="px-4 py-1.5 rounded-full text-sm whitespace-nowrap transition-all"
                   :class="statusFilter === tab.value
@@ -347,17 +349,17 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
         <button class="finance-btn" @click="page = 1; load()"><Icon icon="search" class="w-4 h-4"/>搜索</button>
         <button class="finance-btn" @click="page = 1; load()"><Icon icon="refresh-cw" class="w-4 h-4"/>刷新</button>
       </div>
-    </div>
+    </AdminSurface>
 
-    <div v-if="checkedKeys.length" class="finance-card mb-4 flex items-center justify-between">
+    <AdminSurface v-if="checkedKeys.length" class="finance-card mb-4 flex items-center justify-between">
       <span class="text-sm text-gray-600 dark:text-gray-300">已选择 {{ checkedKeys.length }} 份材料</span>
       <div class="flex gap-2">
         <button class="finance-btn" @click="checkedKeys = []">取消选择</button>
         <button class="finance-btn danger" @click="batchRemoveMaterials">批量删除</button>
       </div>
-    </div>
+    </AdminSurface>
 
-    <div class="finance-card">
+    <AdminSurface class="finance-card">
       <div v-if="loadError" class="finance-empty">
         <Icon icon="circle-alert" class="w-8 h-8 text-red-500"/>
         <p>{{ loadError }}</p>
@@ -378,9 +380,9 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
           </template>
         </n-data-table>
       </div>
-    </div>
+    </AdminSurface>
 
-    <n-modal v-model:show="createModal" preset="card" style="max-width: 640px" :bordered="false"
+    <AdminModal v-model:show="createModal"  style="--admin-modal-width: 640px; " :bordered="false"
              title="新建报销材料">
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div class="sm:col-span-2">
@@ -434,6 +436,6 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
           <button class="finance-btn primary" :disabled="saving" @click="submitCreate">{{ saving ? '创建中…' : '创建材料' }}</button>
         </div>
       </template>
-    </n-modal>
+    </AdminModal>
   </div>
 </template>

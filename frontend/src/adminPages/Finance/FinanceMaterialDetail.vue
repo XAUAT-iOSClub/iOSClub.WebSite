@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import AdminSurface from '@/components/admin/AdminSurface.vue'
+import AdminModal from '@/components/admin/AdminModal.vue'
 import { computed, h, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NDataTable, NModal, useDialog, useMessage } from 'naive-ui'
+import { NDataTable, useDialog, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import Icon from '@/components/Icon.vue'
 import FinanceTabs from './components/FinanceTabs.vue'
@@ -401,15 +403,15 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
 </script>
 
 <template>
-  <div class="finance-page">
+  <div class="admin-page finance-page">
     <FinanceTabs/>
 
     <div v-if="loading" class="space-y-4">
-      <div class="finance-card h-24 animate-pulse"></div>
-      <div class="finance-card h-64 animate-pulse"></div>
+      <AdminSurface class="finance-card h-24 animate-pulse"></AdminSurface>
+      <AdminSurface class="finance-card h-64 animate-pulse"></AdminSurface>
     </div>
 
-    <div v-else-if="loadError" class="finance-card">
+    <AdminSurface v-else-if="loadError" class="finance-card">
       <div class="finance-empty">
         <Icon icon="circle-alert" class="w-8 h-8 text-red-500"/>
         <p>{{ loadError }}</p>
@@ -418,7 +420,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
           <button class="finance-btn primary" @click="load">重新加载</button>
         </div>
       </div>
-    </div>
+    </AdminSurface>
 
     <template v-else-if="material">
       <div class="flex flex-wrap items-center gap-3 mb-4">
@@ -485,7 +487,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
       <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div class="xl:col-span-2 space-y-4">
           <!-- 活动信息 -->
-          <div class="finance-card">
+          <AdminSurface class="finance-card">
             <div class="flex items-center justify-between mb-4">
               <span class="finance-card-title">活动信息</span>
               <button v-if="editable" class="finance-btn primary" :disabled="saving" @click="saveInfo">
@@ -537,10 +539,10 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
                 <input v-model="form.remark" maxlength="200" class="finance-input" :disabled="!editable"/>
               </div>
             </div>
-          </div>
+          </AdminSurface>
 
           <!-- 发票明细 -->
-          <div class="finance-card">
+          <AdminSurface class="finance-card">
             <div class="flex items-center justify-between mb-3">
               <span class="finance-card-title">发票明细</span>
               <button v-if="editable" class="finance-btn primary" @click="openPool">
@@ -556,10 +558,10 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
                 </div>
               </template>
             </n-data-table>
-          </div>
+          </AdminSurface>
 
           <!-- 表单 -->
-          <div class="finance-card">
+          <AdminSurface class="finance-card">
             <span class="finance-card-title">表单</span>
             <div class="mt-3 space-y-3">
               <div v-for="item in formRows" :key="item.kind"
@@ -583,12 +585,12 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
               </div>
             </div>
             <p class="finance-muted mt-3">生成表单只填充单元格，不改版式；签字、盖章栏留空，线下完成。</p>
-          </div>
+          </AdminSurface>
         </div>
 
         <div class="space-y-4">
           <!-- 状态操作 -->
-          <div class="finance-card" v-if="material.status !== 'pending'">
+          <AdminSurface class="finance-card" v-if="material.status !== 'pending'">
             <span class="finance-card-title">状态操作</span>
             <div class="mt-3 space-y-2">
               <template v-if="material.status === 'reimbursed'">
@@ -609,10 +611,10 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
                 <button class="finance-btn success w-full" @click="restoreMaterial">恢复材料</button>
               </template>
             </div>
-          </div>
+          </AdminSurface>
 
           <!-- 变更日志 -->
-          <div class="finance-card">
+          <AdminSurface class="finance-card">
             <div class="flex items-center justify-between mb-3">
               <span class="finance-card-title">变更日志</span>
               <button class="text-xs text-[#007AFF]" @click="loadLogs">刷新</button>
@@ -635,13 +637,13 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
                 </div>
               </div>
             </div>
-          </div>
+          </AdminSurface>
         </div>
       </div>
     </template>
 
     <!-- 确认报销 -->
-    <n-modal v-model:show="showConfirm" preset="card" style="max-width: 500px" :bordered="false" title="确认已报销">
+    <AdminModal v-model:show="showConfirm"  style="--admin-modal-width: 500px; " :bordered="false" title="确认已报销">
       <div v-if="material" class="space-y-3">
         <p class="text-sm text-gray-600 dark:text-gray-300">确认后材料将锁定并写入扣减流水，请再次核对：</p>
         <div class="rounded-xl bg-black/[.03] dark:bg-white/[.06] p-3 text-sm space-y-1.5">
@@ -660,10 +662,10 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
           </button>
         </div>
       </template>
-    </n-modal>
+    </AdminModal>
 
     <!-- 撤销报销 -->
-    <n-modal v-model:show="showRevoke" preset="card" style="max-width: 480px" :bordered="false" title="撤销报销">
+    <AdminModal v-model:show="showRevoke"  style="--admin-modal-width: 480px; " :bordered="false" title="撤销报销">
       <div class="space-y-3">
         <p class="text-sm text-gray-600 dark:text-gray-300">撤销后材料回到待报销，原扣减流水作废并写入回滚流水。请填写原因：</p>
         <textarea v-model="revokeReason" rows="3" maxlength="200" class="finance-textarea"
@@ -675,10 +677,10 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
           <button class="finance-btn danger" :disabled="revoking" @click="doRevoke">{{ revoking ? '撤销中…' : '确认撤销' }}</button>
         </div>
       </template>
-    </n-modal>
+    </AdminModal>
 
     <!-- 选择待报销发票 -->
-    <n-modal v-model:show="showPool" preset="card" style="max-width: 900px" :bordered="false" title="选择待报销发票">
+    <AdminModal v-model:show="showPool"  style="--admin-modal-width: 900px; " :bordered="false" title="选择待报销发票">
       <div class="space-y-3">
         <div class="flex gap-2">
           <input v-model="poolKeyword" type="text" class="finance-input" placeholder="搜索发票号、销售方、项目..."
@@ -705,6 +707,6 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
           </div>
         </div>
       </template>
-    </n-modal>
+    </AdminModal>
   </div>
 </template>

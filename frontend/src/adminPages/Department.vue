@@ -1,5 +1,5 @@
 <template>
-  <div class="apple-container min-h-screen max-sm:p-0 p-6 md:p-8 transition-colors duration-300">
+  <div class="admin-page apple-container min-h-screen max-sm:p-0 p-6 md:p-8 transition-colors duration-300">
     <input ref="importFileInput" type="file" accept=".xlsx,.xls,.csv,.json" class="hidden" @change="handleImportFile"/>
     <div class="p-4">
       <n-tabs
@@ -16,7 +16,7 @@
             <!-- 顶部统计卡片组 -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <!-- 领导层概览 -->
-              <div class="apple-sub-card p-6 flex flex-col justify-between h-full">
+              <AdminSurface class="apple-sub-card p-6 flex flex-col justify-between h-full">
                 <div class="flex items-center justify-between mb-4">
                   <div class="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                     <Icon icon="award" class="text-xl"/>
@@ -44,10 +44,10 @@
                   </div>
                   <div v-if="ministers.length === 0" class="text-gray-400 italic text-sm">暂无领导成员</div>
                 </div>
-              </div>
+              </AdminSurface>
 
               <!-- 成员概览 -->
-              <div class="apple-sub-card p-6 flex flex-col justify-between h-full">
+              <AdminSurface class="apple-sub-card p-6 flex flex-col justify-between h-full">
                 <div class="flex items-center justify-between mb-4">
                   <div class="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                     <Icon icon="users" class="text-xl"/>
@@ -67,7 +67,7 @@
                   {{ loading ? '-' : members.length }}
                   <span class="text-lg font-normal text-gray-400 ml-1">人</span>
                 </div>
-              </div>
+              </AdminSurface>
 
             </div>
 
@@ -75,7 +75,7 @@
             <section>
               <h3 class="section-title mb-4">数据透视</h3>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div v-for="(chartId, index) in ['collegeChart', 'genderChart']"
+                <AdminSurface v-for="(chartId, index) in ['collegeChart', 'genderChart']"
                      :key="chartId"
                      class="apple-sub-card p-4 h-[350px] flex flex-col">
                     <span class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 ml-2">
@@ -89,12 +89,12 @@
                       <Icon icon="loader-circle" class="animate-spin text-3xl text-blue-500"/>
                     </div>
                   </div>
-                </div>
+                </AdminSurface>
               </div>
             </section>
 
             <!-- 成员列表表格 -->
-            <section class="apple-sub-card overflow-hidden">
+            <AdminSurface as="section" class="apple-sub-card overflow-hidden">
               <div class="p-4 border-b border-gray-100 dark:border-white/10 flex justify-between items-center">
                 <h3 class="font-semibold text-lg">全体成员名单</h3>
               </div>
@@ -106,7 +106,7 @@
                   :loading="loading"
                   class="apple-table mb-4"
               />
-            </section>
+            </AdminSurface>
 
           </div>
         </n-tab-pane>
@@ -122,7 +122,7 @@
           <div class="space-y-8 mt-6 animate-fade-in" v-if="!loading">
 
             <!-- 部门头部信息 -->
-            <div class="apple-sub-card p-8 relative overflow-hidden">
+            <AdminSurface class="apple-sub-card p-8 relative overflow-hidden">
               <!-- 装饰背景 -->
               <div
                   class="absolute -right-10 -top-10 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -168,14 +168,14 @@
                   {{ department.description }}
                 </p>
               </div>
-            </div>
+            </AdminSurface>
 
             <!-- 部门内容双栏布局 -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
               <!-- 左侧：部长与信息 -->
               <div class="space-y-6">
-                <div class="apple-sub-card p-6">
+                <AdminSurface class="apple-sub-card p-6">
                   <div class="flex justify-between items-center mb-4">
                     <h3 class="font-semibold text-lg">管理团队</h3>
                     <div class="flex gap-1">
@@ -204,12 +204,12 @@
                       暂未指派部长
                     </div>
                   </div>
-                </div>
+                </AdminSurface>
 
               </div>
 
               <!-- 右侧：成员列表 -->
-              <div class="lg:col-span-2 apple-sub-card overflow-hidden flex flex-col">
+              <AdminSurface class="lg:col-span-2 apple-sub-card overflow-hidden flex flex-col">
                 <div
                     class="p-4 border-b border-gray-100 dark:border-white/10 flex justify-between items-center bg-gray-50/50 dark:bg-white/5">
                   <div class="flex items-center gap-2">
@@ -235,7 +235,7 @@
                       class="apple-table"
                   />
                 </div>
-              </div>
+              </AdminSurface>
             </div>
 
           </div>
@@ -250,11 +250,11 @@
 
   <!-- 模态框组件 - 样式重写 -->
   <!-- 添加成员 -->
-  <n-modal
+  <AdminModal
       v-model:show="showAddMemberModal"
-      preset="card"
+
       class="apple-modal"
-      style="max-width: 560px"
+      style="--admin-modal-width: 560px; "
       :title="addMemberTitle"
       :bordered="false"
       size="huge"
@@ -305,14 +305,14 @@
         </div>
       </div>
     </div>
-  </n-modal>
+  </AdminModal>
 
   <!-- 编辑部门 -->
-  <n-modal
+  <AdminModal
       v-model:show="showDepartmentModal"
-      preset="card"
+
       class="apple-modal"
-      style="max-width: 500px"
+      style="--admin-modal-width: 500px; "
       :title="editingDepartment ? '编辑部门' : '新建部门'"
       :bordered="false"
   >
@@ -336,14 +336,14 @@
         <button @click="saveDepartment" class="apple-btn primary">完成</button>
       </div>
     </template>
-  </n-modal>
+  </AdminModal>
 
   <!-- 更改部门 -->
-  <n-modal
+  <AdminModal
       v-model:show="showChangeDepartmentModalRef"
-      preset="card"
+
       class="apple-modal"
-      style="max-width: 500px"
+      style="--admin-modal-width: 500px; "
       title="人事调动"
       :bordered="false"
   >
@@ -378,14 +378,14 @@
         </button>
       </div>
     </template>
-  </n-modal>
+  </AdminModal>
 
   <!-- 导入部门名单（选择文件 → 预检查，同一个弹窗内完成） -->
-  <n-modal
+  <AdminModal
       v-model:show="showImportModal"
-      preset="card"
+
       class="apple-modal"
-      style="max-width: 560px"
+      style="--admin-modal-width: 560px; "
       :title="importStep === 'select' ? '导入部门名单' : '导入检查'"
       :bordered="false"
   >
@@ -449,14 +449,14 @@
         </button>
       </div>
     </template>
-  </n-modal>
+  </AdminModal>
 
   <!-- 导入历史 -->
-  <n-modal
+  <AdminModal
       v-model:show="showHistoryModal"
-      preset="card"
+
       class="apple-modal"
-      style="max-width: 600px"
+      style="--admin-modal-width: 600px; "
       title="版本记录"
       :bordered="false"
   >
@@ -493,24 +493,16 @@
         <button class="apple-btn secondary" @click="showHistoryModal = false">关闭</button>
       </div>
     </template>
-  </n-modal>
+  </AdminModal>
 </template>
 
 <script setup lang="ts">
+import { useAdminCharts } from '@/composables/useAdminCharts'
+const { trackChart } = useAdminCharts()
+import AdminSurface from '@/components/admin/AdminSurface.vue'
+import AdminModal from '@/components/admin/AdminModal.vue'
 import {ref, onMounted, onBeforeUnmount, h, computed, nextTick, watch, defineComponent} from 'vue'
-import {
-  useMessage,
-  useDialog,
-  NTabs,
-  NTabPane,
-  NSelect,
-  NInput,
-  NDataTable,
-  NModal,
-  NForm,
-  NFormItem,
-  NDropdown,
-} from 'naive-ui'
+import { useMessage, useDialog, NTabs, NTabPane, NSelect, NInput, NDataTable, NForm, NFormItem, NDropdown,  } from 'naive-ui'
 import type {DataTableColumns} from 'naive-ui'
 import Icon from '@/components/Icon.vue'
 import {DepartmentService} from '../services/DepartmentService'
@@ -1388,13 +1380,10 @@ const genderData = computed(() => {
 const initChart = (id: string, options: any) => {
   const dom = document.getElementById(id)
   if (!dom) return
-  const chart = echarts.init(dom as HTMLElement)
+  const chart = trackChart(echarts.getInstanceByDom(dom) || echarts.init(dom))
   chart.setOption(options)
 
-  // Auto Resize
-  const resizeHandler = () => chart.resize()
-  window.addEventListener('resize', resizeHandler)
-  // Store implementation to remove listener later if needed (skipped for this simple implementation)
+
 }
 
 const getCommonChartOptions = (data: any[], name: string) => {
@@ -1459,23 +1448,17 @@ onBeforeUnmount(() => {
 }
 
 .apple-card {
-  background-color: rgba(255, 255, 255, 0.65);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+
   border: 1px solid rgba(255, 255, 255, 0.4);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+
 }
 
 .apple-sub-card {
-  background-color: #FFFFFF;
-  border-radius: 24px; /* Apple uses larger border radiuses now */
-  border: 1px solid rgba(0, 0, 0, 0.02); /* Very subtle border */
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
 
-.apple-sub-card:hover {
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+   /* Apple uses larger border radiuses now */
+  border: 1px solid rgba(0, 0, 0, 0.02); /* Very subtle border */
+
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 /* Buttons */
@@ -1585,18 +1568,14 @@ onBeforeUnmount(() => {
 }
 
 .dark .apple-card {
-  background-color: rgba(28, 28, 30, 0.6);
+
   border-color: rgba(255, 255, 255, 0.1);
 }
 
 .dark .apple-sub-card {
-  background-color: #1C1C1E; /* System Gray 6 Dark */
+   /* System Gray 6 Dark */
   border-color: rgba(255, 255, 255, 0.05);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
 
-.dark .apple-sub-card:hover {
-  background-color: #242426;
 }
 
 .dark .apple-item-card {

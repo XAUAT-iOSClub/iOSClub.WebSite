@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AdminSurface from '@/components/admin/AdminSurface.vue'
 import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { NDataTable } from 'naive-ui'
@@ -132,7 +133,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
 </script>
 
 <template>
-  <div class="finance-page">
+  <div class="admin-page finance-page">
     <FinanceTabs/>
 
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
@@ -177,7 +178,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
       </div>
     </div>
 
-    <div class="finance-card mb-4">
+    <AdminSurface class="finance-card mb-4">
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <div>
           <label class="finance-label">类型</label>
@@ -204,9 +205,9 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
           <button class="finance-btn" @click="resetFilters">重置</button>
         </div>
       </div>
-    </div>
+    </AdminSurface>
 
-    <div class="finance-card">
+    <AdminSurface class="finance-card">
       <div v-if="loadError" class="finance-empty">
         <Icon icon="circle-alert" class="w-8 h-8 text-red-500"/>
         <p>{{ loadError }}</p>
@@ -221,6 +222,6 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
           </div>
         </template>
       </n-data-table>
-    </div>
+    </AdminSurface>
   </div>
 </template>

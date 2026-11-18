@@ -1,6 +1,6 @@
 <template>
-  <div class="ip-blacklist-container min-h-screen transition-colors duration-300">
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <div class="admin-page ip-blacklist-container min-h-screen transition-colors duration-300">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
       <div class="mb-8 px-2">
         <h2 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white text-effect">
@@ -11,7 +11,7 @@
       <!-- 统计概览卡片 -->
       <div v-if="!statsLoading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         <!-- 精确IP数量 -->
-        <div class="apple-card group relative overflow-hidden p-6">
+        <AdminSurface class="apple-card group relative overflow-hidden p-6">
           <div class="flex items-start justify-between">
             <div class="flex flex-col">
               <span class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -26,10 +26,10 @@
               <Icon icon="network" class="w-6 h-6 text-red-600 dark:text-red-400"/>
             </div>
           </div>
-        </div>
+        </AdminSurface>
 
         <!-- CIDR范围数量 -->
-        <div class="apple-card group relative overflow-hidden p-6">
+        <AdminSurface class="apple-card group relative overflow-hidden p-6">
           <div class="flex items-start justify-between">
             <div class="flex flex-col">
               <span class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -44,10 +44,10 @@
               <Icon icon="network" class="w-6 h-6 text-orange-600 dark:text-orange-400"/>
             </div>
           </div>
-        </div>
+        </AdminSurface>
 
         <!-- 拦截次数 -->
-        <div class="apple-card group relative overflow-hidden p-6">
+        <AdminSurface class="apple-card group relative overflow-hidden p-6">
           <div class="flex items-start justify-between">
             <div class="flex flex-col">
               <span class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -62,11 +62,11 @@
               <Icon icon="shield-check" class="w-6 h-6 text-blue-600 dark:text-blue-400"/>
             </div>
           </div>
-        </div>
+        </AdminSurface>
       </div>
 
       <!-- 缓存性能图表 -->
-      <div class="apple-card p-6 mb-8">
+      <AdminSurface class="apple-card p-6 mb-8">
         <div v-if="!statsLoading && stats" class="flex items-center justify-between mb-6">
           <div class="flex items-center gap-3">
             <div class="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center">
@@ -79,12 +79,12 @@
           </span>
         </div>
         <div ref="cacheChartRef" class="h-64"></div>
-      </div>
+      </AdminSurface>
 
       <!-- 操作区域 -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <!-- 添加IP -->
-        <div class="apple-card p-6">
+        <AdminSurface class="apple-card p-6">
           <div class="flex items-center gap-3 mb-4">
             <div class="w-8 h-8 rounded-xl bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
               <Icon icon="circle-plus" class="w-5 h-5 text-green-600 dark:text-green-400"/>
@@ -120,10 +120,10 @@
               添加到黑名单
             </n-button>
           </n-form>
-        </div>
+        </AdminSurface>
 
         <!-- 移除IP -->
-        <div class="apple-card p-6">
+        <AdminSurface class="apple-card p-6">
           <div class="flex items-center gap-3 mb-4">
             <div class="w-8 h-8 rounded-xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
               <Icon icon="circle-minus" class="w-5 h-5 text-red-600 dark:text-red-400"/>
@@ -158,11 +158,11 @@
               从黑名单移除
             </n-button>
           </n-form>
-        </div>
+        </AdminSurface>
       </div>
 
       <!-- IP检查 -->
-      <div class="apple-card p-6 mb-8">
+      <AdminSurface class="apple-card p-6 mb-8">
         <div class="flex items-center gap-3 mb-4">
           <div class="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
             <Icon icon="search" class="w-5 h-5 text-blue-600 dark:text-blue-400"/>
@@ -214,7 +214,7 @@
             </div>
           </div>
         </div>
-      </div>
+      </AdminSurface>
 
       <!-- 操作按钮组 -->
       <div class="flex flex-wrap gap-3">
@@ -242,11 +242,14 @@
         </n-button>
       </div>
 
-    </main>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useAdminCharts } from '@/composables/useAdminCharts'
+const { trackChart } = useAdminCharts()
+import AdminSurface from '@/components/admin/AdminSurface.vue'
 import {ref, onMounted, computed, watch} from 'vue';
 import {useMessage, NInput, NButton, NForm, NFormItem} from 'naive-ui';
 import Icon from '@/components/Icon.vue'
@@ -344,7 +347,7 @@ const loadStats = async () => {
 // 渲染缓存性能图表
 const renderCacheChart = () => {
   if (!cacheChartRef.value) return
-  cacheChart = echarts.init(cacheChartRef.value)
+  cacheChart = trackChart(echarts.getInstanceByDom(cacheChartRef.value) || echarts.init(cacheChartRef.value))
 
   const option = {
     backgroundColor: 'transparent',
@@ -402,13 +405,8 @@ const renderCacheChart = () => {
   };
 
   cacheChart.setOption(option);
-  console.log(option)
-  console.log(stats.value)
 
-  // 响应式调整
-  window.addEventListener('resize', () => {
-    cacheChart?.resize();
-  });
+
 };
 
 // 监听暗黑模式变化，更新图表

@@ -1,24 +1,13 @@
 <template>
   <div
-      class="min-h-screen bg-[#F5F5F7] dark:bg-black text-slate-900 dark:text-slate-100 transition-colors duration-300 selection:bg-blue-500/30">
+      class="admin-page min-h-screen bg-[#F5F5F7] dark:bg-black text-slate-900 dark:text-slate-100 transition-colors duration-300 selection:bg-blue-500/30">
     <!-- 顶部导航/欢迎区 -->
-    <header
-        class="sticky top-0 z-20 px-6 py-4 sm:px-8 lg:px-12 glass-effect border-b border-slate-200/50 dark:border-neutral-800/50 flex justify-between items-center">
-      <div>
-        <h1 class="text-2xl font-bold tracking-tight -mb-1">控制中心</h1>
-        <p class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">
-          {{ welcomeMessage }}，{{ userInfo.name }}
-        </p>
-      </div>
-      <div class="flex items-center gap-4">
+    <AdminPageHeading title="控制中心" :description="`${welcomeMessage}，${userInfo.name}`" />
 
-      </div>
-    </header>
-
-    <main class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
       <!-- 统计数据不可用：失败时不能把示例值或零值当成查询结果 -->
-      <div
+      <AdminSurface
           v-if="statisticsUnavailable"
           role="alert"
           class="ios-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-amber-200/70 bg-amber-50/80 dark:bg-amber-900/10 dark:border-amber-500/20"
@@ -36,13 +25,13 @@
         >
           {{ loading.statistics ? '重试中…' : '重试' }}
         </button>
-      </div>
+      </AdminSurface>
 
       <!-- 顶部主要信息区：Bento Grid 布局 -->
       <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
 
         <!-- 个人卡片 (占比较大) -->
-        <div class="md:col-span-12 lg:col-span-4 ios-card relative overflow-hidden group">
+        <AdminSurface class="md:col-span-12 lg:col-span-4 ios-card relative overflow-hidden group">
           <div
               class="absolute inset-0 bg-gradient-to-br from-blue-50 via-transparent to-purple-50 dark:from-blue-900/20 dark:via-transparent dark:to-purple-900/20 opacity-50"></div>
           <div class="relative z-10 flex flex-col h-full p-6 justify-between">
@@ -69,13 +58,13 @@
               </button>
             </div>
           </div>
-        </div>
+        </AdminSurface>
 
         <!-- 关键指标 -->
         <div v-if="userInfo.isAdmin"
              class="md:col-span-12 lg:col-span-8 h-full">
           <!-- 成员概览 -->
-          <div class="ios-card p-5 flex flex-col justify-between hover:scale-[1.02] transition-all cursor-pointer h-full"
+          <AdminSurface class="ios-card p-5 flex flex-col justify-between hover:scale-[1.02] transition-all cursor-pointer h-full"
                @click="router.push('/Centre/MemberData')">
             <div class="flex items-center justify-between mb-2">
               <div class="p-2 bg-indigo-100 dark:bg-indigo-500/20 rounded-lg text-indigo-600 dark:text-indigo-400">
@@ -88,7 +77,7 @@
               <div v-else-if="statistics" class="text-2xl font-bold mt-0.5">{{ statistics.members }}</div>
               <div v-else class="text-2xl font-bold mt-0.5 text-slate-400">暂不可用</div>
             </div>
-          </div>
+          </AdminSurface>
 
         </div>
       </div>
@@ -101,7 +90,7 @@
             iTools
           </h3>
         </div>
-        <div class="ios-card p-1 overflow-hidden">
+        <AdminSurface class="ios-card p-1 overflow-hidden">
           <div v-if="loading.tools" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4 p-4">
             <div v-for="n in 6" :key="n" class="h-24 bg-slate-100 dark:bg-neutral-800 animate-pulse rounded-xl"></div>
           </div>
@@ -114,7 +103,7 @@
               <div
                   class="w-14 h-14 rounded-2xl flex items-center justify-center mb-3 shadow-sm bg-white dark:bg-neutral-800 border border-slate-100 dark:border-neutral-700 group-hover:scale-110 transition-transform duration-300">
                 <template v-if="tool.icon && !tool.icon.startsWith('http')">
-                  <IconFont :type="tool.icon" className="w-8 h-8 text-slate-700 dark:text-slate-200"/>
+                  <Icon :icon="tool.icon.startsWith('icon-') ? 'app-window-mac' : tool.icon" class="w-7 h-7 text-slate-700 dark:text-slate-200"/>
                 </template>
                 <img v-else :src="fixImageUrl(tool)" class="w-8 h-8 object-contain rounded" :alt="tool.name"/>
               </div>
@@ -124,14 +113,14 @@
                 }}</span>
             </div>
           </div>
-        </div>
+        </AdminSurface>
       </section>
 
       <!-- 社团资源 / 部门管理 -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           <!-- 资源快捷入口 -->
-          <div
+          <AdminSurface
               v-if="userInfo.isAdmin"
               @click="goToResources"
               class="ios-card p-6 relative overflow-hidden group cursor-pointer hover:ring-2 ring-blue-500/30 transition-all"
@@ -155,10 +144,10 @@
                 <Icon icon="arrow-right" class="ml-1 group-hover:translate-x-1 transition-transform"/>
               </div>
             </div>
-          </div>
+          </AdminSurface>
 
           <!-- 部门入口 -->
-          <div
+          <AdminSurface
               v-if="userInfo.isAdmin"
               @click="goToDepartment"
               class="ios-card p-6 relative overflow-hidden group cursor-pointer hover:ring-2 ring-blue-500/30 transition-all"
@@ -198,21 +187,18 @@
                 <Icon icon="settings" class="w-6 h-6"/>
               </div>
             </div>
-          </div>
+          </AdminSurface>
       </div>
 
-    </main>
-
-    <!-- 全局背景装饰 -->
-    <div class="fixed top-0 left-0 w-full h-full pointer-events-none -z-10 overflow-hidden">
-      <div class="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-blue-400/10 rounded-full blur-[100px]"></div>
-      <div
-          class="absolute bottom-[-10%] left-[-5%] w-[600px] h-[600px] bg-purple-400/10 rounded-full blur-[120px]"></div>
     </div>
+
+
   </div>
 </template>
 
 <script setup lang="ts">
+import AdminPageHeading from '@/components/admin/AdminPageHeading.vue'
+import AdminSurface from '@/components/admin/AdminSurface.vue'
 import {ref, onMounted, computed} from 'vue'
 import {useRouter} from 'vue-router'
 import {useMessage} from 'naive-ui'
@@ -223,9 +209,7 @@ import {DataCentreService} from "../services/DataCentreService"
 import {AuthService} from "../services/AuthService"
 import {ApiError} from '../services/ApiService'
 import {ErrorCode} from '../constants/ErrorCode'
-import IconFont from "../components/IconFont.vue"
-// @ts-ignore
-import '//at.alicdn.com/t/c/font_4612528_md4hjwjgcb.js';
+
 
 const router = useRouter()
 const message = useMessage()
@@ -418,7 +402,7 @@ onMounted(async () => {
 }
 
 .dark .ios-card {
-  background-color: #171717;
+
   border: 1px solid #262626;
 }
 

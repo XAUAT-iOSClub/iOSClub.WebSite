@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import AdminModal from '@/components/admin/AdminModal.vue'
 import { computed } from 'vue'
-import { NModal } from 'naive-ui'
+
 import type { OperationLogItem } from '@/services/OperationLogService'
 
 const show = defineModel<boolean>('show', { required: true })
@@ -19,12 +20,12 @@ const changeContent = computed(() => {
 </script>
 
 <template>
-  <NModal
+  <AdminModal
     v-model:show="show"
-    preset="card"
+
     title="操作详情"
     aria-label="操作详情"
-    class="w-[calc(100%-2rem)] max-w-3xl rounded-3xl!"
+    style="--admin-modal-width: 48rem"
     :bordered="false"
   >
     <div v-if="item" class="max-h-[70dvh] space-y-5 overflow-y-auto text-sm">
@@ -77,7 +78,7 @@ const changeContent = computed(() => {
         <p class="detail-secondary break-all">{{ item.userAgent }}</p>
       </div>
     </div>
-  </NModal>
+  </AdminModal>
 </template>
 
 <style scoped>

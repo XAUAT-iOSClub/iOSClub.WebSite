@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import AdminSurface from '@/components/admin/AdminSurface.vue'
+import AdminModal from '@/components/admin/AdminModal.vue'
 import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
-import { NDataTable, NModal, useDialog, useMessage } from 'naive-ui'
+import { NDataTable, useDialog, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import Icon from '@/components/Icon.vue'
 import FinanceTabs from './components/FinanceTabs.vue'
@@ -126,7 +128,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
 </script>
 
 <template>
-  <div class="finance-page finance-dashboard">
+  <div class="admin-page finance-page finance-dashboard">
     <FinanceTabs/>
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-5">
@@ -153,16 +155,16 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
     </div>
 
     <div v-if="loading" class="finance-kpi-grid">
-      <div v-for="i in 4" :key="i" class="finance-kpi animate-pulse h-28"></div>
+      <AdminSurface v-for="i in 4" :key="i" class="finance-kpi animate-pulse h-28"></AdminSurface>
     </div>
 
-    <div v-else-if="loadError" class="finance-card">
+    <AdminSurface v-else-if="loadError" class="finance-card">
       <div class="finance-empty">
         <Icon icon="circle-alert" class="w-8 h-8 text-red-500"/>
         <p>{{ loadError }}</p>
         <button class="finance-btn primary" @click="load">重新加载</button>
       </div>
-    </div>
+    </AdminSurface>
 
     <template v-else-if="summary">
       <div v-if="warning !== 'normal'" class="finance-alert mb-4" :class="warning">
@@ -172,29 +174,29 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
       </div>
 
       <div class="finance-kpi-grid">
-        <div class="finance-kpi">
+        <AdminSurface class="finance-kpi">
           <div class="finance-kpi-label">年度经费</div>
           <div class="finance-kpi-value">{{ formatMoney(summary.budgetAmount) }}</div>
           <div class="finance-muted mt-2">{{ summary.academicYear }} 学年</div>
-        </div>
-        <div class="finance-kpi">
+        </AdminSurface>
+        <AdminSurface class="finance-kpi">
           <div class="finance-kpi-label">已用金额</div>
           <div class="finance-kpi-value">{{ formatMoney(summary.usedAmount) }}</div>
           <div class="finance-muted mt-2">{{ summary.reimbursedCount }} 份已报销材料</div>
-        </div>
-        <div class="finance-kpi">
+        </AdminSurface>
+        <AdminSurface class="finance-kpi">
           <div class="finance-kpi-label">在途金额</div>
           <div class="finance-kpi-value text-blue-600 dark:text-blue-400">{{ formatMoney(summary.inTransitAmount) }}</div>
           <div class="finance-muted mt-2">{{ summary.pendingCount }} 份待报销材料，不参与扣减</div>
-        </div>
-        <div class="finance-kpi">
+        </AdminSurface>
+        <AdminSurface class="finance-kpi">
           <div class="finance-kpi-label">剩余经费</div>
           <div class="finance-kpi-value" :class="remainingClass">{{ formatMoney(summary.remainingAmount) }}</div>
           <div class="finance-muted mt-2">已使用 {{ summary.usagePercent.toFixed(2) }}%</div>
-        </div>
+        </AdminSurface>
       </div>
 
-      <div class="finance-card mt-4">
+      <AdminSurface class="finance-card mt-4">
         <div class="flex items-center justify-between mb-3">
           <span class="finance-card-title">预算执行进度</span>
           <span class="finance-muted">{{ summary.usagePercent.toFixed(2) }}%</span>
@@ -208,10 +210,10 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
           <Icon icon="circle-alert" class="w-5 h-5 shrink-0"/>
           <span>当前学年尚未设置年度经费，经费与扣减会按 0 计算。请点击右上角“设置年度经费”。</span>
         </div>
-      </div>
+      </AdminSurface>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
-        <div class="finance-card lg:col-span-2">
+        <AdminSurface class="finance-card lg:col-span-2">
           <div class="flex items-center justify-between mb-3">
             <span class="finance-card-title">最近经费流水</span>
             <router-link to="/Centre/Finance/Flows" class="text-xs text-[#007AFF] hover:underline">查看全部</router-link>
@@ -222,9 +224,9 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
             <Icon icon="refresh-cw" class="w-8 h-8"/>
             <span>暂无经费流水，确认报销后会生成扣减记录</span>
           </div>
-        </div>
+        </AdminSurface>
 
-        <div class="finance-card">
+        <AdminSurface class="finance-card">
           <span class="finance-card-title">快捷入口</span>
           <div class="mt-3 space-y-2">
             <router-link to="/Centre/Finance/Invoices"
@@ -261,11 +263,11 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
               <Icon icon="chevron-left" class="w-4 h-4 text-gray-300 rotate-180"/>
             </router-link>
           </div>
-        </div>
+        </AdminSurface>
       </div>
     </template>
 
-    <n-modal v-model:show="showBudget" preset="card" style="width: calc(100% - 32px); max-width: 460px" :bordered="false"
+    <AdminModal v-model:show="showBudget"  style="--admin-modal-width: 460px; " :bordered="false"
              title="设置年度经费">
       <div class="space-y-4">
         <div>
@@ -292,7 +294,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
           </button>
         </div>
       </template>
-    </n-modal>
+    </AdminModal>
   </div>
 </template>
 

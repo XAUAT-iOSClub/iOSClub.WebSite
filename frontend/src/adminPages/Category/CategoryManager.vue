@@ -1,6 +1,6 @@
 <template>
-  <div class="ios-container min-h-screen w-full transition-colors duration-300">
-    <main class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-10">
+  <div class="admin-page ios-container min-h-screen w-full transition-colors duration-300">
+    <div class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-10">
 
       <!-- 顶部说明 (可选，增加苹果风格的大标题感觉) -->
       <div class="mb-8 pl-1">
@@ -11,13 +11,13 @@
 
       <!-- 骨架屏加载状态 -->
       <div v-if="loading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 w-full">
-        <div v-for="i in 8" :key="i" class="ios-card h-48 p-6 flex flex-col justify-between animate-pulse">
+        <AdminSurface v-for="i in 8" :key="i" class="ios-card h-48 p-6 flex flex-col justify-between animate-pulse">
           <div class="w-12 h-12 rounded-xl bg-gray-200 dark:bg-gray-700"></div>
           <div class="space-y-3">
             <div class="h-6 bg-gray-200 dark:bg-gray-700 rounded-lg w-2/3"></div>
             <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded-md w-1/3"></div>
           </div>
-        </div>
+        </AdminSurface>
       </div>
 
       <!-- 实际内容列表 -->
@@ -33,7 +33,7 @@
           class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 w-full"
       >
         <template #item="{ element: category }">
-          <div class="ios-card group relative h-48 p-6 flex flex-col justify-between select-none transition-all duration-300"
+          <AdminSurface class="ios-card group relative h-48 p-6 flex flex-col justify-between select-none transition-all duration-300"
                @click="goToCategorySetting(category)">
 
             <!-- 顶部：图标与操作 -->
@@ -76,7 +76,7 @@
 
             <!-- 背景装饰 (玻璃光泽) -->
             <div class="absolute -right-4 -bottom-4 w-32 h-32 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-2xl pointer-events-none"></div>
-          </div>
+          </AdminSurface>
         </template>
       </draggable>
 
@@ -93,11 +93,12 @@
           看起来这里还是空的。
         </p>
       </div>
-    </main>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import AdminSurface from '@/components/admin/AdminSurface.vue'
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import { useMessage } from 'naive-ui';
@@ -189,9 +190,7 @@ onBeforeUnmount(() => {
 
 .ios-card:hover {
   /* 悬停时轻微抬起缩放 */
-  transform: scale(1.02);
-  box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.08),
-  0 8px 10px -5px rgba(0, 0, 0, 0.02);
+
   z-index: 10;
 }
 
@@ -202,13 +201,13 @@ onBeforeUnmount(() => {
 
 /* 暗黑模式适配 Dark Mode Overrides */
 .dark .ios-card {
-  background-color: #1C1C1E; /* Apple Dark Background Secondary */
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08); /* 非常淡的内描边 */
+   /* Apple Dark Background Secondary */
+   /* 非常淡的内描边 */
 }
 
 .dark .ios-card:hover {
-  background-color: #2C2C2E; /* 悬停变更亮一点的灰 */
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+   /* 悬停变更亮一点的灰 */
+
 }
 
 .dark .folder-icon-bg {

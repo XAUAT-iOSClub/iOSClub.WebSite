@@ -1,13 +1,13 @@
 <template>
-  <div class="min-h-screen bg-[#F5F5F7] dark:bg-black transition-colors duration-300 font-sans">
-    <main class="max-w-3xl mx-auto px-4 sm:px-6 py-8 pb-20">
+  <div class="admin-page admin-page--settings min-h-screen bg-[#F5F5F7] dark:bg-black transition-colors duration-300 font-sans">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8 pb-20">
 
       <!-- 区域 1: 分类基本信息 -->
       <div class="mb-2 px-1">
         <h2 class="text-[13px] text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 ml-3">基本信息</h2>
       </div>
 
-      <div class="bg-white dark:bg-[#1C1C1E] rounded-[10px] overflow-hidden mb-6 transition-colors duration-300">
+      <AdminSurface class="bg-white dark:bg-[#1C1C1E] rounded-[10px] overflow-hidden mb-6 transition-colors duration-300">
         <!-- 分类名称行 -->
         <div class="flex items-center min-h-[44px] pl-4 pr-0">
           <div class="w-24 shrink-0 text-[17px] text-gray-900 dark:text-white">名称</div>
@@ -26,7 +26,7 @@
             <Icon icon="lock" class="ml-2 w-4 h-4 text-gray-400" />
           </div>
         </div>
-      </div>
+      </AdminSurface>
 
       <!-- 操作按钮区域 -->
       <div class="mb-8 px-1 flex justify-end">
@@ -45,7 +45,7 @@
         </button>
       </div>
 
-      <div
+      <AdminSurface
         class="bg-white dark:bg-[#1C1C1E] rounded-[10px] overflow-hidden transition-colors duration-300 min-h-[100px]">
 
         <!-- 加载骨架 -->
@@ -99,17 +99,18 @@
           </div>
           <p class="text-gray-500 dark:text-gray-400 text-[15px]">此分类下暂无文章</p>
         </div>
-      </div>
+      </AdminSurface>
 
       <div class="mt-4 px-4 text-center text-gray-400 dark:text-gray-600 text-xs">
         拖拽左侧图标可调整文章顺序，调整后请点击保存。
       </div>
 
-    </main>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import AdminSurface from '@/components/admin/AdminSurface.vue'
 import { ref, onMounted, h, defineComponent } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useMessage, NInput, NTag } from 'naive-ui';

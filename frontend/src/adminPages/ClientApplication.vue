@@ -1,6 +1,6 @@
 <template>
-  <div class="apple-container min-h-screen transition-colors duration-500">
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+  <div class="admin-page apple-container min-h-screen transition-colors duration-500">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
 
       <!-- 顶部控制栏：搜索与统计 -->
       <div class="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
@@ -21,7 +21,7 @@
       </div>
 
       <!-- 主要内容区域：类似 iOS 设置列表的容器 -->
-      <div class="content-card rounded-3xl overflow-hidden shadow-sm border">
+      <AdminSurface class="content-card rounded-3xl overflow-hidden shadow-sm border">
         <!-- 桌面端表头 -->
         <div class="hidden md:grid grid-cols-12 gap-4 px-8 py-4 bg-gray-50/50 dark:bg-white/5 border-b border-gray-100 dark:border-gray-700/50 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
           <div class="col-span-4">应用信息</div>
@@ -119,11 +119,11 @@
             <p class="text-gray-500 dark:text-gray-400 mt-1">尝试调整搜索关键词或创建一个新应用</p>
           </div>
         </div>
-      </div>
-    </main>
+      </AdminSurface>
+    </div>
 
     <!-- 模态框：创建客户端 -->
-    <n-modal v-model:show="showCreateModal" preset="card" title="创建新的客户端" :bordered="false" size="huge" style="width: 600px; border-radius: 20px;" class="custom-modal">
+    <AdminModal v-model:show="showCreateModal"  title="创建新的客户端" :bordered="false" size="huge" style="--admin-modal-width: 600px; " class="custom-modal">
       <form @submit.prevent="handleCreateSubmit" class="space-y-6 py-2">
         <!-- 表单项组件化风格 -->
         <div class="form-section">
@@ -158,10 +158,10 @@
           </button>
         </div>
       </form>
-    </n-modal>
+    </AdminModal>
 
     <!-- 模态框：编辑客户端 (结构类似创建) -->
-    <n-modal v-model:show="showEditModal" preset="card" title="编辑客户端" :bordered="false" size="huge" style="width: 600px; border-radius: 20px;" class="custom-modal">
+    <AdminModal v-model:show="showEditModal"  title="编辑客户端" :bordered="false" size="huge" style="--admin-modal-width: 600px; " class="custom-modal">
       <form @submit.prevent="handleEditSubmit" class="space-y-6 py-2">
         <div class="form-section">
           <label class="form-label">基本信息</label>
@@ -197,10 +197,10 @@
           <button type="submit" :disabled="isSubmitting" class="px-6 py-2 rounded-full text-sm font-medium bg-[#0071e3] hover:bg-[#0077ed] text-white shadow-sm transition-all">保存更改</button>
         </div>
       </form>
-    </n-modal>
+    </AdminModal>
 
     <!-- 模态框：详情 -->
-    <n-modal v-model:show="showDetailsModal" preset="card" :title="selectedApp?.applicationName" :bordered="false" size="huge" style="width: 550px; border-radius: 24px;" class="custom-modal details-modal">
+    <AdminModal v-model:show="showDetailsModal"  :title="selectedApp?.applicationName" :bordered="false" size="huge" style="--admin-modal-width: 550px; " class="custom-modal details-modal">
       <div class="relative pt-6 pb-2">
         <div class="flex flex-col items-center mb-8">
           <img alt="" v-if="selectedApp?.logoUrl" :src="selectedApp.logoUrl" class="w-24 h-24 rounded-3xl shadow-lg mb-4 object-cover bg-white" />
@@ -290,7 +290,7 @@
           </div>
         </div>
       </div>
-    </n-modal>
+    </AdminModal>
 
     <!-- 帮助指南保持原样，仅微调样式以匹配 -->
     <Transition name="modal-fade">
@@ -314,8 +314,10 @@
 </template>
 
 <script setup lang="ts">
+import AdminSurface from '@/components/admin/AdminSurface.vue'
+import AdminModal from '@/components/admin/AdminModal.vue'
 import { ref, computed, onMounted, onBeforeUnmount, defineComponent, h } from 'vue';
-import { useMessage, useDialog, NModal, NSwitch } from 'naive-ui';
+import { useMessage, useDialog, NSwitch } from 'naive-ui';
 import Icon from '@/components/Icon.vue'
 import HelpGuide from '../components/HelpGuide.vue';
 import { ClientAppService } from '../services/ClientAppService';
@@ -648,11 +650,11 @@ onBeforeUnmount(() => {
 }
 
 /* NaiveUI Modal 定制 */
-.custom-modal .n-card-header {
+.custom-modal .admin-modal-header {
   padding-top: 24px;
   padding-bottom: 8px;
 }
-.custom-modal .n-card__content {
+.custom-modal .admin-modal-content {
   padding: 0 24px 24px 24px;
 }
 .form-label {

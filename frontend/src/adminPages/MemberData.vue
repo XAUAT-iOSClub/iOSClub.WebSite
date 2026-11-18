@@ -1,19 +1,12 @@
 <script setup lang="ts">
+import AdminToolbar from '@/components/admin/AdminToolbar.vue'
+import { useAdminCharts } from '@/composables/useAdminCharts'
+const { trackChart } = useAdminCharts()
+import AdminSurface from '@/components/admin/AdminSurface.vue'
+import AdminModal from '@/components/admin/AdminModal.vue'
 import {ref, computed, h, onMounted, onBeforeUnmount, nextTick, defineComponent} from 'vue'
-import {useDialog, useMessage} from 'naive-ui'
-import {
-  NSelect,
-  NInput,
-  NDataTable,
-  NModal,
-  NForm,
-  NFormItem,
-  NRadioGroup,
-  NSpace,
-  NRadio,
-  NNumberAnimation,
-  NTag
-} from 'naive-ui'
+import { useDialog, useMessage } from 'naive-ui'
+import { NSelect, NInput, NDataTable, NForm, NFormItem, NRadioGroup, NSpace, NRadio,  NTag } from 'naive-ui'
 import Icon from '@/components/Icon.vue'
 import {MemberQueryService} from '../services/MemberQueryService'
 import {MemberManagementService} from '../services/MemberManagementService'
@@ -319,7 +312,7 @@ const fetchMembers = async () => {
 // Chart Renders (Use system colors for ECharts to match themes later if needed, simple colors for now)
 const initChart = (chartRef: HTMLDivElement | null, option: any) => {
   if (chartRef) {
-    const chart = echarts.init(chartRef)
+    const chart = trackChart(echarts.getInstanceByDom(chartRef) || echarts.init(chartRef))
     chart.setOption(option)
     return chart
   }
@@ -778,7 +771,7 @@ onBeforeUnmount(() => {
 <template>
   <!-- Global Background Container -->
   <div
-      class="min-h-screen bg-[#F5F5F7] dark:bg-[#000000] pb-10 transition-colors duration-300 text-[15px] text-[#1d1d1f] dark:text-[#f5f5f7]">
+      class="admin-page min-h-screen bg-[#F5F5F7] dark:bg-[#000000] pb-10 transition-colors duration-300 text-[15px] text-[#1d1d1f] dark:text-[#f5f5f7]">
 
     <input ref="fileInput" type="file" accept=".json" @change="updateMemberUseJson" class="hidden"/>
 
@@ -804,7 +797,7 @@ onBeforeUnmount(() => {
       <!-- Content Area -->
       <div v-show="activeTab === 'memberData'" class="space-y-4">
         <!-- Tool Bar (Search) -->
-        <div class="glass-panel p-2 flex flex-col md:flex-row items-center gap-2 rounded-2xl">
+        <AdminToolbar label="筛选成员" class="glass-panel p-2 flex flex-col md:flex-row items-center gap-2 rounded-2xl">
           <div class="w-full md:w-48">
             <!-- Using Naive UI but scoped styling wrapper for visual consistency -->
             <n-select
@@ -828,17 +821,17 @@ onBeforeUnmount(() => {
 
           <div class="hidden md:flex items-center px-4 text-sm text-gray-500">
             <span class="mr-2">共</span>
-            <n-number-animation :from="0" :to="totalCount" class="font-semibold text-black dark:text-white text-lg"/>
+            <span class="font-semibold text-black dark:text-white text-lg">{{ totalCount }}</span>
             <span class="ml-2">人</span>
           </div>
 
           <button @click="searchMembers" class="ios-btn-primary w-full md:w-auto px-6 py-2 !rounded-xl">
             搜索
           </button>
-        </div>
+        </AdminToolbar>
 
         <!-- Table Card -->
-        <div
+        <AdminSurface
             class="bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-sm border border-black/5 dark:border-white/5 overflow-hidden transition-colors">
           <div class="min-h-[500px]">
             <n-data-table
@@ -855,13 +848,13 @@ onBeforeUnmount(() => {
                 class="ios-table mb-2"
             />
           </div>
-        </div>
+        </AdminSurface>
       </div>
 
       <!-- Chart Views (Grid Layout) -->
       <div v-show="activeTab !== 'memberData'"
            class="grid grid-cols-1 md:grid-cols-1 gap-6 animate-in fade-in duration-500 slide-in-from-bottom-4">
-        <div
+        <AdminSurface
             class="bg-white dark:bg-[#1C1C1E] p-6 rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] border border-black/5 dark:border-white/5">
           <!-- Chart Header -->
           <div class="flex items-center justify-between mb-6">
@@ -885,13 +878,13 @@ onBeforeUnmount(() => {
             <div v-show="activeTab === 'genderData'" ref="genderChartRef" class="h-full w-full"/>
             <div v-show="activeTab === 'politicalData'" ref="politicalChartRef" class="h-full w-full"/>
           </div>
-        </div>
+        </AdminSurface>
       </div>
 
     </div>
 
     <!-- Modals (Customized Presets) -->
-    <n-modal v-model:show="showModal" preset="card" class="custom-modal w-full max-w-lg"
+    <AdminModal v-model:show="showModal"  class="custom-modal" style="--admin-modal-width: 32rem"
              :title="editingUserId ? '编辑成员' : '添加成员'">
       <n-form :model="currentMember" :rules="rules" ref="formRef" label-placement="left" label-width="auto"
               require-mark-placement="right-hanging">
@@ -947,9 +940,9 @@ onBeforeUnmount(() => {
           <button class="ios-btn-primary px-6" @click="saveMember">保存</button>
         </div>
       </template>
-    </n-modal>
+    </AdminModal>
 
-    <n-modal v-model:show="showPasswordModal" preset="card" class="custom-modal w-full max-w-md" title="重置密码">
+    <AdminModal v-model:show="showPasswordModal"  class="custom-modal" style="--admin-modal-width: 28rem" title="重置密码">
       <n-form :model="passwordForm" :rules="passwordRules" ref="passwordFormRef" class="py-4">
         <div class="bg-gray-50 dark:bg-white/5 p-4 rounded-xl mb-4">
           <p class="text-xs text-gray-500 mb-1">正在为以下用户修改密码:</p>
@@ -970,7 +963,7 @@ onBeforeUnmount(() => {
           <button class="ios-btn-primary px-6 bg-amber-500 hover:bg-amber-600" @click="changePassword">确认重置</button>
         </div>
       </template>
-    </n-modal>
+    </AdminModal>
 
   </div>
 </template>
@@ -986,7 +979,7 @@ onBeforeUnmount(() => {
 }
 
 .dark .glass-panel {
-  background: rgba(28, 28, 30, 0.7);
+
   border-color: rgba(255, 255, 255, 0.1);
 }
 
@@ -1062,24 +1055,6 @@ onBeforeUnmount(() => {
 /* Naive UI Overrides for iOS Look */
 
 /* Modal Styling */
-:deep(.custom-modal) {
-  border-radius: 24px !important;
-  background-color: rgba(255, 255, 255, 0.95) !important;
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(0, 0, 0, 0.05);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15) !important;
-}
-
-.dark .custom-modal {
-  background-color: rgba(28, 28, 30, 0.95) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-}
-
-:deep(.n-card-header__main) {
-  font-weight: 700 !important;
-  font-size: 1.1rem !important;
-  text-align: center;
-}
 
 /* Input & Select Styling Overrides */
 :deep(.n-input .n-input__border),

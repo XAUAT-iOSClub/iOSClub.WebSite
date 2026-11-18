@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AdminSurface from '@/components/admin/AdminSurface.vue'
+import AdminModal from '@/components/admin/AdminModal.vue'
 import { onMounted, ref } from 'vue'
 import { NButton, NModal, useDialog, useMessage } from 'naive-ui'
 import Icon from '@/components/Icon.vue'
@@ -83,8 +85,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="mx-auto grid max-w-6xl gap-5 px-4 py-5 sm:px-6 text-[#1d1d1f] dark:text-[#f5f5f7]">
-    <section aria-labelledby="key-list-heading" class="settings-card">
+  <div class="admin-page mx-auto grid max-w-6xl gap-5 px-4 py-5 sm:px-6 text-[#1d1d1f] dark:text-[#f5f5f7]">
+    <AdminSurface as="section" aria-labelledby="key-list-heading" class="settings-card">
       <header class="flex flex-wrap items-center justify-between gap-3 border-b border-black/8 p-5 dark:border-white/10">
         <div class="flex items-center gap-3">
           <span class="settings-icon bg-indigo-50 text-indigo-700 dark:bg-indigo-400/15 dark:text-indigo-300">
@@ -106,9 +108,9 @@ onMounted(() => {
         <NButton round size="small" @click="load">重试</NButton>
       </div>
       <ApiKeyList v-else :keys="keys" :loading="loading" :revoking="revoking" @revoke="confirmRevoke" />
-    </section>
+    </AdminSurface>
 
-    <section aria-labelledby="api-access-heading" class="settings-card p-5">
+    <AdminSurface as="section" aria-labelledby="api-access-heading" class="settings-card p-5">
       <div class="flex items-center gap-3">
         <span class="settings-icon bg-sky-50 text-sky-700 dark:bg-sky-400/15 dark:text-sky-300">
           <Icon icon="lock" :size="19" />
@@ -119,7 +121,7 @@ onMounted(() => {
         使用 HTTPS 和 HTTP Basic 认证。只读密钥可查询资源，读写密钥还可新增、编辑和删除资源。
       </p>
       <code class="mt-3 block select-all break-all rounded-xl bg-[#f5f5f7] px-4 py-3 text-xs leading-relaxed dark:bg-black/25">curl -u 'KEY_ID:SECRET' '{{ resourceUrl }}'</code>
-    </section>
+    </AdminSurface>
 
     <NModal
       v-model:show="showCreateDialog"
@@ -135,9 +137,9 @@ onMounted(() => {
       <ApiKeyForm :saving="saving" @create="create" @cancel="showCreateDialog = false" />
     </NModal>
 
-    <NModal
-      :show="credentials !== null" preset="card" title="保存 API Key"
-      class="w-[calc(100%-2rem)] max-w-lg rounded-3xl!"
+    <AdminModal
+      :show="credentials !== null"  title="保存 API Key"
+      style="--admin-modal-width: 32rem"
       :mask-closable="false" :close-on-esc="false" :closable="false"
     >
       <div v-if="credentials" class="grid gap-4">
@@ -151,7 +153,7 @@ onMounted(() => {
           <NButton round color="#0071e3" text-color="#fff" @click="credentials = null">完成</NButton>
         </div>
       </div>
-    </NModal>
+    </AdminModal>
   </div>
 </template>
 

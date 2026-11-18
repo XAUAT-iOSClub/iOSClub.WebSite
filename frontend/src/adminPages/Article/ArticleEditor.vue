@@ -1,6 +1,6 @@
 <template>
   <!-- 页面容器：Apple 风格浅灰背景，暗黑模式深色背景 -->
-  <div class="min-h-screen bg-[#f5f5f7] dark:bg-black transition-colors duration-300 p-4 sm:p-6 lg:p-8 font-sans">
+  <div class="admin-page min-h-screen bg-[#f5f5f7] dark:bg-black transition-colors duration-300 p-4 sm:p-6 lg:p-8 font-sans">
 
     <!-- Markdown 文件导入入口；实际导入模式在读取文件后选择。 -->
     <input
@@ -32,7 +32,7 @@
       <div class="flex flex-col gap-6">
 
         <!-- 标题输入块 (突出显示) -->
-        <div class="ios-card p-6">
+        <AdminSurface class="ios-card p-6">
           <label class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 ml-1">
             Title
           </label>
@@ -48,7 +48,7 @@
               <Icon icon="pencil" class="text-gray-400 text-xl" />
             </template>
           </n-input>
-        </div>
+        </AdminSurface>
 
         <!-- 元数据设置组 (类似 iOS 设置列表风格) -->
         <div class="ios-group">
@@ -133,7 +133,7 @@
         </div>
 
         <!-- 正文编辑区域 -->
-        <div class="ios-card flex flex-col min-h-[500px] relative group">
+        <AdminSurface class="ios-card flex flex-col min-h-[500px] relative group">
           <!-- 顶部工具栏模拟 -->
           <div class="h-10 border-b border-gray-100 dark:border-gray-800 flex items-center px-4 gap-3">
             <div class="flex gap-1.5">
@@ -163,7 +163,7 @@
           <div class="absolute bottom-4 right-4 text-xs text-gray-400 bg-white/80 dark:bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg border border-gray-100 dark:border-gray-700 transition-opacity opacity-0 group-hover:opacity-100">
             {{ editForm.content?.length || 0 }} characters
           </div>
-        </div>
+        </AdminSurface>
       </div>
 
       <!-- 右侧：实时预览 (Sticky) -->
@@ -177,13 +177,13 @@
         </div>
 
         <!-- 模拟 iPad/Paper 效果 -->
-        <div class="ios-card flex-1 overflow-hidden flex flex-col shadow-lg border-0 ring-4 ring-gray-200/50 dark:ring-gray-800/50">
+        <AdminSurface class="ios-card flex-1 overflow-hidden flex flex-col shadow-lg border-0 ring-4 ring-gray-200/50 dark:ring-gray-800/50">
           <div class="flex-1 overflow-y-auto custom-scrollbar p-8 bg-white dark:bg-[#1c1c1e]">
             <div class="max-w-none prose dark:prose-invert prose-slate mx-auto">
               <MarkdownComponent :content="previewContent" :show-nav="false"/>
             </div>
           </div>
-        </div>
+        </AdminSurface>
       </div>
 
     </div>
@@ -191,6 +191,7 @@
 </template>
 
 <script setup lang="ts">
+import AdminSurface from '@/components/admin/AdminSurface.vue'
 import { ref, computed, onMounted, onBeforeUnmount, defineComponent, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMessage, NForm, NFormItem, NInput, NSelect, NButton, NModal } from 'naive-ui'
@@ -522,14 +523,10 @@ onBeforeUnmount(() => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
-.ios-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-}
-
 .dark .ios-card {
-  background-color: #1C1C1E;
+
   border: 1px solid rgba(31, 41, 55, 0.6);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.20);
+
 }
 
 /* 编辑器高度自适应 */

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AdminSurface from '@/components/admin/AdminSurface.vue'
 import {computed, onBeforeUnmount, onMounted, ref} from 'vue'
 import {
   NButton,
@@ -168,8 +169,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="mx-auto grid max-w-6xl gap-5 px-4 py-5 text-[#1d1d1f] sm:px-6 dark:text-[#f5f5f7] [--log-page-accent:#005bb9] dark:[--log-page-accent:#8bc4ff]">
-    <section aria-labelledby="log-filter-heading" class="settings-card">
+  <div class="admin-page mx-auto grid max-w-6xl gap-5 px-4 py-5 text-[#1d1d1f] sm:px-6 dark:text-[#f5f5f7] [--log-page-accent:#005bb9] dark:[--log-page-accent:#8bc4ff]">
+    <AdminSurface as="section" aria-labelledby="log-filter-heading" class="settings-card">
       <h2 id="log-filter-heading" class="section-title px-5 pt-5">筛选日志</h2>
       <form class="grid gap-4 p-5" @submit.prevent="applyFilters">
         <div class="flex flex-wrap items-center gap-2">
@@ -236,9 +237,9 @@ onBeforeUnmount(() => {
           />
         </div>
       </form>
-    </section>
+    </AdminSurface>
 
-    <section aria-labelledby="log-list-heading" class="settings-card">
+    <AdminSurface as="section" aria-labelledby="log-list-heading" class="settings-card">
       <header class="flex flex-wrap items-center justify-between gap-3 border-b border-black/8 p-5 dark:border-white/10">
         <div class="flex items-center gap-3">
           <span class="grid size-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-400/15 dark:text-blue-300">
@@ -324,7 +325,7 @@ onBeforeUnmount(() => {
           @update:page-size="changePageSize"
         />
       </footer>
-    </section>
+    </AdminSurface>
 
     <OperationLogDetail
       v-model:show="showDetail"

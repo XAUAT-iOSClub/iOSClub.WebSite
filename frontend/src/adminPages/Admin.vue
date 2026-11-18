@@ -1,24 +1,20 @@
 <template>
-  <div class="dashboard-container min-h-screen transition-colors duration-300">
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <div class="admin-page dashboard-container min-h-screen transition-colors duration-300">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-      <div class="mb-8 px-2">
-        <h2 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white text-effect">
-          概览
-        </h2>
-        <p class="mt-1 text-gray-500 dark:text-gray-400 text-sm">
-          {{ formatDate(new Date()) }}
-        </p>
-      </div>
+      <AdminPageHeading title="数据概览" :description="formatDate(new Date())" />
+      <AdminState v-if="statisticsError" kind="error" title="核心数据暂不可用" description="请重试获取最新数据。">
+        <button class="admin-retry" @click="fetchData">重新加载</button>
+      </AdminState>
 
       <!-- 加载状态 -->
       <div v-if="loading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div v-for="i in 4" :key="i" class="apple-card-base h-40 animate-pulse bg-gray-200 dark:bg-gray-800"></div>
+        <AdminSurface v-for="i in 4" :key="i" class="apple-card-base h-40 animate-pulse bg-gray-200 dark:bg-gray-800"></AdminSurface>
       </div>
 
       <!-- 数据概览卡片网格 -->
-      <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div
+      <div v-else-if="!statisticsError" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <AdminSurface
             v-for="item in statItems"
             :key="item.key"
             class="apple-card group relative overflow-hidden p-6 flex flex-col justify-between transition-all duration-300 select-none"
@@ -29,7 +25,7 @@
                 {{ item.label }}
               </span>
               <span class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white font-display">
-                {{ formatNumber(statistics[item.key as keyof typeof statistics]) }}
+                {{ formatNumber(statistics[item.key]) }}
               </span>
             </div>
             <div
@@ -39,11 +35,11 @@
           </div>
           <div
               :class="['absolute -bottom-4 -right-4 w-24 h-24 rounded-full blur-2xl opacity-0 group-hover:opacity-10 transition-opacity duration-500 pointer-events-none', item.bgClass]"></div>
-        </div>
+        </AdminSurface>
       </div>
 
       <!-- HTTP 性能概览 -->
-      <div class="mt-12" v-if="!loading">
+      <div class="mt-8" v-if="!loading">
         <div class="mb-6 px-2">
           <h2 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white text-effect">
             HTTP 性能
@@ -55,11 +51,12 @@
 
         <!-- 性能数据加载状态 -->
         <div v-if="monitoringLoading" class="grid grid-cols-1 gap-6">
-          <div class="apple-card-base h-40 animate-pulse bg-gray-200 dark:bg-gray-800"></div>
+          <AdminSurface class="apple-card-base h-40 animate-pulse bg-gray-200 dark:bg-gray-800"></AdminSurface>
         </div>
 
         <!-- 性能数据卡片 -->
-        <div v-else class="apple-card group relative overflow-hidden p-6 transition-all duration-300 select-none">
+        <AdminState v-else-if="monitoringError" kind="error" title="请求指标暂不可用"><button class="admin-retry" @click="fetchMonitoringData">重新加载</button></AdminState>
+        <AdminSurface v-else class="apple-card group relative overflow-hidden p-6 transition-all duration-300 select-none">
           <div class="flex items-start justify-between mb-4">
             <div class="flex items-center gap-2">
               <div class="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
@@ -98,18 +95,21 @@
               </span>
             </div>
           </div>
-        </div>
+        </AdminSurface>
       </div>
 
       <!-- 隐藏的文件输入 -->
       <input ref="fileInput" type="file" accept=".json" multiple @change="uploadFiles" style="display: none"/>
-    </main>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import AdminPageHeading from '@/components/admin/AdminPageHeading.vue'
+import AdminState from '@/components/admin/AdminState.vue'
+import AdminSurface from '@/components/admin/AdminSurface.vue'
 import {ref, computed, onMounted, onBeforeUnmount, defineComponent, h} from 'vue'
-import {useMessage} from 'naive-ui'
+import {NDropdown, useMessage} from 'naive-ui'
 import Icon from '@/components/Icon.vue'
 import {DataCentreService} from '../services/DataCentreService'
 import {MonitoringService} from '../services/MonitoringService'
@@ -118,7 +118,7 @@ import {useLayoutStore} from '../stores/LayoutStore'
 
 // Types
 interface StatItemConfig {
-  key: string
+  key: 'members' | 'staffs' | 'resources' | 'departments'
   label: string
   icon: string
   bgClass: string
@@ -132,6 +132,8 @@ const layoutStore = useLayoutStore()
 
 // State
 const fileInput = ref<HTMLInputElement>()
+const statisticsError = ref(false)
+const monitoringError = ref(false)
 const loading = ref(false)
 const monitoringLoading = ref(false)
 const isAdmin = ref(false)
@@ -272,6 +274,7 @@ const downloadAllData = async () => {
 
 const fetchMonitoringData = async () => {
   monitoringLoading.value = true
+  monitoringError.value = false
   try {
     const performanceData = await MonitoringService.getPerformanceMetrics()
     monitoringData.value = {
@@ -286,6 +289,7 @@ const fetchMonitoringData = async () => {
       timestamp: performanceData?.timestamp ? new Date(performanceData.timestamp) : null
     }
   } catch (e) {
+    monitoringError.value = true
     console.error('Failed to fetch monitoring data:', e)
   } finally {
     monitoringLoading.value = false
@@ -294,6 +298,7 @@ const fetchMonitoringData = async () => {
 
 const fetchData = async () => {
   loading.value = true
+  statisticsError.value = false
   try {
     // Parallelize: fetch centre data and monitoring data concurrently
     const [centreResult] = await Promise.allSettled([
@@ -304,69 +309,35 @@ const fetchData = async () => {
     if (centreResult.status === 'fulfilled') {
       statistics.value = centreResult.value
     } else {
+      statisticsError.value = true
       message.error('无法获取核心数据')
     }
   } catch {
+    statisticsError.value = true
     message.error('无法获取核心数据')
   } finally {
     loading.value = false
   }
 }
 
-// --- Actions Component (defined at module level to avoid recreating on each mount) ---
 const ActionsComponent = defineComponent({
   setup() {
-    const isOpen = ref(false)
-
-    onMounted(() => {
-      document.addEventListener('click', (e: MouseEvent) => {
-        const target = e.target as HTMLElement
-        if (!target.closest('.ios-dropdown-trigger')) {
-          isOpen.value = false
-        }
-      })
-    })
-
-    return () => h('div', {class: 'flex items-center gap-3'}, [
+    return () => h('div', { class: 'admin-actions' }, [
       h('button', {
-        class: 'flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors shadow-sm active:scale-95 duration-200',
-        onClick: triggerFileInput
-      }, [
-        h(Icon, {icon: 'cloud-upload', class: 'w-4 h-4'}),
-        h('span', '导入数据')
-      ]),
-
-      h('div', {class: 'relative ios-dropdown-trigger'}, [
-        h('button', {
-          onClick: (e: Event) => {
-            e.stopPropagation();
-            isOpen.value = !isOpen.value
-          },
-          class: `w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-200 ${isOpen.value ? 'bg-gray-200 dark:bg-gray-700' : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'}`
-        }, [
-          h(Icon, {icon: 'ellipsis', class: 'text-gray-600 dark:text-gray-300'})
-        ]),
-
-        h('div', {
-          class: `absolute right-0 mt-3 w-48 py-1 rounded-xl apple-dropdown origin-top-right transition-all duration-200 ${isOpen.value ? 'opacity-100 scale-100 visible' : 'opacity-0 scale-95 invisible'}`
-        }, [
-          h('div', {class: 'px-1 py-1'}, [
-            h('button', {
-              onClick: () => {
-                isOpen.value = false;
-                downloadAllData()
-              },
-              title: '仅导出部分实体，不能作为完整备份或完整还原依据',
-              class: 'w-full text-left px-3 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 transition-colors flex items-center gap-2'
-            }, [
-              h(Icon, {icon: 'download', class: 'w-4 h-4'}),
-              h('span', '导出部分数据')
-            ]),
-          ])
-        ])
-      ])
+        class: 'flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium',
+        onClick: triggerFileInput,
+      }, [h(Icon, { icon: 'cloud-upload', size: 16 }), '导入数据']),
+      h(NDropdown, {
+        trigger: 'click',
+        menuProps: () => ({ role: 'menu', 'aria-label': '更多数据操作' }),
+        nodeProps: () => ({ role: 'menuitem' }),
+        options: [{ key: 'export', label: '导出部分数据', icon: () => h(Icon, { icon: 'download', size: 16 }) }],
+        onSelect: () => { void downloadAllData() },
+      }, { default: () => h('button', {
+        class: 'admin-icon-button', 'aria-label': '更多数据操作', 'aria-haspopup': 'menu',
+      }, [h(Icon, { icon: 'ellipsis', size: 18 })]) }),
     ])
-  }
+  },
 })
 
 // --- Lifecycle ---
@@ -390,14 +361,8 @@ onBeforeUnmount(() => {
 }
 
 .apple-card {
-  background-color: rgba(255, 255, 255, 1);
-  border-radius: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.01);
-  border: 1px solid rgba(0, 0, 0, 0.02);
-}
 
-.apple-card-base {
-  border-radius: 20px;
+  border: 1px solid rgba(0, 0, 0, 0.02);
 }
 
 .apple-dropdown {
@@ -414,9 +379,9 @@ onBeforeUnmount(() => {
 }
 
 .dark .apple-card {
-  background-color: #1c1c1e;
+
   border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+
 }
 
 .dark .apple-dropdown {

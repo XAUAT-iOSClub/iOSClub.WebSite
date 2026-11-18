@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AdminSurface from '@/components/admin/AdminSurface.vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useDialog, useMessage } from 'naive-ui'
 import Icon from '@/components/Icon.vue'
@@ -116,7 +117,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
 </script>
 
 <template>
-  <div class="finance-page">
+  <div class="admin-page finance-page">
     <FinanceTabs/>
 
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
@@ -130,20 +131,20 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
     <input ref="uploadInput" type="file" accept=".docx" class="hidden" @change="onFileChange"/>
 
     <div v-if="loading" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div v-for="i in 2" :key="i" class="finance-card h-64 animate-pulse"></div>
+      <AdminSurface v-for="i in 2" :key="i" class="finance-card h-64 animate-pulse"></AdminSurface>
     </div>
 
-    <div v-else-if="loadError" class="finance-card">
+    <AdminSurface v-else-if="loadError" class="finance-card">
       <div class="finance-empty">
         <Icon icon="circle-alert" class="w-8 h-8 text-red-500"/>
         <p>{{ loadError }}</p>
         <button class="finance-btn primary" @click="load">重新加载</button>
       </div>
-    </div>
+    </AdminSurface>
 
     <template v-else>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div v-for="section in sections" :key="section.kind" class="finance-card h-full min-h-[240px] flex flex-col">
+        <AdminSurface v-for="section in sections" :key="section.kind" class="finance-card h-full min-h-[240px] flex flex-col">
           <div class="flex items-start justify-between gap-3 mb-3">
             <div>
               <span class="finance-card-title">{{ section.title }}</span>
@@ -175,10 +176,10 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
               <button class="finance-btn danger" @click="remove(template)">删除</button>
             </div>
           </div>
-        </div>
+        </AdminSurface>
       </div>
 
-      <div class="finance-card mt-4">
+      <AdminSurface class="finance-card mt-4">
         <span class="finance-card-title">模板填写说明</span>
         <p class="finance-muted mt-2">
           学校固定模板无需占位符：系统按“社团名称 / 活动主题 / 支出项目 / 合计（小写）/ 合计（大写）”等标签和表头定位单元格并填写，签字、盖章栏保持空白。
@@ -186,7 +187,7 @@ onBeforeUnmount(() => layoutStore.clearPageHeader())
         <p class="finance-muted mt-2">
           也兼容带占位符的模板；模板的字体、行高、列宽、合并单元格和边框保持不变。
         </p>
-      </div>
+      </AdminSurface>
     </template>
   </div>
 </template>
