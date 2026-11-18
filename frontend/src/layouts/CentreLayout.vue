@@ -80,7 +80,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', resize))
                 <div v-else v-html="layoutStore.pageActionsContent" />
               </div>
               <NDropdown v-model:show="themeMenuOpen" trigger="click" :options="themeOptions" :value="userPreference"
-                :menu-props="() => ({ role: 'menu', id: themeMenuId, 'aria-label': '外观' })"
+                :menu-props="() => ({ role: 'menu', id: themeMenuId, 'aria-label': '外观', class: 'admin-theme-menu' })"
                 :node-props="themeNodeProps"
                 @select="selectTheme">
                 <button class="admin-icon-button" aria-label="选择外观" aria-haspopup="menu" :aria-expanded="themeMenuOpen" :aria-controls="themeMenuId"><Icon :icon="userPreference === 'system' ? 'monitor' : isDark ? 'moon-star' : 'sun'" :size="19" /></button>

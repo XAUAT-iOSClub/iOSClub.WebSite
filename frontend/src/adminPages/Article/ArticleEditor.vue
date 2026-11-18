@@ -548,14 +548,14 @@ onBeforeUnmount(() => {
 
 /* 分组容器 (类似 iOS Settings) */
 .ios-group {
-  background-color: #ffffff;
+  background-color: var(--admin-surface);
   border-radius: 1rem;
   border: 1px solid rgba(229, 231, 235, 0.6);
   overflow: hidden;
 }
 
 .dark .ios-group {
-  background-color: #1C1C1E;
+  background-color: var(--admin-surface);
   border: 1px solid rgba(31, 41, 55, 0.6);
 }
 

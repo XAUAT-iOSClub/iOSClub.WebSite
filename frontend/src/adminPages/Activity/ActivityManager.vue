@@ -304,7 +304,7 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
 
 @media (max-width: 639px) {
   .activity-filters { width: 100%; }
-  .activity-filters button { flex: 1; padding-inline: 4px; min-height: 40px; white-space: nowrap; }
+  .activity-filters button { flex: 1; padding-inline: 4px; min-height: 44px; white-space: nowrap; }
   .activity-mobile-list { display: grid; gap: 12px; }
   .activity-card { padding: 16px; }
   .activity-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
@@ -315,7 +315,7 @@ onBeforeUnmount(() => { layoutStore.clearPageHeader() })
   .activity-details dt { flex-shrink: 0; color: #8e8e93; }
   .activity-details dd { min-width: 0; overflow-wrap: anywhere; }
   .activity-actions { display: flex; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(128, 128, 128, .15); }
-  .activity-actions .apple-btn { justify-content: center; min-height: 40px; }
+  .activity-actions .apple-btn { justify-content: center; min-height: 44px; }
   .activity-delete { color: #dc2626; background: rgba(239, 68, 68, .08); }
   .activity-empty { padding: 36px 16px; color: #8e8e93; text-align: center; }
   .activity-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #8e8e93; font-size: 13px; }
