@@ -100,8 +100,12 @@ export class ActivityService {
     return apiRequest<{ deleted: number }>({ url: `${url}/Activity/${activityId}/participants/bulk-delete`, method: 'POST', body: JSON.stringify({ ids }) });
   }
 
+  static checkRegistration(activityId: string): Promise<void> {
+    return apiRequest<void>({ url: `${url}/Activity/${encodeURIComponent(activityId)}/register`, method: 'GET', requiresAuth: false, cache: 'no-store' });
+  }
+
   static register(activityId: string, dto: ParticipantCreateDto): Promise<ParticipantModel> {
-    return apiRequest<ParticipantModel>({ url: `${url}/Activity/${activityId}/register`, method: 'POST', body: JSON.stringify(dto), requiresAuth: false });
+    return apiRequest<ParticipantModel>({ url: `${url}/Activity/${encodeURIComponent(activityId)}/register`, method: 'POST', body: JSON.stringify(dto), requiresAuth: false });
   }
 
   // ===== Excel =====

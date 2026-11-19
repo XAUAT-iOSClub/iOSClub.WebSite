@@ -194,14 +194,22 @@ public class ActivityController(
 
     // ===== 自助登记（公开） =====
 
+    [HttpGet("{id}/register")]
+    [AllowAnonymous]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<ActionResult<ApiResponse>> CheckRegistration(string id)
+    {
+        var (errorCode, message) = await GetRegistrationAvailabilityAsync(id);
+        return Ok(errorCode == ErrorCode.Success ? ApiResponse.Success() : ApiResponse.Fail(errorCode, message));
+    }
+
     [HttpPost("{id}/register")]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<ActivityParticipantVO>>> Register(string id, [FromBody] ActivityParticipantCreateDTO dto)
     {
-        var activity = await activityRepository.GetByIdAsync(id);
-        if (activity == null) return Ok(ApiResponse<ActivityParticipantVO>.Fail(ErrorCode.ResourceNotFound, "活动不存在"));
-        if (!activity.SelfRegistrationEnabled)
-            return Ok(ApiResponse<ActivityParticipantVO>.Fail(ErrorCode.InvalidStatusForOperation, "登记通道已关闭"));
+        var (errorCode, message) = await GetRegistrationAvailabilityAsync(id);
+        if (errorCode != ErrorCode.Success)
+            return Ok(ApiResponse<ActivityParticipantVO>.Fail(errorCode, message));
 
         var (model, err) = BuildParticipant(id, dto, ParticipantSource.Self);
         if (err != null) return Ok(ApiResponse<ActivityParticipantVO>.Fail(ErrorCode.ParameterValidationFailed, err));
@@ -296,6 +304,21 @@ public class ActivityController(
         => Ok(ApiResponse<List<ActivityOperationLogVO>>.Success(await logRepository.GetByActivityAsync(id)));
 
     // ===== 私有工具 =====
+
+    private async Task<(int ErrorCode, string Message)> GetRegistrationAvailabilityAsync(string id)
+    {
+        var activity = await activityRepository.GetByIdDOAsync(id);
+        if (activity == null)
+            return (ErrorCode.ResourceNotFound, "活动不存在");
+        if (activity.Status == ActivityStatus.Finished || activity.EndTime <= DateTime.UtcNow)
+            return (ErrorCode.InvalidStatusForOperation, "活动已结束");
+        if (activity.Status == ActivityStatus.Upcoming)
+            return (ErrorCode.InvalidStatusForOperation, "活动尚未开始");
+        if (activity.Status != ActivityStatus.Ongoing || !activity.SelfRegistrationEnabled)
+            return (ErrorCode.InvalidStatusForOperation, "登记通道已关闭");
+
+        return (ErrorCode.Success, "");
+    }
 
     /// <summary>把传入时间统一成 UTC：Npgsql 的 timestamptz 只接受 Utc/Local，
     /// 带时区偏移的字符串反序列化后可能得到非 Utc 的 Kind，直接保存会抛 DbUpdateException。</summary>
