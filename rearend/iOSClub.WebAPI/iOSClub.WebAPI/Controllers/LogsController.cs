@@ -348,13 +348,13 @@ public class LogsController
             string groupByFormat;
             if (timeRange.Equals("today", StringComparison.OrdinalIgnoreCase))
             {
-                // 当天数据按小时分组
-                groupByFormat = "strftime('%H:00', Timestamp)";
+                // 当天数据按小时分组（Timestamp 以 UTC 存储，+8 小时后按北京时间展示）
+                groupByFormat = "strftime('%H:00', Timestamp, '+8 hours')";
             }
             else
             {
-                // 多天数据按天分组
-                groupByFormat = "strftime('%Y-%m-%d', Timestamp)";
+                // 多天数据按天分组（Timestamp 以 UTC 存储，+8 小时后按北京时间展示）
+                groupByFormat = "strftime('%Y-%m-%d', Timestamp, '+8 hours')";
             }
 
             // 构建查询
