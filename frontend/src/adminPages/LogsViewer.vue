@@ -453,8 +453,11 @@ const getBadgeStyle = (level: string) => {
 }
 
 const formatDateTime = (dateString: string): string => {
-  const date = new Date(dateString)
+  // 后端以 UTC 存储且不带时区标识，补上 Z 后统一按 UTC+8（北京时间）展示
+  const hasTimeZone = /(?:z|[+-]\d{2}:?\d{2})$/i.test(dateString)
+  const date = new Date(hasTimeZone ? dateString : `${dateString}Z`)
   return date.toLocaleString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
     month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
     hour12: false
   })
